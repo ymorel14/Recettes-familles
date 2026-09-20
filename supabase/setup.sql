@@ -21,7 +21,16 @@ create schema if not exists recettes;
 
 -- Droits minimaux pour que l'API Supabase (PostgREST) puisse lire/écrire
 -- dans ce schéma pour les utilisateurs anonymes et authentifiés.
+--
+-- "alter default privileges" ne s'applique qu'aux tables créées APRÈS cette
+-- ligne : comme certaines tables de ce schéma existaient déjà (créées par une
+-- exécution antérieure du script, avant même que ces lignes n'y figurent),
+-- on ajoute aussi un "grant" direct sur les tables déjà existantes, sans quoi
+-- l'API renvoie 403 (permission denied) même avec des politiques RLS
+-- correctes.
 grant usage on schema recettes to anon, authenticated;
+grant select, insert, update, delete on all tables in schema recettes to anon, authenticated;
+grant usage, select on all sequences in schema recettes to anon, authenticated;
 alter default privileges in schema recettes
   grant select, insert, update, delete on tables to anon, authenticated;
 alter default privileges in schema recettes
@@ -142,11 +151,31 @@ create policy "Voir les membres de ses foyers" on recettes.foyer_membres
 -- Devenir automatiquement administrateur du foyer qu'on vient de créer.
 -- (Rejoindre le foyer de quelqu'un d'autre passe uniquement par la fonction
 -- rejoindre_foyer ci-dessus, qui contourne cette politique en security definer.)
+--
+-- La vérification "je suis bien le créateur de ce foyer" doit se faire via
+-- une fonction security definer : sinon la sous-requête sur recettes.foyers
+-- est elle-même filtrée par la politique "Voir ses foyers" (qui exige d'être
+-- déjà membre du foyer) — un cercle vicieux qui bloquait la toute première
+-- insertion dans foyer_membres juste après la création d'un foyer.
+create or replace function recettes.est_createur_du_foyer(id_foyer uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = recettes, pg_temp
+as $$
+  select exists (
+    select 1 from recettes.foyers where id = id_foyer and cree_par = auth.uid()
+  );
+$$;
+
+grant execute on function recettes.est_createur_du_foyer(uuid) to authenticated;
+
 drop policy if exists "Devenir admin de son propre foyer" on recettes.foyer_membres;
 create policy "Devenir admin de son propre foyer" on recettes.foyer_membres
   for insert with check (
     utilisateur_id = auth.uid()
-    and foyer_id in (select id from recettes.foyers where cree_par = auth.uid())
+    and recettes.est_createur_du_foyer(foyer_id)
   );
 
 drop policy if exists "Voir les invitations de ses foyers" on recettes.invitations;
@@ -163,10 +192,24 @@ create policy "Créer une invitation pour son foyer" on recettes.invitations
 -- par l'orthographe). Voir cahier des charges §4 et §11.
 -- =========================================================================
 
+-- La fonction unaccent() fournie par l'extension n'est pas déclarée IMMUTABLE
+-- par Postgres (seulement STABLE), alors qu'une colonne "generated" exige une
+-- expression immutable. On l'enveloppe dans notre propre fonction, marquée
+-- immutable nous-mêmes : le dictionnaire "unaccent" utilisé est fixe, donc le
+-- résultat est bien déterministe pour un même texte en entrée.
+create or replace function recettes.normaliser_texte(valeur text)
+returns text
+language sql
+immutable
+parallel safe
+as $$
+  select lower(unaccent(valeur));
+$$;
+
 create table if not exists recettes.categories (
   id uuid primary key default gen_random_uuid(),
   nom text not null,
-  nom_normalise text generated always as (lower(unaccent(trim(nom)))) stored,
+  nom_normalise text generated always as (recettes.normaliser_texte(trim(nom))) stored,
   cree_le timestamptz not null default now(),
   unique (nom_normalise)
 );

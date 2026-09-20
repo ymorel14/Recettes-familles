@@ -4,6 +4,17 @@ import { supabase } from '../../services/supabase';
 import { theme } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
 
+// Les erreurs Supabase (PostgrestError) ne sont pas toujours reconnues comme
+// des Error JS "classiques" selon la version — on extrait le message de
+// façon plus robuste pour ne jamais afficher un message générique inutile.
+function extraireMessageErreur(e: unknown, motParDefaut: string): string {
+  if (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string') {
+    return (e as any).message;
+  }
+  if (e instanceof Error) return e.message;
+  return motParDefaut;
+}
+
 function genererCode(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans caractères ambigus (0/O, 1/I)
   let code = '';
@@ -16,7 +27,7 @@ function genererCode(): string {
 // Écran affiché à un utilisateur connecté qui n'appartient encore à aucun
 // foyer : créer son foyer, ou rejoindre celui d'un proche via un code (§3).
 export default function FoyerScreen() {
-  const { session, rafraichirFoyer } = useAuth();
+  const { session, rafraichirFoyer, deconnexion } = useAuth();
   const [nomFoyer, setNomFoyer] = useState('');
   const [codeSaisi, setCodeSaisi] = useState('');
   const [enCours, setEnCours] = useState<'creation' | 'jonction' | null>(null);
@@ -47,7 +58,8 @@ export default function FoyerScreen() {
 
       await rafraichirFoyer();
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : 'Impossible de créer le foyer.');
+      console.log('Erreur création foyer :', e);
+      setErreur(extraireMessageErreur(e, 'Impossible de créer le foyer.'));
     } finally {
       setEnCours(null);
     }
@@ -62,7 +74,8 @@ export default function FoyerScreen() {
       if (error) throw error;
       await rafraichirFoyer();
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : 'Code invalide.');
+      console.log('Erreur jonction foyer :', e);
+      setErreur(extraireMessageErreur(e, 'Code invalide.'));
     } finally {
       setEnCours(null);
     }
@@ -111,6 +124,13 @@ export default function FoyerScreen() {
       </View>
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
+
+      {/* Tant qu'on n'a pas de foyer, l'écran Profil (où se trouve la
+          déconnexion normale) n'est pas accessible : on l'ajoute donc ici
+          aussi, pour ne jamais bloquer un utilisateur sur cet écran. */}
+      <Pressable onPress={deconnexion} style={styles.lienDeconnexion}>
+        <Text style={styles.lienDeconnexionTexte}>Se déconnecter</Text>
+      </Pressable>
     </View>
   );
 }
@@ -173,5 +193,15 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontBody,
     color: theme.colors.warning,
     textAlign: 'center',
+  },
+  lienDeconnexion: {
+    alignItems: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  lienDeconnexionTexte: {
+    fontFamily: theme.fontBody,
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
