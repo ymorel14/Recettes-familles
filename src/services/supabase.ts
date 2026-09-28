@@ -1,6 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { AppState, Platform } from 'react-native';
 
 // Client Supabase — backend retenu au §3 de la feuille de route (cahier des charges, onglet 2).
 //
@@ -36,11 +37,32 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Version web : le lien de confirmation reçu par email ramène sur le site
+    // avec la session dans l'adresse ; on la lit pour connecter directement
+    // la personne. Sur téléphone, sans objet.
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
+
+// Adresse vers laquelle renvoient les liens des emails (confirmation
+// d'inscription) : le site lui-même sur le web. Sur téléphone : non précisée,
+// Supabase utilise alors la "Site URL" du projet. L'adresse doit figurer dans
+// Authentication > URL Configuration > Redirect URLs, sinon Supabase l'ignore.
+export const URL_RETOUR_EMAIL: string | undefined =
+  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
 
 // Stockage des photos : utiliser un bucket au nom distinct (ex. "recettes-photos"),
 // pour ne pas entrer en collision avec un bucket déjà utilisé par une autre application
 // sur ce même projet Supabase.
 export const BUCKET_PHOTOS_RECETTES = 'recettes-photos';
+
+// Sur téléphone, le renouvellement automatique du jeton de connexion ne tourne
+// que quand l'application est au premier plan (recommandation Supabase pour
+// React Native) : sans ça, en revenant dans l'app après un long moment, le
+// jeton pouvait être expiré et la session perdue.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (etat) => {
+    if (etat === 'active') supabase.auth.startAutoRefresh();
+    else supabase.auth.stopAutoRefresh();
+  });
+}

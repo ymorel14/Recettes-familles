@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from 'react-native';
-import { theme } from '../../theme/theme';
+import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { listerRecettes } from '../../services/recettes';
 import { obtenirOuCreerListeActive, ajouterRecettesALaListe } from '../../services/listesCourses';
@@ -114,7 +114,7 @@ export default function SelectionRecettesScreen({ route, navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = creerStylesThemes(() => ({
   container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.md },
   centre: { flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' },
   titre: { fontFamily: theme.fontTitle, fontSize: 24, color: theme.colors.accent, marginBottom: theme.spacing.sm },
@@ -136,4 +136,4 @@ const styles = StyleSheet.create({
   partsValeur: { fontFamily: theme.fontBody, color: theme.colors.textMuted, fontSize: 13 },
   boutonPrincipal: { backgroundColor: theme.colors.accent, borderRadius: theme.radii.md, paddingVertical: theme.spacing.md, alignItems: 'center' },
   boutonPrincipalTexte: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.background },
-});
+}));

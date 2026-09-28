@@ -1,147 +1,193 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { supabase } from '../../services/supabase';
-import { theme } from '../../theme/theme';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  choisirFoyer,
+  creerFoyer,
+  extraireMessageErreur,
+  listerFoyersARejoindre,
+  type FoyerARejoindre,
+} from '../../services/famille';
+import { alerte } from '../../utils/alerte';
+import ZoneClavier from '../../components/ZoneClavier';
 
-// Les erreurs Supabase (PostgrestError) ne sont pas toujours reconnues comme
-// des Error JS "classiques" selon la version — on extrait le message de
-// façon plus robuste pour ne jamais afficher un message générique inutile.
-function extraireMessageErreur(e: unknown, motParDefaut: string): string {
-  if (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string') {
-    return (e as any).message;
-  }
-  if (e instanceof Error) return e.message;
-  return motParDefaut;
-}
-
-function genererCode(): string {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans caractères ambigus (0/O, 1/I)
-  let code = '';
-  for (let i = 0; i < 6; i += 1) {
-    code += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return code;
-}
-
-// Écran affiché à un utilisateur connecté qui n'appartient encore à aucun
-// foyer : créer son foyer, ou rejoindre celui d'un proche via un code (§3).
+// Utilisateur membre d'une famille mais sans foyer (il vient de créer sa
+// famille, ou de la rejoindre avec le code famille) : il choisit un foyer
+// existant de la famille (s'il vit avec des personnes déjà inscrites) ou
+// crée le sien.
 export default function FoyerScreen() {
-  const { session, rafraichirFoyer, deconnexion } = useAuth();
+  const { famille, rafraichirFoyer, deconnexion } = useAuth();
+  const [foyers, setFoyers] = useState<FoyerARejoindre[] | null>(null);
+  const [erreurListe, setErreurListe] = useState<string | null>(null);
   const [nomFoyer, setNomFoyer] = useState('');
-  const [codeSaisi, setCodeSaisi] = useState('');
-  const [enCours, setEnCours] = useState<'creation' | 'jonction' | null>(null);
+  // 'creation' ou identifiant du foyer en cours de rejoindre.
+  const [enCours, setEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
-  const creerFoyer = async () => {
-    if (!nomFoyer.trim() || !session) return;
+  const chargerFoyers = useCallback(async () => {
+    setErreurListe(null);
+    try {
+      setFoyers(await listerFoyersARejoindre());
+    } catch (e) {
+      setFoyers([]);
+      setErreurListe(extraireMessageErreur(e, 'Impossible de charger les foyers de la famille.'));
+    }
+  }, []);
+
+  useEffect(() => {
+    chargerFoyers();
+  }, [chargerFoyers]);
+
+  const validerFoyer = async () => {
+    if (!nomFoyer.trim()) return;
     setErreur(null);
     setEnCours('creation');
     try {
-      const { data: foyerCree, error: erreurFoyer } = await supabase
-        .from('foyers')
-        .insert({ nom: nomFoyer.trim(), cree_par: session.user.id })
-        .select()
-        .single();
-      if (erreurFoyer) throw erreurFoyer;
-
-      const { error: erreurMembre } = await supabase
-        .from('foyer_membres')
-        .insert({ foyer_id: foyerCree.id, utilisateur_id: session.user.id, role: 'administrateur' });
-      if (erreurMembre) throw erreurMembre;
-
-      await supabase.from('invitations').insert({
-        foyer_id: foyerCree.id,
-        code: genererCode(),
-        creee_par: session.user.id,
-      });
-
+      await creerFoyer(nomFoyer);
       await rafraichirFoyer();
     } catch (e) {
-      console.log('Erreur création foyer :', e);
       setErreur(extraireMessageErreur(e, 'Impossible de créer le foyer.'));
     } finally {
       setEnCours(null);
     }
   };
 
-  const rejoindreFoyer = async () => {
-    if (!codeSaisi.trim()) return;
+  const rejoindre = async (f: FoyerARejoindre) => {
     setErreur(null);
-    setEnCours('jonction');
+    setEnCours(f.id);
     try {
-      const { error } = await supabase.rpc('rejoindre_foyer', { code_saisi: codeSaisi.trim() });
-      if (error) throw error;
+      await choisirFoyer(f.id);
       await rafraichirFoyer();
     } catch (e) {
-      console.log('Erreur jonction foyer :', e);
-      setErreur(extraireMessageErreur(e, 'Code invalide.'));
+      setErreur(extraireMessageErreur(e, 'Impossible de rejoindre ce foyer.'));
     } finally {
       setEnCours(null);
     }
   };
 
+  // Un seul foyer par personne : on confirme avant de rejoindre.
+  const confirmerRejoindre = (f: FoyerARejoindre) => {
+    alerte(
+      `Rejoindre « ${f.nom} » ?`,
+      'Vous partagerez les recettes et les listes de courses de ce foyer. Choisissez-le seulement si vous vivez sous le même toit.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Rejoindre', onPress: () => rejoindre(f) },
+      ]
+    );
+  };
+
+  const detailFoyer = (f: FoyerARejoindre) => {
+    const membres = `${f.nb_membres} membre${f.nb_membres > 1 ? 's' : ''}`;
+    return f.createur ? `Créé par ${f.createur} · ${membres}` : membres;
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.titre}>Bienvenue !</Text>
-      <Text style={styles.sousTitre}>Créez le foyer de votre famille, ou rejoignez-en un.</Text>
+    <ZoneClavier style={styles.flex} sansEnTete>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Text style={styles.surTitre}>Famille</Text>
+        <Text style={styles.titre}>{famille?.nom ?? 'Ma famille'}</Text>
+        <Text style={styles.sousTitre}>
+          Dernière étape : choisissez votre foyer, c'est-à-dire la maison où vous partagez vos
+          recettes et vos listes de courses.
+        </Text>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitre}>Créer un foyer</Text>
-        <TextInput
-          style={styles.champ}
-          placeholder="Nom du foyer (ex. Famille Morel)"
-          placeholderTextColor={theme.colors.textMuted}
-          value={nomFoyer}
-          onChangeText={setNomFoyer}
-        />
-        <Pressable style={styles.bouton} onPress={creerFoyer} disabled={enCours !== null}>
-          {enCours === 'creation' ? (
-            <ActivityIndicator color={theme.colors.background} />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitre}>Rejoindre un foyer existant</Text>
+          <Text style={styles.aide}>
+            Si vous vivez avec une personne déjà inscrite, choisissez son foyer.
+          </Text>
+          {foyers === null ? (
+            <ActivityIndicator color={theme.colors.accent} />
+          ) : foyers.length === 0 ? (
+            <Text style={styles.aide}>
+              {erreurListe ?? "La famille n'a pas encore de foyer : créez le vôtre ci-dessous."}
+            </Text>
           ) : (
-            <Text style={styles.boutonTexte}>Créer le foyer</Text>
+            foyers.map((f) => (
+              <Pressable
+                key={f.id}
+                style={[styles.carteFoyer, enCours !== null && styles.boutonInactif]}
+                onPress={() => confirmerRejoindre(f)}
+                disabled={enCours !== null}
+              >
+                <View style={styles.carteFoyerTexte}>
+                  <Text style={styles.nomFoyer}>{f.nom}</Text>
+                  <Text style={styles.aide}>{detailFoyer(f)}</Text>
+                </View>
+                {enCours === f.id ? (
+                  <ActivityIndicator color={theme.colors.accent} />
+                ) : (
+                  <Text style={styles.boutonSecondaireTexte}>Rejoindre</Text>
+                )}
+              </Pressable>
+            ))
           )}
-        </Pressable>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitre}>Rejoindre un foyer existant</Text>
-        <TextInput
-          style={styles.champ}
-          placeholder="Code d'invitation (ex. A3F9K2)"
-          placeholderTextColor={theme.colors.textMuted}
-          autoCapitalize="characters"
-          value={codeSaisi}
-          onChangeText={setCodeSaisi}
-        />
-        <Pressable style={styles.bouton} onPress={rejoindreFoyer} disabled={enCours !== null}>
-          {enCours === 'jonction' ? (
-            <ActivityIndicator color={theme.colors.background} />
-          ) : (
-            <Text style={styles.boutonTexte}>Rejoindre</Text>
+          {erreurListe && (
+            <Pressable onPress={chargerFoyers}>
+              <Text style={styles.lienTexte}>Réessayer</Text>
+            </Pressable>
           )}
+        </View>
+
+        <View style={styles.separateur}>
+          <View style={styles.trait} />
+          <Text style={styles.separateurTexte}>ou</Text>
+          <View style={styles.trait} />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitre}>Créer mon foyer</Text>
+          <TextInput
+            style={styles.champ}
+            placeholder="Nom du foyer (ex. Maison de Lyon)"
+            placeholderTextColor={theme.colors.textMuted}
+            value={nomFoyer}
+            onChangeText={setNomFoyer}
+            onSubmitEditing={validerFoyer}
+          />
+          <Pressable
+            style={[styles.bouton, (!nomFoyer.trim() || enCours !== null) && styles.boutonInactif]}
+            onPress={validerFoyer}
+            disabled={!nomFoyer.trim() || enCours !== null}
+          >
+            {enCours === 'creation' ? (
+              <ActivityIndicator color={theme.colors.background} />
+            ) : (
+              <Text style={styles.boutonTexte}>Créer le foyer</Text>
+            )}
+          </Pressable>
+        </View>
+
+        {erreur && <Text style={styles.erreur}>{erreur}</Text>}
+
+        <Pressable onPress={deconnexion} style={styles.lien}>
+          <Text style={styles.lienTexte}>Se déconnecter</Text>
         </Pressable>
-      </View>
-
-      {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-
-      {/* Tant qu'on n'a pas de foyer, l'écran Profil (où se trouve la
-          déconnexion normale) n'est pas accessible : on l'ajoute donc ici
-          aussi, pour ne jamais bloquer un utilisateur sur cet écran. */}
-      <Pressable onPress={deconnexion} style={styles.lienDeconnexion}>
-        <Text style={styles.lienDeconnexionTexte}>Se déconnecter</Text>
-      </Pressable>
-    </View>
+      </ScrollView>
+    </ZoneClavier>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const styles = creerStylesThemes(() => ({
+  flex: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  container: {
+    flexGrow: 1,
     padding: theme.spacing.lg,
     justifyContent: 'center',
-    gap: theme.spacing.lg,
+    gap: theme.spacing.md,
+  },
+  surTitre: {
+    fontFamily: theme.fontBody,
+    fontSize: 14,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   titre: {
     fontFamily: theme.fontTitle,
@@ -154,7 +200,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: theme.colors.textMuted,
     textAlign: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   section: {
     backgroundColor: theme.colors.surface,
@@ -166,8 +212,13 @@ const styles = StyleSheet.create({
   },
   sectionTitre: {
     fontFamily: theme.fontBodyBold,
-    fontSize: 16,
+    fontSize: 17,
     color: theme.colors.text,
+  },
+  aide: {
+    fontFamily: theme.fontBody,
+    fontSize: 13,
+    color: theme.colors.textMuted,
   },
   champ: {
     backgroundColor: theme.colors.background,
@@ -184,24 +235,66 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     alignItems: 'center',
   },
+  boutonInactif: {
+    opacity: 0.5,
+  },
   boutonTexte: {
     fontFamily: theme.fontBodyBold,
     fontSize: 16,
     color: theme.colors.background,
+  },
+  boutonSecondaireTexte: {
+    fontFamily: theme.fontBodyBold,
+    fontSize: 16,
+    color: theme.colors.accent,
+  },
+  carteFoyer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.background,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+  },
+  carteFoyerTexte: {
+    flex: 1,
+    gap: 2,
+  },
+  nomFoyer: {
+    fontFamily: theme.fontBodyBold,
+    fontSize: 16,
+    color: theme.colors.text,
+  },
+  separateur: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  trait: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.border,
+    opacity: 0.5,
+  },
+  separateurTexte: {
+    fontFamily: theme.fontBody,
+    color: theme.colors.textMuted,
   },
   erreur: {
     fontFamily: theme.fontBody,
     color: theme.colors.warning,
     textAlign: 'center',
   },
-  lienDeconnexion: {
+  lien: {
     alignItems: 'center',
     marginTop: theme.spacing.sm,
   },
-  lienDeconnexionTexte: {
+  lienTexte: {
     fontFamily: theme.fontBody,
     color: theme.colors.textMuted,
     fontSize: 14,
     textDecorationLine: 'underline',
   },
-});
+}));

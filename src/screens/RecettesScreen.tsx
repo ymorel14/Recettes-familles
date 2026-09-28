@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, Pressable, Image, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { theme } from '../theme/theme';
+import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { listerRecettes } from '../services/recettes';
 import { supabase } from '../services/supabase';
@@ -26,11 +26,14 @@ export default function RecettesScreen({ navigation }: any) {
   // Recharge à chaque retour sur l'écran (ex. après création d'une recette).
   useFocusEffect(charger);
 
-  // Synchronisation temps réel entre appareils du foyer (§9).
+  // Synchronisation temps réel entre appareils du foyer (§9). Suffixe
+  // aléatoire dans le nom du canal à chaque montage, pour éviter toute
+  // collision avec un canal du même nom pas encore complètement fermé
+  // (voir le commentaire équivalent dans CategoriesScreen.tsx).
   useEffect(() => {
     if (!foyer) return;
     const canal = supabase
-      .channel(`recettes-foyer-${foyer.id}`)
+      .channel(`recettes-foyer-${foyer.id}-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'recettes', table: 'recettes', filter: `foyer_id=eq.${foyer.id}` },
@@ -121,7 +124,7 @@ export default function RecettesScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = creerStylesThemes(() => ({
   container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.md },
   enTete: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.sm },
   titre: { fontFamily: theme.fontTitle, fontSize: 26, color: theme.colors.accent },
@@ -162,4 +165,4 @@ const styles = StyleSheet.create({
   carteTexte: { flex: 1, padding: theme.spacing.sm, justifyContent: 'center' },
   carteTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
   carteCategorie: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-});
+}));

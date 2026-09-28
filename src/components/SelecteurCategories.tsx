@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, FlatList } from 'react-native';
-import { theme } from '../theme/theme';
+import { theme, creerStylesThemes } from '../theme/theme';
 import { rechercherCategories } from '../services/categories';
 import type { Categorie } from '../types/models';
 
@@ -80,7 +80,7 @@ export default function SelecteurCategories({ selection, onChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = creerStylesThemes(() => ({
   puces: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -131,4 +131,4 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     fontStyle: 'italic',
   },
-});
+}));
