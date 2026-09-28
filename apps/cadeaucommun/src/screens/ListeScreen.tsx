@@ -25,6 +25,8 @@ import {
   type Liste,
   type Personne,
   type Souhait,
+  dateCle,
+  libelleDates,
 } from '../services/wishlist';
 import { Bouton, Chargement, Pastille } from '../components/ui';
 
@@ -268,9 +270,9 @@ export default function ListeScreen({ route, navigation }: any) {
       <View style={styles.entete}>
         <View style={styles.enteteLigne}>
           <Text style={styles.evenement}>
-            {liste.evenement.titre} · {formaterDate(liste.evenement.date_evenement)}
+            {liste.evenement.titre} · {libelleDates(liste.evenement)}
           </Text>
-          <Pastille texte={libelleCompteARebours(liste.evenement.date_evenement)} />
+          <Pastille texte={libelleCompteARebours(dateCle(liste.evenement))} />
         </View>
         <Text style={styles.titre}>{titre}</Text>
         <View style={styles.role}>

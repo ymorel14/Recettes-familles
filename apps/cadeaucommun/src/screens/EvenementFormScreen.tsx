@@ -9,7 +9,10 @@ import {
   estEvenementPersonnel,
   lireDateSaisie,
   listerPersonnes,
+  modifierEvenement,
+  obtenirEvenement,
   obtenirMaPersonne,
+  versSaisie,
   prochainAnniversaire,
   TYPES_EVENEMENT,
   type Personne,
@@ -49,7 +52,10 @@ function titrePropose(type: TypeEvenement, personne: Personne | null, date: stri
 // Nouvel événement dans la famille active. Un anniversaire, une naissance…
 // concerne une personne ("Pour qui ?") : sa liste est créée tout de suite.
 // Noël est collectif : chacun y crée sa liste.
-export default function EvenementFormScreen({ navigation }: any) {
+// Avec `evenementId` : modification (nom et dates) d'un événement existant.
+export default function EvenementFormScreen({ navigation, route }: any) {
+  const evenementId: string | undefined = route?.params?.evenementId;
+  const modification = !!evenementId;
   const { famille, session, foyersFamille } = useAuth();
   const [type, setType] = useState<TypeEvenement>('noel');
   const [personnes, setPersonnes] = useState<Personne[]>([]);
@@ -59,8 +65,25 @@ export default function EvenementFormScreen({ navigation }: any) {
   const [titre, setTitre] = useState(`Noël ${prochaineDate(25, 12).slice(-4)}`);
   // Tant que l'utilisateur n'a pas retouché le titre, il suit le type et la personne.
   const titreAuto = useRef(true);
+  // Jour où les cadeaux sont offerts (repas…) ; vide = le jour même.
+  const [dateRemise, setDateRemise] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+
+  // Modification : on reprend le nom et les dates de l'événement.
+  useEffect(() => {
+    if (!evenementId) return;
+    navigation.setOptions({ title: 'Modifier l’événement' });
+    titreAuto.current = false;
+    obtenirEvenement(evenementId)
+      .then((e) => {
+        setType(e.type);
+        setTitre(e.titre);
+        setDate(versSaisie(e.date_evenement));
+        setDateRemise(versSaisie(e.date_remise));
+      })
+      .catch((err) => setErreur(extraireMessageErreur(err, 'Chargement impossible.')));
+  }, [evenementId, navigation]);
 
   useEffect(() => {
     if (!session) return;
@@ -98,12 +121,19 @@ export default function EvenementFormScreen({ navigation }: any) {
   const enregistrer = async () => {
     setErreur(null);
     const iso = lireDateSaisie(date);
-    if (personnel && !pourQui) return setErreur('Choisissez la personne fêtée.');
+    const isoRemise = dateRemise.trim() ? lireDateSaisie(dateRemise) : null;
+    if (!modification && personnel && !pourQui) return setErreur('Choisissez la personne fêtée.');
     if (!titre.trim()) return setErreur('Donnez un nom à l’événement.');
     if (!iso) return setErreur('Date attendue au format JJ/MM/AAAA, par exemple 25/12/2026.');
+    if (dateRemise.trim() && !isoRemise) return setErreur('Date de remise attendue au format JJ/MM/AAAA.');
     if (!famille || !session) return;
     setEnCours(true);
     try {
+      if (evenementId) {
+        await modifierEvenement(evenementId, { titre, date: iso, dateRemise: isoRemise });
+        navigation.goBack();
+        return;
+      }
       const id = await creerEvenement({
         familleId: famille.id,
         type,
@@ -111,6 +141,7 @@ export default function EvenementFormScreen({ navigation }: any) {
         date: iso,
         auteurId: session.user.id,
         destinataireId: personnel ? pourQui!.id : null,
+        dateRemise: isoRemise,
       });
       if (personnel && pourQui) {
         // Sa propre liste démarre en brouillon ; celle d'un proche est
@@ -132,6 +163,8 @@ export default function EvenementFormScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
+      {!modification && (
+      <>
       <Text style={styles.libelle}>Type</Text>
       <View style={styles.puces}>
         {TYPES_EVENEMENT.map((t) => (
@@ -181,6 +214,8 @@ export default function EvenementFormScreen({ navigation }: any) {
           Événement collectif : chacun pourra y créer sa liste, et vous pourrez aussi créer celle d'un proche.
         </Text>
       )}
+      </>
+      )}
 
       <Text style={styles.libelle} nativeID="libelle-titre">Nom</Text>
       <TextInput
@@ -195,7 +230,9 @@ export default function EvenementFormScreen({ navigation }: any) {
         accessibilityLabelledBy="libelle-titre"
       />
 
-      <Text style={styles.libelle} nativeID="libelle-date">Date</Text>
+      <Text style={styles.libelle} nativeID="libelle-date">
+        {type === 'anniversaire' ? "Date de l'anniversaire" : type === 'naissance' ? 'Date de naissance' : 'Date'}
+      </Text>
       <TextInput
         style={styles.champ}
         value={date}
@@ -205,10 +242,25 @@ export default function EvenementFormScreen({ navigation }: any) {
         keyboardType="numbers-and-punctuation"
         accessibilityLabelledBy="libelle-date"
       />
+
+      <Text style={styles.libelle} nativeID="libelle-remise">Remise des cadeaux (facultatif)</Text>
+      <TextInput
+        style={styles.champ}
+        value={dateRemise}
+        onChangeText={setDateRemise}
+        placeholder="JJ/MM/AAAA — le jour du repas, si différent"
+        placeholderTextColor={theme.colors.textMuted}
+        keyboardType="numbers-and-punctuation"
+        accessibilityLabelledBy="libelle-remise"
+      />
+      <Text style={styles.aide}>
+        Le jour où la famille offrira les cadeaux, autour d'un repas par exemple. Le compte à rebours et « À offrir » se
+        baseront sur cette date. Vous pourrez la fixer plus tard en modifiant l'événement.
+      </Text>
       <Text style={styles.aide}>Visible par toute la famille {famille?.nom}.</Text>
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-      <Bouton titre="Créer l’événement" onPress={enregistrer} enCours={enCours} />
+      <Bouton titre={modification ? 'Enregistrer' : 'Créer l’événement'} onPress={enregistrer} enCours={enCours} />
     </ScrollView>
   );
 }

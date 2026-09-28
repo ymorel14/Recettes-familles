@@ -18,6 +18,8 @@ import {
   type Evenement,
   type Liste,
   type Personne,
+  dateCle,
+  libelleDates,
 } from '../services/wishlist';
 import { Bouton, Chargement, Pastille } from '../components/ui';
 
@@ -150,10 +152,10 @@ export default function EvenementScreen({ route, navigation }: any) {
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
       <View style={styles.entete}>
-        <Pastille texte={libelleCompteARebours(evenement.date_evenement)} />
+        <Pastille texte={libelleCompteARebours(dateCle(evenement))} />
         <Text style={styles.titre}>{evenement.titre}</Text>
         <Text style={styles.date}>
-          {formaterDate(evenement.date_evenement)}
+          {libelleDates(evenement)}
           {fete ? ` · pour ${fete.id === moi?.id ? 'vous' : fete.prenom}` : ' · toute la famille'}
         </Text>
       </View>
@@ -206,7 +208,15 @@ export default function EvenementScreen({ route, navigation }: any) {
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
       {session && evenement.cree_par === session.user.id && (
-        <Bouton variante="discret" titre="Supprimer l’événement" onPress={supprimer} />
+        <>
+          <Bouton
+            variante="contour"
+            titre={evenement.date_remise ? 'Modifier l’événement' : 'Modifier / fixer le jour des cadeaux'}
+            onPress={() => navigation.navigate('NouvelEvenement', { evenementId: evenement.id })}
+            style={{ marginTop: theme.spacing.md }}
+          />
+          <Bouton variante="discret" titre="Supprimer l’événement" onPress={supprimer} />
+        </>
       )}
     </ScrollView>
   );

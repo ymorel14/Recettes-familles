@@ -10,6 +10,8 @@ import {
   listerEvenements,
   TYPES_EVENEMENT,
   type Evenement,
+  dateCle,
+  libelleDates,
 } from '../services/wishlist';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
 
@@ -40,8 +42,9 @@ export default function EvenementsScreen({ navigation }: any) {
 
   if (evenements === null) return <Chargement />;
 
-  const aVenir = evenements.filter((e) => joursAvant(e.date_evenement) >= 0);
-  const passes = evenements.filter((e) => joursAvant(e.date_evenement) < 0).reverse();
+  const tries = [...evenements].sort((a, b) => dateCle(a).localeCompare(dateCle(b)));
+  const aVenir = tries.filter((e) => joursAvant(dateCle(e)) >= 0);
+  const passes = tries.filter((e) => joursAvant(dateCle(e)) < 0).reverse();
   const lignes = [...aVenir, ...passes];
 
   return (
@@ -74,7 +77,7 @@ export default function EvenementsScreen({ navigation }: any) {
         />
       }
       renderItem={({ item, index }) => {
-        const passe = joursAvant(item.date_evenement) < 0;
+        const passe = joursAvant(dateCle(item)) < 0;
         const premierPasse = passe && index === aVenir.length;
         return (
           <>
@@ -88,10 +91,10 @@ export default function EvenementsScreen({ navigation }: any) {
                 <Text style={styles.type}>
                   {TYPES_EVENEMENT.find((t) => t.id === item.type)?.libelle ?? 'Événement'}
                 </Text>
-                <Pastille texte={libelleCompteARebours(item.date_evenement)} ton={passe ? 'neutre' : 'accent'} />
+                <Pastille texte={libelleCompteARebours(dateCle(item))} ton={passe ? 'neutre' : 'accent'} />
               </View>
               <Text style={styles.titre}>{item.titre}</Text>
-              <Text style={styles.date}>{formaterDate(item.date_evenement)}</Text>
+              <Text style={styles.date}>{libelleDates(item)}</Text>
             </Pressable>
           </>
         );

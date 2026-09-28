@@ -12,6 +12,8 @@ import {
   obtenirMaPersonne,
   type Evenement,
   type Liste,
+  dateCle,
+  libelleDates,
 } from '../services/wishlist';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
 
@@ -41,8 +43,8 @@ export default function MesEnviesScreen({ navigation }: any) {
 
   if (listes === null) return <Chargement />;
 
-  const aVenir = listes.filter((l) => l.evenement && joursAvant(l.evenement.date_evenement) >= 0);
-  const passees = listes.filter((l) => l.evenement && joursAvant(l.evenement.date_evenement) < 0);
+  const aVenir = listes.filter((l) => l.evenement && joursAvant(dateCle(l.evenement)) >= 0);
+  const passees = listes.filter((l) => l.evenement && joursAvant(dateCle(l.evenement)) < 0);
 
   const carte = (l: Liste & { evenement: Evenement }) => (
     <Pressable
@@ -53,10 +55,10 @@ export default function MesEnviesScreen({ navigation }: any) {
     >
       <View style={styles.carteHaut}>
         <Text style={styles.carteTitre}>{l.evenement.titre}</Text>
-        <Pastille texte={libelleCompteARebours(l.evenement.date_evenement)} ton={joursAvant(l.evenement.date_evenement) < 0 ? 'neutre' : 'accent'} />
+        <Pastille texte={libelleCompteARebours(dateCle(l.evenement))} ton={joursAvant(dateCle(l.evenement)) < 0 ? 'neutre' : 'accent'} />
       </View>
       <Text style={styles.detail}>
-        {formaterDate(l.evenement.date_evenement)} ·{' '}
+        {libelleDates(l.evenement)} ·{' '}
         {l.statut === 'brouillon' ? 'brouillon, pas encore publiée' : 'visible par la famille'}
       </Text>
     </Pressable>

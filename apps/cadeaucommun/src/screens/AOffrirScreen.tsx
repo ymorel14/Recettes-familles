@@ -16,6 +16,8 @@ import {
   mesReservations,
   type MaReservation,
   type Personne,
+  dateCle,
+  libelleDates,
 } from '../services/wishlist';
 import { Chargement, MessageVide, Pastille } from '../components/ui';
 
@@ -60,11 +62,11 @@ export default function AOffrirScreen({ navigation }: any) {
   };
 
   // Regroupement par événement, les plus proches d'abord (passés à la fin).
-  const groupes = new Map<string, { titre: string; date: string; lignes: MaReservation[] }>();
+  const groupes = new Map<string, { titre: string; date: string; libelle: string; lignes: MaReservation[] }>();
   reservations.forEach((r) => {
     const ev = r.souhait?.liste?.evenement;
     const cle = ev?.id ?? 'autre';
-    if (!groupes.has(cle)) groupes.set(cle, { titre: ev?.titre ?? 'Autre', date: ev?.date_evenement ?? '', lignes: [] });
+    if (!groupes.has(cle)) groupes.set(cle, { titre: ev?.titre ?? 'Autre', date: ev ? dateCle(ev) : '', libelle: ev ? libelleDates(ev) : '', lignes: [] });
     groupes.get(cle)!.lignes.push(r);
   });
   const ordre = [...groupes.values()].sort((a, b) => {
@@ -107,7 +109,7 @@ export default function AOffrirScreen({ navigation }: any) {
               <View style={styles.groupeEntete}>
                 <View style={styles.groupeTextes}>
                   <Text style={styles.groupeTitre}>{g.titre}</Text>
-                  {g.date ? <Text style={styles.detail}>{formaterDate(g.date)}</Text> : null}
+                  {g.libelle ? <Text style={styles.detail}>{g.libelle}</Text> : null}
                 </View>
                 {g.date ? <Pastille texte={libelleCompteARebours(g.date)} /> : null}
               </View>

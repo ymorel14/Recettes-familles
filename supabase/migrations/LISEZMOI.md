@@ -11,6 +11,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20260928160000_wishlist_listes_creees.sql` | Correctif CadeauCommun : pouvoir créer sa liste (lecture de la liste qu'on vient de créer) |
 | `20260928170000_wishlist_evenement_destinataire.sql` | CadeauCommun : personne fêtée d'un événement (anniversaire de…) |
 | `20260928180000_wishlist_photos_budget.sql` | CadeauCommun : prix estimé ou budget, espace de stockage des photos de cadeaux |
+| `20260928190000_wishlist_date_remise.sql` | CadeauCommun : date de remise des cadeaux (repas), distincte de la date de l'événement |
 
 ## Exécution
 

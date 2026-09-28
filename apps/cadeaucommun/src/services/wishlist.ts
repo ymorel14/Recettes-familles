@@ -38,7 +38,9 @@ export type Evenement = {
   famille_id: string;
   type: TypeEvenement;
   titre: string;
-  date_evenement: string; // AAAA-MM-JJ
+  date_evenement: string; // AAAA-MM-JJ : la vraie date (anniversaire…)
+  // Jour où les cadeaux sont offerts (repas de famille…) ; null = le jour même.
+  date_remise: string | null;
   // Personne fêtée (anniversaire, naissance…) ; null = événement collectif (Noël).
   destinataire_id: string | null;
   cree_par: string;
@@ -184,6 +186,7 @@ export async function creerEvenement(e: {
   date: string;
   auteurId: string;
   destinataireId: string | null;
+  dateRemise: string | null;
 }): Promise<string> {
   const { data, error } = await supabase
     .from('evenements')
@@ -194,11 +197,23 @@ export async function creerEvenement(e: {
       date_evenement: e.date,
       cree_par: e.auteurId,
       destinataire_id: e.destinataireId,
+      date_remise: e.dateRemise,
     })
     .select('id')
     .single();
   if (error) throw error;
   return data.id as string;
+}
+
+export async function modifierEvenement(
+  id: string,
+  e: { titre: string; date: string; dateRemise: string | null }
+): Promise<void> {
+  const { error } = await supabase
+    .from('evenements')
+    .update({ titre: e.titre.trim(), date_evenement: e.date, date_remise: e.dateRemise })
+    .eq('id', id);
+  if (error) throw error;
 }
 
 export async function supprimerEvenement(id: string): Promise<void> {
@@ -447,6 +462,34 @@ export function formaterDate(iso: string): string {
   const [a, m, j] = iso.split('-').map(Number);
   if (!a || !m || !j) return iso;
   return `${j} ${MOIS[m - 1]} ${a}`;
+}
+
+const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+
+// "2027-03-17" → "mercredi 17 mars 2027"
+export function formaterDateLongue(iso: string): string {
+  const [a, m, j] = iso.split('-').map(Number);
+  if (!a || !m || !j) return iso;
+  return `${JOURS[new Date(a, m - 1, j).getDay()]} ${formaterDate(iso)}`;
+}
+
+// Date qui compte pour acheter : la remise des cadeaux si elle est fixée,
+// sinon la date de l'événement. Sert au compte à rebours et au tri.
+export function dateCle(e: Pick<Evenement, 'date_evenement' | 'date_remise'>): string {
+  return e.date_remise ?? e.date_evenement;
+}
+
+// "15 mars 2027" ou "15 mars 2027 · cadeaux offerts le dimanche 21 mars 2027"
+export function libelleDates(e: Pick<Evenement, 'date_evenement' | 'date_remise'>): string {
+  if (!e.date_remise || e.date_remise === e.date_evenement) return formaterDate(e.date_evenement);
+  return `${formaterDate(e.date_evenement)} · cadeaux offerts le ${formaterDateLongue(e.date_remise)}`;
+}
+
+// "2027-03-15" → "15/03/2027" (pour préremplir un champ de saisie)
+export function versSaisie(iso: string | null): string {
+  if (!iso) return '';
+  const [a, m, j] = iso.split('-');
+  return `${j}/${m}/${a}`;
 }
 
 // Jours restants avant la date (0 = aujourd'hui, négatif = passé).
