@@ -1,3 +1,8 @@
+-- ⚠ NE PLUS EXÉCUTER CE SCRIPT une fois la migration
+-- supabase/migrations/20260928140000_socle_famille.sql appliquée : le compte
+-- famille a quitté le schéma "recettes". Les changements suivants sont dans
+-- supabase/migrations (voir LISEZMOI.md).
+--
 -- Mise en place de l'app "Recettes familiales" sur un projet Supabase EXISTANT.
 --
 -- À exécuter une fois dans l'éditeur SQL du projet (Dashboard > SQL Editor),
