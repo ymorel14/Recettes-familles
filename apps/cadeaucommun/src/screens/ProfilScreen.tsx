@@ -5,12 +5,20 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes, THEMES } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { usePreferences } from '../contexts/PreferencesContext';
-import { extraireMessageErreur, formaterExpiration, obtenirCodeInvitation } from '@apps-famille/famille';
+import {
+  definirMonPrenom,
+  extraireMessageErreur,
+  formaterExpiration,
+  obtenirCodeInvitation,
+  obtenirMonPrenom,
+} from '@apps-famille/famille';
+import { alerte } from '../utils/alerte';
 import {
   ajouterPersonneSansCompte,
   formaterDate,
   lireDateSaisie,
   listerPersonnes,
+  supprimerPersonne,
   type Personne,
 } from '../services/wishlist';
 import { Bouton } from '../components/ui';
@@ -25,15 +33,20 @@ export default function ProfilScreen() {
   const [naissance, setNaissance] = useState('');
   const [enCours, setEnCours] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [monPrenom, setMonPrenom] = useState('');
+  const [prenomEnregistre, setPrenomEnregistre] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
-    if (!foyer) return;
+    if (!foyer || !session) return;
     try {
-      setPersonnes(await listerPersonnes([foyer.id]));
+      const [p, moi] = await Promise.all([listerPersonnes([foyer.id]), obtenirMonPrenom(session.user.id)]);
+      setPersonnes(p);
+      setPrenomEnregistre(moi);
+      setMonPrenom(moi ?? '');
     } catch {
       setPersonnes([]);
     }
-  }, [foyer]);
+  }, [foyer, session]);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,12 +98,62 @@ export default function ProfilScreen() {
   };
 
   const sansCompte = personnes.filter((p) => !p.utilisateur_id);
+  const avecCompte = personnes.filter((p) => p.utilisateur_id && p.utilisateur_id !== session?.user.id);
+
+  const enregistrerPrenom = () =>
+    executer(
+      'prenom',
+      async () => {
+        await definirMonPrenom(session!.user.id, monPrenom);
+        setPrenomEnregistre(monPrenom.trim());
+      },
+      'Impossible d’enregistrer le prénom.'
+    );
+
+  const retirerPersonne = (p: Personne) =>
+    alerte(`Retirer ${p.prenom} du foyer ?`, 'Ses listes de souhaits seront supprimées.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Retirer',
+        style: 'destructive',
+        onPress: () =>
+          executer(
+            p.id,
+            async () => {
+              await supprimerPersonne(p.id);
+              await charger();
+            },
+            'Impossible de retirer cette personne.'
+          ),
+      },
+    ]);
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
       <View>
-        <Text style={styles.titre}>{foyer?.nom ?? 'Mon foyer'}</Text>
-        <Text style={styles.detail}>{session?.user.email}</Text>
+        <Text style={styles.titre}>{prenomEnregistre || 'Mon profil'}</Text>
+        <Text style={styles.detail}>
+          Connecté en tant que {prenomEnregistre || 'utilisateur sans prénom'} · {session?.user.email}
+        </Text>
+        <Text style={styles.detail}>Foyer : {foyer?.nom}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitre}>Mon prénom</Text>
+        <Text style={styles.aide}>
+          Affiché sur vos listes (« La liste de … ») et vos idées, dans toutes les apps de la famille.
+        </Text>
+        <TextInput
+          style={styles.champ}
+          value={monPrenom}
+          onChangeText={setMonPrenom}
+          placeholder="Prénom ou surnom"
+          placeholderTextColor={theme.colors.textMuted}
+          accessibilityLabel="Mon prénom"
+        />
+        {monPrenom.trim() !== (prenomEnregistre ?? '') && monPrenom.trim().length > 0 && (
+          <Bouton titre="Enregistrer" onPress={enregistrerPrenom} enCours={enCours === 'prenom'} />
+        )}
       </View>
 
       <View style={styles.section}>
@@ -117,16 +180,32 @@ export default function ProfilScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitre}>Personnes sans compte</Text>
+        <Text style={styles.sectionTitre}>Mon foyer</Text>
         <Text style={styles.aide}>
-          Un enfant, un bébé ou un grand-parent sans téléphone : ajoutez-le à votre foyer pour lui créer des listes.
+          Un adulte (votre conjoint…) crée son propre compte puis saisit le code famille (« Inviter un proche »
+          ci-dessus) et choisit votre foyer. Un enfant ou un bébé sans compte s'ajoute ici : vous remplirez ses listes à
+          sa place.
         </Text>
-        {sansCompte.map((p) => (
-          <Text key={p.id} style={styles.personne}>
-            {p.prenom}
-            {p.date_naissance ? ` · né(e) le ${formaterDate(p.date_naissance)}` : ''}
-          </Text>
+        {avecCompte.map((p) => (
+          <View key={p.id} style={styles.lignePersonne}>
+            <Ionicons name="person-outline" size={18} color={theme.colors.textMuted} />
+            <Text style={styles.personne}>{p.prenom || 'Sans prénom'}</Text>
+            <Text style={styles.aide}>a son compte</Text>
+          </View>
         ))}
+        {sansCompte.map((p) => (
+          <View key={p.id} style={styles.lignePersonne}>
+            <Ionicons name="happy-outline" size={18} color={theme.colors.textMuted} />
+            <Text style={styles.personne}>
+              {p.prenom}
+              {p.date_naissance ? ` · ${formaterDate(p.date_naissance)}` : ''}
+            </Text>
+            <Pressable onPress={() => retirerPersonne(p)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Retirer ${p.prenom}`}>
+              <Text style={styles.lienDiscret}>Retirer</Text>
+            </Pressable>
+          </View>
+        ))}
+        <Text style={styles.sousSection}>Ajouter une personne sans compte</Text>
         <TextInput
           style={styles.champ}
           value={prenom}
@@ -212,7 +291,10 @@ const styles = creerStylesThemes(() => ({
   themeTextes: { flex: 1, gap: 2 },
   apercu: { flexDirection: 'row', gap: 3, padding: 5, borderRadius: 4, borderWidth: 1 },
   pastille: { width: 12, height: 24, borderRadius: 3 },
-  personne: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  personne: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  lignePersonne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 36 },
+  sousSection: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.text, marginTop: theme.spacing.sm },
+  lienDiscret: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted, textDecorationLine: 'underline' },
   champ: {
     minHeight: 44,
     backgroundColor: theme.colors.background,

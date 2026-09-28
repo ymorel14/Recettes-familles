@@ -33,8 +33,15 @@ export type Evenement = {
   type: TypeEvenement;
   titre: string;
   date_evenement: string; // AAAA-MM-JJ
+  // Personne fêtée (anniversaire, naissance…) ; null = événement collectif (Noël).
+  destinataire_id: string | null;
   cree_par: string;
 };
+
+// Types d'événement qui concernent une seule personne.
+export function estEvenementPersonnel(type: TypeEvenement): boolean {
+  return type !== 'noel' && type !== 'autre';
+}
 
 export type StatutListe = 'brouillon' | 'publiee' | 'archivee';
 
@@ -112,6 +119,13 @@ export async function ajouterPersonneSansCompte(
   if (error) throw error;
 }
 
+// Retire une personne sans compte de son foyer (fiche créée par erreur, en
+// double…). Ses listes sont supprimées avec elle.
+export async function supprimerPersonne(id: string): Promise<void> {
+  const { error } = await schemaFamille().from('personnes').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ---------------------------------------------------------------------------
 // Événements
 // ---------------------------------------------------------------------------
@@ -138,10 +152,18 @@ export async function creerEvenement(e: {
   titre: string;
   date: string;
   auteurId: string;
+  destinataireId: string | null;
 }): Promise<string> {
   const { data, error } = await supabase
     .from('evenements')
-    .insert({ famille_id: e.familleId, type: e.type, titre: e.titre.trim(), date_evenement: e.date, cree_par: e.auteurId })
+    .insert({
+      famille_id: e.familleId,
+      type: e.type,
+      titre: e.titre.trim(),
+      date_evenement: e.date,
+      cree_par: e.auteurId,
+      destinataire_id: e.destinataireId,
+    })
     .select('id')
     .single();
   if (error) throw error;
@@ -391,6 +413,18 @@ export function lireDateSaisie(texte: string): string | null {
   const d = new Date(a, mo - 1, j);
   if (d.getFullYear() !== a || d.getMonth() !== mo - 1 || d.getDate() !== j) return null;
   return `${a}-${String(mo).padStart(2, '0')}-${String(j).padStart(2, '0')}`;
+}
+
+// Prochain anniversaire d'une date de naissance "AAAA-MM-JJ", au format
+// JJ/MM/AAAA (aujourd'hui compris).
+export function prochainAnniversaire(dateNaissance: string): string | null {
+  const [, m, j] = dateNaissance.split('-').map(Number);
+  if (!m || !j) return null;
+  const aujourdHui = new Date();
+  const debut = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth(), aujourdHui.getDate());
+  let annee = aujourdHui.getFullYear();
+  if (new Date(annee, m - 1, j) < debut) annee += 1;
+  return `${String(j).padStart(2, '0')}/${String(m).padStart(2, '0')}/${annee}`;
 }
 
 export function formaterPrix(prix: number | null): string | null {

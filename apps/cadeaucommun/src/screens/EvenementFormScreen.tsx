@@ -1,57 +1,134 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
-import { creerEvenement, lireDateSaisie, TYPES_EVENEMENT, type TypeEvenement } from '../services/wishlist';
+import {
+  creerEvenement,
+  creerListe,
+  estEvenementPersonnel,
+  lireDateSaisie,
+  listerPersonnes,
+  obtenirMaPersonne,
+  prochainAnniversaire,
+  TYPES_EVENEMENT,
+  type Personne,
+  type TypeEvenement,
+} from '../services/wishlist';
 import { Bouton } from '../components/ui';
 
 // Prochaine date d'un jour/mois fixe (Noël : 25/12) au format JJ/MM/AAAA.
 function prochaineDate(jour: number, mois: number): string {
   const aujourdHui = new Date();
   let annee = aujourdHui.getFullYear();
-  const cette = new Date(annee, mois - 1, jour);
-  if (cette < new Date(annee, aujourdHui.getMonth(), aujourdHui.getDate())) annee += 1;
+  if (new Date(annee, mois - 1, jour) < new Date(annee, aujourdHui.getMonth(), aujourdHui.getDate())) annee += 1;
   return `${String(jour).padStart(2, '0')}/${String(mois).padStart(2, '0')}/${annee}`;
 }
 
-// Nouvel événement dans la famille active.
+// Titre proposé selon le type et la personne fêtée.
+function titrePropose(type: TypeEvenement, personne: Personne | null, date: string): string {
+  const prenom = personne?.prenom?.trim();
+  switch (type) {
+    case 'noel':
+      return `Noël ${date.slice(-4)}`;
+    case 'anniversaire':
+      return prenom ? `Anniversaire de ${prenom}` : 'Anniversaire';
+    case 'naissance':
+      return prenom ? `Naissance de ${prenom}` : 'Naissance';
+    case 'mariage':
+      return prenom ? `Mariage de ${prenom}` : 'Mariage';
+    case 'fete_des_meres':
+      return prenom ? `Fête des mères · ${prenom}` : 'Fête des mères';
+    case 'fete_des_peres':
+      return prenom ? `Fête des pères · ${prenom}` : 'Fête des pères';
+    default:
+      return '';
+  }
+}
+
+// Nouvel événement dans la famille active. Un anniversaire, une naissance…
+// concerne une personne ("Pour qui ?") : sa liste est créée tout de suite.
+// Noël est collectif : chacun y crée sa liste.
 export default function EvenementFormScreen({ navigation }: any) {
-  const { famille, session } = useAuth();
+  const { famille, session, foyersFamille } = useAuth();
   const [type, setType] = useState<TypeEvenement>('noel');
-  const [titre, setTitre] = useState(`Noël ${prochaineDate(25, 12).slice(-4)}`);
+  const [personnes, setPersonnes] = useState<Personne[]>([]);
+  const [moi, setMoi] = useState<Personne | null>(null);
+  const [pourQui, setPourQui] = useState<Personne | null>(null);
   const [date, setDate] = useState(prochaineDate(25, 12));
+  const [titre, setTitre] = useState(`Noël ${prochaineDate(25, 12).slice(-4)}`);
+  // Tant que l'utilisateur n'a pas retouché le titre, il suit le type et la personne.
+  const titreAuto = useRef(true);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!session) return;
+    Promise.all([listerPersonnes(foyersFamille), obtenirMaPersonne(session.user.id)])
+      .then(([p, m]) => {
+        setPersonnes(p);
+        setMoi(m);
+      })
+      .catch(() => {});
+  }, [foyersFamille, session]);
+
+  const personnel = estEvenementPersonnel(type);
+
+  const appliquer = (t: TypeEvenement, p: Personne | null) => {
+    let nouvelleDate = date;
+    if (t === 'noel') nouvelleDate = prochaineDate(25, 12);
+    else if (t === 'anniversaire' && p?.date_naissance) nouvelleDate = prochainAnniversaire(p.date_naissance) ?? date;
+    else if (type === 'noel') nouvelleDate = '';
+    setDate(nouvelleDate);
+    if (titreAuto.current) setTitre(titrePropose(t, estEvenementPersonnel(t) ? p : null, nouvelleDate));
+  };
+
   const choisirType = (t: TypeEvenement) => {
     setType(t);
-    if (t === 'noel') {
-      const d = prochaineDate(25, 12);
-      setDate(d);
-      setTitre(`Noël ${d.slice(-4)}`);
-    } else if (titre.startsWith('Noël')) {
-      setTitre('');
-      setDate('');
-    }
+    const p = estEvenementPersonnel(t) ? pourQui : null;
+    if (!estEvenementPersonnel(t)) setPourQui(null);
+    appliquer(t, p);
+  };
+
+  const choisirPersonne = (p: Personne) => {
+    setPourQui(p);
+    appliquer(type, p);
   };
 
   const enregistrer = async () => {
     setErreur(null);
     const iso = lireDateSaisie(date);
+    if (personnel && !pourQui) return setErreur('Choisissez la personne fêtée.');
     if (!titre.trim()) return setErreur('Donnez un nom à l’événement.');
     if (!iso) return setErreur('Date attendue au format JJ/MM/AAAA, par exemple 25/12/2026.');
     if (!famille || !session) return;
     setEnCours(true);
     try {
-      const id = await creerEvenement({ familleId: famille.id, type, titre, date: iso, auteurId: session.user.id });
-      navigation.replace('Evenement', { evenementId: id });
+      const id = await creerEvenement({
+        familleId: famille.id,
+        type,
+        titre,
+        date: iso,
+        auteurId: session.user.id,
+        destinataireId: personnel ? pourQui!.id : null,
+      });
+      if (personnel && pourQui) {
+        // Sa propre liste démarre en brouillon ; celle d'un proche est
+        // publiée tout de suite pour que la famille puisse y proposer des idées.
+        const pourMoi = pourQui.id === moi?.id;
+        const listeId = await creerListe(id, pourQui.id, session.user.id, pourMoi ? 'brouillon' : 'publiee');
+        navigation.replace('Liste', { listeId });
+      } else {
+        navigation.replace('Evenement', { evenementId: id });
+      }
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Impossible de créer l’événement.'));
     } finally {
       setEnCours(false);
     }
   };
+
+  const nomAffiche = (p: Personne) => (p.id === moi?.id ? `${p.prenom || 'Moi'} (moi)` : p.prenom || 'Sans prénom');
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
@@ -70,11 +147,49 @@ export default function EvenementFormScreen({ navigation }: any) {
         ))}
       </View>
 
+      {personnel ? (
+        <>
+          <Text style={styles.libelle}>Pour qui ?</Text>
+          <View style={styles.puces}>
+            {personnes.map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => choisirPersonne(p)}
+                style={[styles.puce, pourQui?.id === p.id && styles.puceActive]}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: pourQui?.id === p.id }}
+              >
+                <Text style={[styles.puceTexte, pourQui?.id === p.id && styles.puceTexteActive]}>{nomAffiche(p)}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {pourQui && (
+            <Text style={styles.aide}>
+              {pourQui.id === moi?.id
+                ? 'Votre liste sera créée en brouillon : ajoutez vos souhaits puis publiez-la.'
+                : pourQui.utilisateur_id
+                  ? `La liste de ${pourQui.prenom} sera créée et visible par la famille. ${pourQui.prenom} pourra y ajouter ses souhaits ; ce que vous y ajouterez restera caché à ${pourQui.prenom}.`
+                  : `${pourQui.prenom} n'a pas de compte : vous remplirez sa liste à sa place, et la famille pourra y réserver des cadeaux.`}
+            </Text>
+          )}
+          {personnes.length === 0 && (
+            <Text style={styles.aide}>Personne dans la famille pour l'instant.</Text>
+          )}
+        </>
+      ) : (
+        <Text style={styles.aide}>
+          Événement collectif : chacun pourra y créer sa liste, et vous pourrez aussi créer celle d'un proche.
+        </Text>
+      )}
+
       <Text style={styles.libelle} nativeID="libelle-titre">Nom</Text>
       <TextInput
         style={styles.champ}
         value={titre}
-        onChangeText={setTitre}
+        onChangeText={(t) => {
+          titreAuto.current = false;
+          setTitre(t);
+        }}
         placeholder="Ex. Anniversaire de Léa"
         placeholderTextColor={theme.colors.textMuted}
         accessibilityLabelledBy="libelle-titre"
@@ -90,9 +205,7 @@ export default function EvenementFormScreen({ navigation }: any) {
         keyboardType="numbers-and-punctuation"
         accessibilityLabelledBy="libelle-date"
       />
-      <Text style={styles.aide}>
-        L'événement est visible par toute la famille {famille?.nom}. Chacun pourra y créer sa liste de souhaits.
-      </Text>
+      <Text style={styles.aide}>Visible par toute la famille {famille?.nom}.</Text>
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
       <Bouton titre="Créer l’événement" onPress={enregistrer} enCours={enCours} />
@@ -102,7 +215,7 @@ export default function EvenementFormScreen({ navigation }: any) {
 
 const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
-  contenu: { padding: theme.spacing.md, gap: theme.spacing.sm },
+  contenu: { padding: theme.spacing.md, gap: theme.spacing.sm, paddingBottom: theme.spacing.xl },
   libelle: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text, marginTop: theme.spacing.sm },
   puces: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   puce: {
@@ -128,6 +241,6 @@ const styles = creerStylesThemes(() => ({
     fontFamily: theme.fontBody,
     fontSize: 16,
   },
-  aide: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
+  aide: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, lineHeight: 18 },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

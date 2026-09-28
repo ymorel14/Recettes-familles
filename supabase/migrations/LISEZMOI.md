@@ -9,6 +9,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20260928140000_socle_famille.sql` | Schéma `famille` commun à toutes les apps, plusieurs familles par utilisateur, famille active partagée, personnes sans compte, compatibilité avec l'app Cuisine actuelle |
 | `20260928150000_wishlist.sql` | Schéma `wishlist` de CadeauCommun : événements, listes, souhaits, idées cachées, réservations anonymes |
 | `20260928160000_wishlist_listes_creees.sql` | Correctif CadeauCommun : pouvoir créer sa liste (lecture de la liste qu'on vient de créer) |
+| `20260928170000_wishlist_evenement_destinataire.sql` | CadeauCommun : personne fêtée d'un événement (anniversaire de…) |
 
 ## Exécution
 

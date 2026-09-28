@@ -30,7 +30,12 @@ const PRIORITES: { valeur: 1 | 2 | 3; libelle: string }[] = [
 // Ajout ou modification d'un souhait (par le destinataire ou son
 // gestionnaire) ou d'une idée cachée (par un proche : `idee` vrai).
 export default function SouhaitFormScreen({ route, navigation }: any) {
-  const { listeId, souhaitId, idee } = route.params as { listeId: string; souhaitId?: string; idee?: boolean };
+  const { listeId, souhaitId, idee, prenom } = route.params as {
+    listeId: string;
+    souhaitId?: string;
+    idee?: boolean;
+    prenom?: string;
+  };
   const { session } = useAuth();
   const [form, setForm] = useState<FormulaireSouhait | null>(souhaitId ? null : VIDE);
   const [enCours, setEnCours] = useState(false);
@@ -101,7 +106,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
       {idee && (
         <Text style={styles.bandeau}>
-          Cette idée sera visible par la famille, mais jamais par la personne à qui elle est destinée.
+          Idée cachée : la famille la verra, mais jamais {prenom ?? 'la personne à qui elle est destinée'}. La base
+          de données l'empêche, même en cas d'erreur de l'app.
         </Text>
       )}
       {champ('titre', 'Nom', { placeholder: idee ? 'Ex. Cours de poterie' : 'Ex. Roman illustré' })}

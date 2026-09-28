@@ -103,7 +103,26 @@ export default function ListeScreen({ route, navigation }: any) {
   );
   const idees = souhaits.filter((s) => s.secret && !s.supprime_le);
 
-  const titre = mode === 'destinataire' ? 'Ma liste' : `La liste de ${prenom}`;
+  const titre =
+    mode === 'destinataire' ? `Ma liste${destinataire?.prenom ? ` · ${destinataire.prenom}` : ''}` : `La liste de ${prenom}`;
+
+  // Rappel du rôle de l'utilisateur sur cette liste, et de ce qui reste caché.
+  const role =
+    mode === 'destinataire'
+      ? {
+          icone: 'heart-outline' as const,
+          texte:
+            'C’est votre liste : la famille voit vos souhaits. Vous ne verrez jamais ce qui est réservé, ni les idées ajoutées par la famille.',
+        }
+      : mode === 'gestionnaire'
+        ? {
+            icone: 'people-outline' as const,
+            texte: `${prenom} n’a pas de compte : vous remplissez sa liste à sa place. Vous voyez aussi les réservations et les idées de la famille.`,
+          }
+        : {
+            icone: 'eye-off-outline' as const,
+            texte: `Vous êtes un proche de ${prenom}. Ce que vous réservez et les idées que vous ajoutez restent cachés à ${prenom}, qui ne voit que ses propres souhaits.`,
+          };
 
   const confirmerRetrait = (s: Souhait) =>
     alerte(`Retirer « ${s.titre} » ?`, undefined, [
@@ -194,6 +213,12 @@ export default function ListeScreen({ route, navigation }: any) {
                 {s.cree_par === moiId ? 'Votre idée' : `Idée de ${prenomAuteur(s.cree_par)}`}
               </Text>
             )}
+            {s.secret && (
+              <View style={styles.cache}>
+                <Ionicons name="eye-off-outline" size={14} color={theme.colors.accent} />
+                <Text style={styles.cacheTexte}>Invisible pour {prenom}</Text>
+              </View>
+            )}
             {s.supprime_le && <Text style={styles.statutReserve}>Retiré de la liste par {prenom}</Text>}
             {statut}
           </View>
@@ -207,7 +232,7 @@ export default function ListeScreen({ route, navigation }: any) {
             </Pressable>
           ) : null}
           {modifiable && !s.supprime_le && (
-            <Pressable onPress={() => navigation.navigate('Souhait', { listeId, souhaitId: s.id, idee: s.secret })} hitSlop={8}>
+            <Pressable onPress={() => navigation.navigate('Souhait', { listeId, souhaitId: s.id, idee: s.secret, prenom })} hitSlop={8}>
               <Text style={styles.lien}>Modifier</Text>
             </Pressable>
           )}
@@ -241,11 +266,11 @@ export default function ListeScreen({ route, navigation }: any) {
           <Pastille texte={libelleCompteARebours(liste.evenement.date_evenement)} />
         </View>
         <Text style={styles.titre}>{titre}</Text>
-        {mode === 'destinataire' ? (
-          <Text style={styles.sousTitre}>
-            Surprise garantie : vous ne verrez ni ce qui est réservé, ni les idées ajoutées par la famille.
-          </Text>
-        ) : (
+        <View style={styles.role}>
+          <Ionicons name={role.icone} size={20} color={theme.colors.accent} />
+          <Text style={styles.roleTexte}>{role.texte}</Text>
+        </View>
+        {mode !== 'destinataire' && (
           <Text style={styles.sousTitre}>
             {nbSouhaitsActifs} souhait{nbSouhaitsActifs > 1 ? 's' : ''}, {nbReservesActifs} déjà réservé
             {nbReservesActifs > 1 ? 's' : ''}
@@ -277,7 +302,7 @@ export default function ListeScreen({ route, navigation }: any) {
         <Bouton
           variante="pointille"
           titre="+ Ajouter un souhait"
-          onPress={() => navigation.navigate('Souhait', { listeId, idee: false })}
+          onPress={() => navigation.navigate('Souhait', { listeId, idee: false, prenom })}
         />
       )}
 
@@ -296,7 +321,7 @@ export default function ListeScreen({ route, navigation }: any) {
           <Bouton
             variante="pointille"
             titre="+ Ajouter une idée cachée"
-            onPress={() => navigation.navigate('Souhait', { listeId, idee: true })}
+            onPress={() => navigation.navigate('Souhait', { listeId, idee: true, prenom })}
           />
         </>
       )}
@@ -328,6 +353,17 @@ const styles = creerStylesThemes(() => ({
   },
   titre: { fontFamily: theme.fontTitle, fontSize: 32, color: theme.colors.text },
   sousTitre: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
+  role: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    alignItems: 'flex-start',
+    backgroundColor: theme.colors.accentTransparent,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.sm,
+  },
+  roleTexte: { flex: 1, fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.text, lineHeight: 19 },
+  cache: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  cacheTexte: { fontFamily: theme.fontBodyBold, fontSize: 12, color: theme.colors.accent },
   bandeau: {
     backgroundColor: theme.colors.accentTransparent,
     borderRadius: theme.radii.lg,
