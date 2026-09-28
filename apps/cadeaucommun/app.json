@@ -28,6 +28,15 @@
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#F5EEE2"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet d'ajouter une photo à un souhait de cadeau.",
+          "cameraPermission": "Permet de photographier un cadeau pour l'ajouter à une liste."
+        }
+      ]
+    ]
   }
 }

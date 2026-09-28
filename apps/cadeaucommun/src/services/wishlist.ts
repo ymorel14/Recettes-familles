@@ -1,4 +1,10 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
+import { Platform } from 'react-native';
 import { supabase, schemaFamille } from './supabase';
+
+// Espace de stockage des photos de cadeaux (migration 5).
+const BUCKET_PHOTOS_CADEAUX = 'cadeaux-photos';
 
 // Accès aux données de CadeauCommun (schéma "wishlist"). La surprise est
 // garantie par la base elle-même (règles RLS de
@@ -61,6 +67,8 @@ export type Souhait = {
   lien: string | null;
   image: string | null;
   prix: number | null;
+  // estime : prix indicatif ; budget : montant maximum à dépenser.
+  type_prix: TypePrix;
   taille: string | null;
   priorite: 1 | 2 | 3;
   quantite: number;
@@ -69,6 +77,8 @@ export type Souhait = {
   cree_le: string;
   supprime_le: string | null;
 };
+
+export type TypePrix = 'estime' | 'budget';
 
 export type EtatReservation = {
   souhait_id: string;
@@ -261,18 +271,48 @@ export type FormulaireSouhait = {
   titre: string;
   description: string;
   lien: string;
+  // Photo déjà en ligne (adresse) et/ou nouvelle photo choisie sur l'appareil.
+  image: string | null;
+  photoLocale: string | null;
   prix: string;
+  typePrix: TypePrix;
   taille: string;
   priorite: 1 | 2 | 3;
   quantite: number;
 };
 
-function lignePourBase(f: FormulaireSouhait) {
-  const prix = f.prix.trim().replace(',', '.');
+// Envoie une photo choisie sur l'appareil et renvoie son adresse publique
+// (nom aléatoire, non listable : voir la migration 5).
+export async function televerserPhoto(uriLocale: string): Promise<string> {
+  let extension: string;
+  let donnees: ArrayBuffer;
+  if (Platform.OS === 'web') {
+    const fichier = await (await fetch(uriLocale)).blob();
+    extension = (fichier.type.split('/')[1] || 'jpeg').replace('jpeg', 'jpg');
+    donnees = await fichier.arrayBuffer();
+  } else {
+    extension = uriLocale.split('.').pop()?.toLowerCase() ?? 'jpg';
+    donnees = decode(await FileSystem.readAsStringAsync(uriLocale, { encoding: 'base64' }));
+  }
+  const nomFichier = `${Date.now()}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}.${extension}`;
+  const { error } = await supabase.storage.from(BUCKET_PHOTOS_CADEAUX).upload(nomFichier, donnees, {
+    contentType: `image/${extension === 'jpg' ? 'jpeg' : extension}`,
+  });
+  if (error) throw error;
+  return supabase.storage.from(BUCKET_PHOTOS_CADEAUX).getPublicUrl(nomFichier).data.publicUrl;
+}
+
+async function lignePourBase(f: FormulaireSouhait) {
+  const prix = f.prix.trim().replace(',', '.').replace(/\s|€/g, '');
+  const image = f.photoLocale ? await televerserPhoto(f.photoLocale) : f.image;
+  let lien = f.lien.trim();
+  if (lien && !/^https?:\/\//i.test(lien)) lien = `https://${lien}`;
   return {
     titre: f.titre.trim(),
     description: f.description.trim() || null,
-    lien: f.lien.trim() || null,
+    lien: lien || null,
+    image,
+    type_prix: f.typePrix,
     prix: prix && !Number.isNaN(Number(prix)) ? Number(prix) : null,
     taille: f.taille.trim() || null,
     priorite: f.priorite,
@@ -286,12 +326,12 @@ function lignePourBase(f: FormulaireSouhait) {
 export async function creerSouhait(listeId: string, auteurId: string, f: FormulaireSouhait, secret: boolean) {
   const { error } = await supabase
     .from('souhaits')
-    .insert({ ...lignePourBase(f), liste_id: listeId, cree_par: auteurId, secret });
+    .insert({ ...(await lignePourBase(f)), liste_id: listeId, cree_par: auteurId, secret });
   if (error) throw error;
 }
 
 export async function modifierSouhait(id: string, f: FormulaireSouhait) {
-  const { error } = await supabase.from('souhaits').update(lignePourBase(f)).eq('id', id);
+  const { error } = await supabase.from('souhaits').update(await lignePourBase(f)).eq('id', id);
   if (error) throw error;
 }
 
@@ -345,6 +385,8 @@ export type MaReservation = {
     id: string;
     titre: string;
     prix: number | null;
+    type_prix: TypePrix;
+    image: string | null;
     lien: string | null;
     secret: boolean;
     supprime_le: string | null;
@@ -361,7 +403,7 @@ export async function mesReservations(): Promise<MaReservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, souhait_id, quantite, achete, note_privee, souhait:souhaits(id, titre, prix, lien, secret, supprime_le, liste:listes(id, destinataire_id, evenement:evenements(*)))'
+      'id, souhait_id, quantite, achete, note_privee, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, evenement:evenements(*)))'
     )
     .order('cree_le', { ascending: true });
   if (error) throw error;
@@ -430,6 +472,13 @@ export function prochainAnniversaire(dateNaissance: string): string | null {
 export function formaterPrix(prix: number | null): string | null {
   if (prix == null) return null;
   return `${prix.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+}
+
+// "≈ 24 €" (prix estimé) ou "Budget : jusqu'à 50 €".
+export function libellePrix(prix: number | null, typePrix: TypePrix | null | undefined): string | null {
+  const montant = formaterPrix(prix);
+  if (!montant) return null;
+  return typePrix === 'budget' ? `Budget : jusqu’à ${montant}` : `≈ ${montant}`;
 }
 
 // Ma fiche personne (créée automatiquement quand je rejoins un foyer).

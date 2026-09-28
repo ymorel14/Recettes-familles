@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Image, Platform } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
@@ -15,7 +17,10 @@ const VIDE: FormulaireSouhait = {
   titre: '',
   description: '',
   lien: '',
+  image: null,
+  photoLocale: null,
   prix: '',
+  typePrix: 'estime',
   taille: '',
   priorite: 2,
   quantite: 1,
@@ -52,7 +57,10 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           titre: s.titre,
           description: s.description ?? '',
           lien: s.lien ?? '',
+          image: s.image,
+          photoLocale: null,
           prix: s.prix != null ? String(s.prix).replace('.', ',') : '',
+          typePrix: s.type_prix ?? 'estime',
           taille: s.taille ?? '',
           priorite: s.priorite,
           quantite: s.quantite,
@@ -80,6 +88,30 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       setEnCours(false);
     }
   };
+
+  // Photo : galerie ou appareil photo, recadrée en carré par le téléphone.
+  const choisirPhoto = async (source: 'galerie' | 'appareil') => {
+    setErreur(null);
+    const options: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ['images'],
+      quality: 0.7,
+      allowsEditing: Platform.OS !== 'web',
+      aspect: [1, 1],
+    };
+    if (source === 'appareil') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) return setErreur("Autorisez l'appareil photo dans les réglages du téléphone.");
+      const resultat = await ImagePicker.launchCameraAsync(options);
+      if (!resultat.canceled && resultat.assets[0]) changer({ photoLocale: resultat.assets[0].uri });
+    } else {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return setErreur('Autorisez l’accès aux photos dans les réglages du téléphone.');
+      const resultat = await ImagePicker.launchImageLibraryAsync(options);
+      if (!resultat.canceled && resultat.assets[0]) changer({ photoLocale: resultat.assets[0].uri });
+    }
+  };
+
+  const apercu = form.photoLocale ?? form.image;
 
   const champ = (
     cle: keyof FormulaireSouhait,
@@ -111,9 +143,51 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         </Text>
       )}
       {champ('titre', 'Nom', { placeholder: idee ? 'Ex. Cours de poterie' : 'Ex. Roman illustré' })}
-      {champ('lien', 'Lien vers le produit', { placeholder: 'https://…', clavier: 'url' })}
+
+      <Text style={styles.libelle}>Photo</Text>
+      <View style={styles.photoBloc}>
+        {apercu ? (
+          <Image source={{ uri: apercu }} style={styles.photo} accessibilityLabel="Photo du cadeau" />
+        ) : (
+          <View style={[styles.photo, styles.photoVide]}>
+            <Ionicons name="image-outline" size={32} color={theme.colors.textMuted} />
+          </View>
+        )}
+        <View style={styles.photoActions}>
+          <Bouton variante="contour" titre={apercu ? 'Changer' : 'Choisir une photo'} onPress={() => choisirPhoto('galerie')} />
+          {Platform.OS !== 'web' && (
+            <Bouton variante="contour" titre="Prendre une photo" onPress={() => choisirPhoto('appareil')} />
+          )}
+          {apercu && <Bouton variante="discret" titre="Retirer la photo" onPress={() => changer({ photoLocale: null, image: null })} />}
+        </View>
+      </View>
+
+      {champ('lien', 'Lien vers un site marchand', { placeholder: 'https://…', clavier: 'url' })}
+
+      <Text style={styles.libelle}>Prix</Text>
+      <View style={styles.puces}>
+        {([
+          ['estime', 'Prix estimé'],
+          ['budget', 'Budget maximum'],
+        ] as const).map(([valeur, libelle]) => (
+          <Pressable
+            key={valeur}
+            onPress={() => changer({ typePrix: valeur })}
+            style={[styles.puce, form.typePrix === valeur && styles.puceActive]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: form.typePrix === valeur }}
+          >
+            <Text style={[styles.puceTexte, form.typePrix === valeur && styles.puceTexteActive]}>{libelle}</Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={styles.ligne}>
-        <View style={styles.moitie}>{champ('prix', 'Prix indicatif (€)', { placeholder: '25', clavier: 'decimal-pad' })}</View>
+        <View style={styles.moitie}>
+          {champ('prix', form.typePrix === 'budget' ? 'Jusqu’à (€)' : 'Environ (€)', {
+            placeholder: form.typePrix === 'budget' ? '50' : '25',
+            clavier: 'decimal-pad',
+          })}
+        </View>
         <View style={styles.moitie}>{champ('taille', 'Taille / pointure', { placeholder: 'Ex. 38' })}</View>
       </View>
       {champ('description', 'Précisions', { placeholder: 'Couleur, modèle, où le trouver…', multiligne: true })}
@@ -213,5 +287,16 @@ const styles = creerStylesThemes(() => ({
   boutonRondTexte: { fontFamily: theme.fontBodyBold, fontSize: 22, color: theme.colors.accent },
   quantiteValeur: { fontFamily: theme.fontTitle, fontSize: 22, color: theme.colors.text, minWidth: 24, textAlign: 'center' },
   enregistrer: { marginTop: theme.spacing.md },
+  photoBloc: { flexDirection: 'row', gap: theme.spacing.md, alignItems: 'center' },
+  photo: { width: 104, height: 104, borderRadius: theme.radii.lg },
+  photoVide: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoActions: { flex: 1, gap: theme.spacing.xs },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning, padding: theme.spacing.sm },
 }));

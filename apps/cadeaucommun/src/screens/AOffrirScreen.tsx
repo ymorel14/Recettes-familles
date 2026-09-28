@@ -8,6 +8,7 @@ import { extraireMessageErreur } from '@apps-famille/famille';
 import {
   formaterDate,
   formaterPrix,
+  libellePrix,
   joursAvant,
   libelleCompteARebours,
   listerPersonnes,
@@ -141,7 +142,7 @@ export default function AOffrirScreen({ navigation }: any) {
                     </Text>
                     <Text style={styles.detail}>
                       Pour {prenomDe(r.souhait?.liste?.destinataire_id)}
-                      {r.souhait?.prix != null ? ` · ${formaterPrix(r.souhait.prix)}` : ''}
+                      {r.souhait?.prix != null ? ` · ${libellePrix(r.souhait.prix, r.souhait.type_prix)}` : ''}
                       {r.souhait?.secret ? ' · idée de la famille' : ''}
                     </Text>
                     {r.souhait?.supprime_le && (

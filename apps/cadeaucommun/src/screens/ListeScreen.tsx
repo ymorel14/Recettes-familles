@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, ScrollView, Pressable, Linking, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -12,7 +12,7 @@ import {
   droitsSurListe,
   etatReservations,
   formaterDate,
-  formaterPrix,
+  libellePrix,
   libelleCompteARebours,
   listerPersonnes,
   listerSouhaits,
@@ -29,6 +29,12 @@ import {
 import { Bouton, Chargement, Pastille } from '../components/ui';
 
 type Mode = 'destinataire' | 'gestionnaire' | 'donateur';
+
+// "https://www.fnac.com/a123" → "fnac.com"
+function nomSite(lien: string): string {
+  const m = lien.match(/^https?:\/\/(?:www\.)?([^/?#]+)/i);
+  return m ? m[1] : 'le site';
+}
 
 // Une liste de souhaits. Trois façons de la voir :
 //  - destinataire : ses propres souhaits, rien d'autre (ni idées cachées, ni
@@ -151,7 +157,7 @@ export default function ListeScreen({ route, navigation }: any) {
     const complet = nbReserves >= s.quantite;
     const parMoi = !!e?.reserve_par_moi;
     const infos = [
-      formaterPrix(s.prix),
+      libellePrix(s.prix, s.type_prix),
       s.taille,
       s.quantite > 1 ? `${s.quantite} souhaités` : null,
       s.priorite === 3 ? 'Très envie' : null,
@@ -203,6 +209,7 @@ export default function ListeScreen({ route, navigation }: any) {
         ]}
       >
         <View style={styles.carteLigne}>
+          {s.image ? <Image source={{ uri: s.image }} style={styles.vignette} accessibilityLabel={s.titre} /> : null}
           <View style={styles.carteTextes}>
             <Text style={[styles.carteTitre, complet && !parMoi && mode !== 'destinataire' && styles.texteAttenue]}>
               {s.titre}
@@ -228,7 +235,7 @@ export default function ListeScreen({ route, navigation }: any) {
         <View style={styles.liens}>
           {s.lien ? (
             <Pressable onPress={() => Linking.openURL(s.lien!)} accessibilityRole="link" hitSlop={8}>
-              <Text style={styles.lien}>Voir le lien</Text>
+              <Text style={styles.lien}>Voir sur {nomSite(s.lien)}</Text>
             </Pressable>
           ) : null}
           {modifiable && !s.supprime_le && (
@@ -384,6 +391,7 @@ const styles = creerStylesThemes(() => ({
   carteReservee: { backgroundColor: theme.colors.background },
   carteLigne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   carteTextes: { flex: 1, gap: 2 },
+  vignette: { width: 56, height: 56, borderRadius: theme.radii.md, backgroundColor: theme.colors.background },
   carteTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
   texteAttenue: { color: theme.colors.textMuted },
   carteDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
