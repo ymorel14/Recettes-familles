@@ -1,0 +1,47 @@
+import 'react-native-url-polyfill/auto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
+import { AppState, Platform } from 'react-native';
+import { configurerFamille, schemaFamille } from '@apps-famille/famille';
+
+// Client Supabase de CadeauCommun : même projet Supabase que l'app Cuisine
+// (mêmes comptes, mêmes familles), mais les données de l'app vivent dans le
+// schéma "wishlist" (supabase/migrations/20260928150000_wishlist.sql), qui
+// est donc le schéma par défaut des requêtes .from(...).
+// Le compte famille (schéma "famille") passe par le paquet commun
+// packages/famille, auquel ce client est confié ci-dessous.
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn(
+    "Supabase n'est pas configuré : renseignez EXPO_PUBLIC_SUPABASE_URL et " +
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY dans apps/cadeaucommun/.env (voir .env.example).'
+  );
+}
+
+export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
+  db: { schema: 'wishlist' },
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: Platform.OS === 'web',
+  },
+});
+
+configurerFamille(supabase);
+export { schemaFamille };
+
+// Adresse de retour des emails de confirmation (version web uniquement).
+export const URL_RETOUR_EMAIL: string | undefined =
+  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+
+// Sur téléphone, le renouvellement du jeton ne tourne qu'au premier plan
+// (recommandation Supabase pour React Native).
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', (etat) => {
+    if (etat === 'active') supabase.auth.startAutoRefresh();
+    else supabase.auth.stopAutoRefresh();
+  });
+}

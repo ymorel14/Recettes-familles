@@ -1,0 +1,11 @@
+{
+  "name": "@apps-famille/theme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Thèmes de couleurs communs aux apps de la famille (Sceau, Charlotte aux fraises, Papier kraft…).",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "react-native": "*"
+  }
+}

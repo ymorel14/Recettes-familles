@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "CadeauCommun",
+    "slug": "cadeaucommun",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "cadeaucommun",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.cadeaucommun"
+    },
+    "android": {
+      "package": "fr.morel.cadeaucommun",
+      "adaptiveIcon": {
+        "backgroundColor": "#F5EEE2",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5EEE2"
+    }
+  }
+}

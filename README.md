@@ -7,8 +7,9 @@ familles, et une famille active commune à toutes les apps.
 | Dossier | Contenu |
 | --- | --- |
 | `apps/cuisine` | App Cuisine (« Recettes familiales ») : recettes, courses, assistant, congélateur |
-| `apps/cadeaucommun` | App CadeauCommun (listes de souhaits) — à venir |
+| `apps/cadeaucommun` | App CadeauCommun : listes de souhaits, idées cachées, réservations anonymes |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
+| `packages/theme` | Thèmes de couleurs communs aux apps |
 | `supabase/` | Base de données : `setup.sql` (historique, ne plus lancer) et `migrations/` |
 
 Le cahier des charges de chaque app vit dans les documents Claude, pas dans ce dépôt.
@@ -21,12 +22,14 @@ Les dépendances s'installent une seule fois, à la racine (npm workspaces) :
 npm install
 npm run cuisine          # lance l'app Cuisine (Expo)
 npm run cuisine:web      # version navigateur
+npm run cadeau           # lance l'app CadeauCommun
+npm run cadeau:web       # version navigateur
 ```
 
 Ou depuis le dossier de l'app : `cd apps/cuisine` puis `npx expo start`.
 
-Le fichier `.env` de chaque app se place dans son dossier (ex. `apps/cuisine/.env`,
-modèle dans `apps/cuisine/.env.example`) avec `EXPO_PUBLIC_SUPABASE_URL` et
+Le fichier `.env` de chaque app se place dans son dossier (`apps/cuisine/.env`,
+`apps/cadeaucommun/.env`, modèle dans chaque `.env.example`) avec `EXPO_PUBLIC_SUPABASE_URL` et
 `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Builds et mise en ligne

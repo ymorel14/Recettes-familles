@@ -8,6 +8,9 @@
   "scripts": {
     "cuisine": "npm run start -w recettes-familiales",
     "cuisine:web": "npm run web -w recettes-familiales",
-    "cuisine:export:web": "npm run export:web -w recettes-familiales"
+    "cuisine:export:web": "npm run export:web -w recettes-familiales",
+    "cadeau": "npm run start -w cadeaucommun",
+    "cadeau:web": "npm run web -w cadeaucommun",
+    "cadeau:export:web": "npm run export:web -w cadeaucommun"
   }
 }

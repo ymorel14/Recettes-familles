@@ -8,12 +8,13 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | --- | --- |
 | `20260928140000_socle_famille.sql` | Schéma `famille` commun à toutes les apps, plusieurs familles par utilisateur, famille active partagée, personnes sans compte, compatibilité avec l'app Cuisine actuelle |
 | `20260928150000_wishlist.sql` | Schéma `wishlist` de CadeauCommun : événements, listes, souhaits, idées cachées, réservations anonymes |
+| `20260928160000_wishlist_listes_creees.sql` | Correctif CadeauCommun : pouvoir créer sa liste (lecture de la liste qu'on vient de créer) |
 
 ## Exécution
 
 1. Sauvegarder la base (Dashboard > Database > Backups), idéalement tester d'abord
    sur une copie du projet.
-2. Dashboard > SQL Editor : coller et exécuter la migration 1, puis la migration 2.
+2. Dashboard > SQL Editor : coller et exécuter les migrations dans l'ordre (1, 2, 3…).
    Chaque fichier est une transaction : en cas d'erreur, rien n'est modifié.
 3. Project Settings > API > Exposed schemas : ajouter `famille` et `wishlist`
    (à côté de `public` et `recettes`).

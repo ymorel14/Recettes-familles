@@ -11,11 +11,16 @@ partagent le compte famille :
   (« Recettes familiales »), scaffoldée en Phase 0 avec Claude Code. Son cahier
   des charges vit dans le document Claude "Cahier des charges – App recettes
   familiales".
-- `apps/cadeaucommun` : app de listes de souhaits (à venir). Cahier des charges :
-  document Claude "Cahier des charges — CadeauCommun".
+- `apps/cadeaucommun` : app de listes de souhaits (événements, listes, idées
+  cachées, réservations anonymes), données dans le schéma `wishlist`. Cahier des
+  charges : document Claude "Cahier des charges — CadeauCommun". La surprise est
+  garantie par les règles RLS de la base, jamais seulement par l'interface.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
   Supabase et le confie au paquet avec `configurerFamille(supabase)`.
+- `packages/theme` : thèmes de couleurs communs (Sceau, Charlotte aux fraises,
+  Papier kraft…) et `creerStylesThemes`. Chaque app fixe son thème par défaut
+  (`definirThemeParDefaut`) et ses polices dans son `src/theme/theme.ts`.
 
 Les dépendances s'installent à la racine (`npm install`). Les commandes Expo et
 EAS se lancent depuis le dossier de l'app. Se référer au cahier des charges de
