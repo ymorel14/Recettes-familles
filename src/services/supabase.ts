@@ -44,6 +44,13 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   },
 });
 
+// Compte famille commun à toutes les apps de la famille (Cuisine,
+// CadeauCommun…) : familles, foyers, membres, profils, codes d'invitation,
+// famille active. Il vit dans le schéma "famille" (voir
+// supabase/migrations/20260928140000_socle_famille.sql) ; les requêtes
+// passent par schemaFamille() au lieu du schéma "recettes" par défaut.
+export const schemaFamille = () => supabase.schema('famille');
+
 // Adresse vers laquelle renvoient les liens des emails (confirmation
 // d'inscription) : le site lui-même sur le web. Sur téléphone : non précisée,
 // Supabase utilise alors la "Site URL" du projet. L'adresse doit figurer dans

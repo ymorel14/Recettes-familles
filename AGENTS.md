@@ -17,7 +17,11 @@ Résumé des choix retenus :
 - Backend : Supabase (base de données, authentification, stockage, temps réel) —
   un projet EXISTANT est réutilisé (limite de 2 projets sur le plan gratuit), avec les
   tables de cette app isolées dans le schéma Postgres `recettes` (voir `supabase/setup.sql`)
-  et un bucket de stockage dédié `recettes-photos`. L'authentification, elle, reste
+  et un bucket de stockage dédié `recettes-photos`. Le compte famille (familles, foyers,
+  membres, profils, famille active) vit dans le schéma `famille`, commun à toutes les apps
+  de la famille (Cuisine, CadeauCommun) — requêtes via `schemaFamille()`. Les changements
+  de base se font désormais par fichiers numérotés dans `supabase/migrations/` (voir
+  LISEZMOI.md) ; `setup.sql` ne doit plus être relancé. L'authentification, elle, reste
   celle du projet (`auth.users`), partagée avec l'autre application du même compte.
   Client dans `src/services/supabase.ts`, clés à renseigner dans `.env` (voir `.env.example`)
 - Thème "Sceau" : palette et polices dans `src/theme/theme.ts` (vert forêt sombre + or,

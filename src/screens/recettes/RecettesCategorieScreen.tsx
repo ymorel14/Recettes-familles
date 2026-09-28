@@ -30,7 +30,7 @@ export default function RecettesCategorieScreen({ navigation, route }: any) {
     categorieNom: string;
     portee?: PorteeRecettes;
   };
-  const { foyer } = useAuth();
+  const { foyer, foyersFamille } = useAuth();
   const [recettes, setRecettes] = useState<RecetteComplete[]>([]);
   const [chargement, setChargement] = useState(true);
   // Nombre de colonnes et taille des vignettes adaptés à la largeur de
@@ -39,10 +39,10 @@ export default function RecettesCategorieScreen({ navigation, route }: any) {
 
   const charger = useCallback(() => {
     if (!foyer) return;
-    listerRecettes(foyer.id, portee)
+    listerRecettes(foyer.id, portee, foyersFamille)
       .then(setRecettes)
       .finally(() => setChargement(false));
-  }, [foyer, portee]);
+  }, [foyer, portee, foyersFamille]);
 
   // Recharge à chaque retour sur l'écran (ex. après création d'une recette).
   useFocusEffect(charger);

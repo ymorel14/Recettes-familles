@@ -173,16 +173,19 @@ export async function listerRecettesPourLiaison(
 }
 
 // Portée d'une liste de recettes : celles de son foyer, ou celles de toute
-// la famille (recettes des autres foyers en lecture seule — la base ne
-// renvoie de toute façon que les recettes des foyers de la famille).
+// la famille ACTIVE (recettes des autres foyers en lecture seule). La base
+// laisse lire les recettes de toutes ses familles : on filtre donc sur les
+// foyers de la famille active (foyersFamille, fourni par useAuth).
 export type PorteeRecettes = 'foyer' | 'famille';
 
 export async function listerRecettes(
   foyerId: string,
-  portee: PorteeRecettes = 'foyer'
+  portee: PorteeRecettes = 'foyer',
+  foyersFamille: string[] = []
 ): Promise<RecetteComplete[]> {
   let requete = supabase.from('recettes').select(SELECTION_RECETTE_COMPLETE);
   if (portee === 'foyer') requete = requete.eq('foyer_id', foyerId);
+  else requete = requete.in('foyer_id', Array.from(new Set([foyerId, ...foyersFamille])));
   const { data, error } = await requete.order('titre', { ascending: true });
 
   if (error) throw error;

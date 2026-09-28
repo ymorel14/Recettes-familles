@@ -22,6 +22,14 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 
 ## Limite connue pendant la transition
 
-Tant que l'app Cuisine n'est pas mise à jour, changer son prénom depuis l'écran
-Profil échoue (l'enregistrement passe par une vue). Tout le reste fonctionne,
-sur la famille active.
+Les anciennes versions de l'app Cuisine (avant le passage au schéma `famille`)
+continuent de fonctionner sur la famille active, sauf pour changer son prénom
+depuis l'écran Profil (l'enregistrement passe par une vue). La version à jour
+n'a pas cette limite.
+
+## Nettoyage, plus tard
+
+Quand toutes les installations sont à jour, une migration pourra supprimer les
+vues et fonctions de compatibilité du schéma `recettes`, **sauf la vue
+`recettes.foyers`**, utilisée en permanence par l'app pour afficher le nom du
+foyer d'une recette ou d'un essai.

@@ -122,7 +122,7 @@ function CarteEssai({
 // "Nos essais" : retours d'expérience de toute la famille.
 export default function RecetteDetailScreen({ route, navigation }: any) {
   const { recetteId } = route.params;
-  const { session, foyer } = useAuth();
+  const { session, foyer, foyersFamille } = useAuth();
   const [recette, setRecette] = useState<RecetteComplete | null>(null);
   const [chargement, setChargement] = useState(true);
   const [suppression, setSuppression] = useState(false);
@@ -154,10 +154,10 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
         })
         .catch((e) => console.error('[DetailRecette] échec du chargement', e))
         .finally(() => setChargement(false));
-      listerEssais(recetteId)
+      listerEssais(recetteId, foyersFamille)
         .then(setEssais)
         .catch((e) => console.error('[DetailRecette] échec du chargement des essais', e));
-    }, [recetteId])
+    }, [recetteId, foyersFamille])
   );
 
   if (chargement) {

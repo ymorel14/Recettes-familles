@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
+import SelecteurFamilleModal from './SelecteurFamilleModal';
 
 // "Morel" → "Famille Morel" ; "Famille Morel" reste tel quel (évite
 // "Famille Famille Morel" quand le nom saisi commence déjà par "Famille").
@@ -27,22 +28,42 @@ function useLibelleFamille(): string | null {
 //  - sans `titre` (écrans qui affichent déjà leur titre dans leur contenu) :
 //    libellé manuscrit seul, plus grand, sur deux lignes si besoin.
 // Le texte rétrécit un peu plutôt que d'être tronqué quand la place manque.
+// Avec plusieurs familles, le libellé (suivi de ▾) ouvre le choix de la
+// famille active.
 export default function EnTeteFamille({ titre }: { titre?: string }) {
   const libelle = useLibelleFamille();
+  const { familles } = useAuth();
+  const [choixOuvert, setChoixOuvert] = useState(false);
+  const plusieursFamilles = familles.length > 1;
+
+  const texteLibelle = libelle && (
+    <Text
+      style={[styles.manuscrit, !titre && styles.manuscritSeul]}
+      numberOfLines={titre ? 1 : 2}
+      adjustsFontSizeToFit
+      minimumFontScale={0.7}
+      maxFontSizeMultiplier={1.15}
+    >
+      {libelle}
+      {plusieursFamilles ? ' ▾' : ''}
+    </Text>
+  );
 
   return (
     <View style={styles.conteneur}>
-      {libelle && (
-        <Text
-          style={[styles.manuscrit, !titre && styles.manuscritSeul]}
-          numberOfLines={titre ? 1 : 2}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-          maxFontSizeMultiplier={1.15}
-        >
-          {libelle}
-        </Text>
-      )}
+      {texteLibelle &&
+        (plusieursFamilles ? (
+          <Pressable
+            onPress={() => setChoixOuvert(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Changer de famille"
+            hitSlop={8}
+          >
+            {texteLibelle}
+          </Pressable>
+        ) : (
+          texteLibelle
+        ))}
       {titre ? (
         <Text
           style={styles.titre}
@@ -54,6 +75,9 @@ export default function EnTeteFamille({ titre }: { titre?: string }) {
           {titre}
         </Text>
       ) : null}
+      {plusieursFamilles && (
+        <SelecteurFamilleModal visible={choixOuvert} onFermer={() => setChoixOuvert(false)} />
+      )}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
 import { usePreferences } from '../../contexts/PreferencesContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { astucesParEtape } from '../../services/essais';
 import type { PointEssai } from '../../types/models';
 import { theme, creerStylesThemes } from '../../theme/theme';
@@ -89,6 +90,8 @@ function decouperEnPhrases(texte: string): string[] {
 type EtatLecture = 'arret' | 'parle' | 'pause';
 
 export default function DeroulementAssistantScreen({ route, navigation }: any) {
+  // Astuces de la famille active seulement (voir listerEssais).
+  const { foyersFamille } = useAuth();
   const { recetteId } = route.params;
   // Vrai quand cet écran a été ouvert depuis le lien "Voir la recette" d'une
   // étape d'une AUTRE recette (retour utilisateur : sous-recette, ex. "faire
@@ -157,12 +160,12 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   useKeepAwake();
 
   useEffect(() => {
-    astucesParEtape(recetteId)
+    astucesParEtape(recetteId, foyersFamille)
       .then(setAstuces)
       .catch(() => {
         // Sans astuces, l'assistant fonctionne normalement.
       });
-  }, [recetteId]);
+  }, [recetteId, foyersFamille]);
 
   // Texte lu à voix haute après une étape : ses astuces de la famille.
   const texteAstuces = (etapeId: string): string => {

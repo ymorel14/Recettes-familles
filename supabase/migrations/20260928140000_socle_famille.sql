@@ -701,6 +701,9 @@ create view recettes.famille_membres with (security_invoker = true) as
   from famille.famille_membres
   where famille_id = famille.ma_famille();
 
+-- PERMANENTE (ne pas supprimer au nettoyage) : l'app Cuisine affiche le nom
+-- du foyer d'une recette ou d'un essai via "foyer:foyers(nom)", ce qui exige
+-- une relation dans le schéma "recettes" ; cette vue la fournit.
 create view recettes.foyers with (security_invoker = true) as
   select * from famille.foyers;
 

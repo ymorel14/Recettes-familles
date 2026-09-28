@@ -1,13 +1,26 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
-import { supabase } from '../services/supabase';
+import { supabase, schemaFamille } from '../services/supabase';
+import {
+  choisirFamilleActive,
+  listerFoyersFamilleActive,
+  listerMesFamilles,
+  type FamilleResume,
+} from '../services/famille';
 import type { Famille, Foyer } from '../types/models';
 
 type AuthContextValue = {
   session: Session | null;
   chargement: boolean;
+  // Famille ACTIVE (commune à toutes les apps de la famille).
   famille: Famille | null;
+  // Toutes les familles de l'utilisateur (deux au plus en pratique).
+  familles: FamilleResume[];
   foyer: Foyer | null;
+  // Foyers de la famille active (le sien compris) : filtre des écrans
+  // "Toute la famille", la base laissant lire toutes ses familles.
+  foyersFamille: string[];
   // Vrai tant que la famille et le foyer n'ont pas été chargés une première
   // fois pour l'utilisateur connecté (évite d'afficher brièvement l'écran
   // de bienvenue à un utilisateur qui a déjà un foyer).
@@ -19,18 +32,31 @@ type AuthContextValue = {
   estCreateurFamille: boolean;
   estCreateurFoyer: boolean;
   rafraichirFoyer: () => Promise<void>;
+  // Change la famille active, ici et dans les autres apps de la famille.
+  changerFamille: (idFamille: string) => Promise<void>;
   deconnexion: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// Fournit la session Supabase, la famille et le foyer de l'utilisateur.
-// Un utilisateur appartient à une seule famille et à un seul foyer.
+function memeContenu(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const ensemble = new Set(a);
+  return b.every((x) => ensemble.has(x));
+}
+
+// Fournit la session Supabase, la famille active et le foyer de l'utilisateur.
+// Un utilisateur vit dans un seul foyer, qui peut appartenir à plusieurs
+// familles ; la famille active est enregistrée en base (famille.famille_active)
+// pour être la même dans toutes les apps. Elle est relue à chaque retour de
+// l'app au premier plan, au cas où elle aurait été changée dans une autre app.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [chargement, setChargement] = useState(true);
   const [famille, setFamille] = useState<Famille | null>(null);
+  const [familles, setFamilles] = useState<FamilleResume[]>([]);
   const [foyer, setFoyer] = useState<Foyer | null>(null);
+  const [foyersFamille, setFoyersFamille] = useState<string[]>([]);
   const [chargementFoyer, setChargementFoyer] = useState(true);
   const [erreurFoyer, setErreurFoyer] = useState<string | null>(null);
   // Numéro du dernier chargement lancé : le résultat d'un chargement plus
@@ -40,30 +66,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const utilisateurId = session?.user.id ?? null;
 
-  // Lit la famille et le foyer de l'utilisateur. Toute erreur de requête est
-  // remontée (jamais confondue avec "pas de famille / pas de foyer").
+  // Lit les familles (dont l'active) et le foyer de l'utilisateur. Toute
+  // erreur de requête est remontée (jamais confondue avec "pas de famille /
+  // pas de foyer").
   const lireFamilleEtFoyer = useCallback(async (id: string) => {
-    const [reponseFamille, reponseFoyer] = await Promise.all([
-      supabase.from('famille_membres').select('famille_id').eq('utilisateur_id', id).maybeSingle(),
-      supabase.from('foyer_membres').select('foyer_id').eq('utilisateur_id', id).limit(1).maybeSingle(),
+    const [listeFamilles, reponseFoyer] = await Promise.all([
+      listerMesFamilles(),
+      schemaFamille().from('foyer_membres').select('foyer_id').eq('utilisateur_id', id).limit(1).maybeSingle(),
     ]);
-    if (reponseFamille.error) throw reponseFamille.error;
     if (reponseFoyer.error) throw reponseFoyer.error;
 
-    const [reponseFamilleDetail, reponseFoyerDetail] = await Promise.all([
-      reponseFamille.data
-        ? supabase.from('familles').select('*').eq('id', reponseFamille.data.famille_id).maybeSingle()
+    const active = listeFamilles.find((f) => f.active) ?? listeFamilles[0] ?? null;
+
+    const [reponseFamilleDetail, reponseFoyerDetail, foyersActifs] = await Promise.all([
+      active
+        ? schemaFamille().from('familles').select('*').eq('id', active.id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       reponseFoyer.data
-        ? supabase.from('foyers').select('*').eq('id', reponseFoyer.data.foyer_id).maybeSingle()
+        ? schemaFamille().from('foyers').select('*').eq('id', reponseFoyer.data.foyer_id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      active ? listerFoyersFamilleActive() : Promise.resolve([] as string[]),
     ]);
     if (reponseFamilleDetail.error) throw reponseFamilleDetail.error;
     if (reponseFoyerDetail.error) throw reponseFoyerDetail.error;
 
     return {
       famille: (reponseFamilleDetail.data as Famille | null) ?? null,
+      familles: listeFamilles,
       foyer: (reponseFoyerDetail.data as Foyer | null) ?? null,
+      foyersFamille: foyersActifs,
     };
   }, []);
 
@@ -71,7 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const numero = ++numeroChargement.current;
     if (!utilisateurId) {
       setFamille(null);
+      setFamilles([]);
       setFoyer(null);
+      setFoyersFamille([]);
       setErreurFoyer(null);
       return;
     }
@@ -87,7 +120,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (numero !== numeroChargement.current) return; // résultat périmé
       setFamille(resultat.famille);
+      setFamilles(resultat.familles);
       setFoyer(resultat.foyer);
+      // Même contenu → même tableau, pour ne pas recharger les écrans qui
+      // en dépendent à chaque retour au premier plan.
+      setFoyersFamille((avant) =>
+        memeContenu(avant, resultat.foyersFamille) ? avant : resultat.foyersFamille
+      );
       setErreurFoyer(null);
     } catch (e) {
       if (numero !== numeroChargement.current) return;
@@ -119,7 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!utilisateurId) {
       numeroChargement.current += 1;
       setFamille(null);
+      setFamilles([]);
       setFoyer(null);
+      setFoyersFamille([]);
       setErreurFoyer(null);
       setChargementFoyer(false);
       return;
@@ -127,6 +168,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setChargementFoyer(true);
     rafraichirFoyer().finally(() => setChargementFoyer(false));
   }, [utilisateurId, rafraichirFoyer]);
+
+  // La famille active a pu être changée dans une autre app de la famille
+  // (CadeauCommun…) : on la relit quand l'app revient au premier plan.
+  useEffect(() => {
+    if (!utilisateurId) return;
+    const abonnement = AppState.addEventListener('change', (etat) => {
+      if (etat === 'active') rafraichirFoyer();
+    });
+    return () => abonnement.remove();
+  }, [utilisateurId, rafraichirFoyer]);
+
+  const changerFamille = useCallback(
+    async (idFamille: string) => {
+      await choisirFamilleActive(idFamille);
+      await rafraichirFoyer();
+    },
+    [rafraichirFoyer]
+  );
 
   const deconnexion = useCallback(async () => {
     await supabase.auth.signOut();
@@ -141,12 +200,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         session,
         chargement,
         famille,
+        familles,
         foyer,
+        foyersFamille,
         chargementFoyer,
         erreurFoyer,
         estCreateurFamille,
         estCreateurFoyer,
         rafraichirFoyer,
+        changerFamille,
         deconnexion,
       }}
     >

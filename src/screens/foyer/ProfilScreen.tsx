@@ -5,10 +5,14 @@ import { theme, creerStylesThemes, THEMES } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePreferences } from '../../contexts/PreferencesContext';
 import {
+  creerFamille,
   extraireMessageErreur,
   formaterExpiration,
   obtenirCodeInvitation,
+  quitterFamille,
+  rejoindreAvecCode,
 } from '../../services/famille';
+import { alerte } from '../../utils/alerte';
 import type { CodeInvitation, TypeCodeInvitation } from '../../types/models';
 import { definirMonPrenom, obtenirMonPrenom } from '../../services/profils';
 import ZoneClavier from '../../components/ZoneClavier';
@@ -139,7 +143,147 @@ function CartePrenom({ utilisateurId }: { utilisateurId: string }) {
   );
 }
 
-// Écran "Profil" : famille, foyer, code d'invitation, déconnexion.
+// "Mes familles" : famille active (commune à toutes les apps), rejoindre ou
+// créer une autre famille, quitter une famille. Un foyer peut appartenir à
+// plusieurs familles : rejoindre ou quitter une famille concerne TOUT le foyer.
+function CarteFamilles() {
+  const { familles, foyer, changerFamille, rafraichirFoyer } = useAuth();
+  const [mode, setMode] = useState<'rejoindre' | 'creer' | null>(null);
+  const [saisie, setSaisie] = useState('');
+  const [enCours, setEnCours] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const executer = async (action: () => Promise<unknown>, messageErreur: string) => {
+    setEnCours(true);
+    setMessage(null);
+    try {
+      await action();
+      await rafraichirFoyer();
+      setMode(null);
+      setSaisie('');
+    } catch (e) {
+      setMessage(extraireMessageErreur(e, messageErreur));
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  const nomFoyer = foyer ? `« ${foyer.nom} »` : null;
+
+  const valider = () => {
+    const texte = saisie.trim();
+    if (!texte) return;
+    if (mode === 'rejoindre') {
+      const lancer = () => executer(() => rejoindreAvecCode(texte), 'Code invalide.');
+      if (nomFoyer) {
+        alerte(
+          'Rejoindre une autre famille',
+          `Tout votre foyer ${nomFoyer} rejoindra cette famille : ses membres y verront vos recettes, et vous les leurs.`,
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Rejoindre', onPress: lancer },
+          ]
+        );
+      } else {
+        lancer();
+      }
+    } else if (mode === 'creer') {
+      executer(() => creerFamille(texte), 'Impossible de créer la famille.');
+    }
+  };
+
+  const confirmerDepart = (id: string, nom: string) => {
+    alerte(
+      `Quitter la famille ${nom} ?`,
+      nomFoyer
+        ? `Tout votre foyer ${nomFoyer} quittera cette famille. Pour y revenir, il faudra un nouveau code.`
+        : 'Pour y revenir, il faudra un nouveau code.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Quitter', style: 'destructive', onPress: () => executer(() => quitterFamille(id), 'Impossible de quitter la famille.') },
+      ]
+    );
+  };
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitre}>{familles.length > 1 ? 'Mes familles' : 'Ma famille'}</Text>
+      {familles.length > 1 && (
+        <Text style={styles.aide}>
+          La famille affichée est la même dans toutes les applications de la famille.
+        </Text>
+      )}
+      {familles.map((f) => (
+        <View key={f.id} style={[styles.ligneTheme, f.active && familles.length > 1 && styles.ligneThemeActive]}>
+          <Pressable
+            style={styles.reglageTextes}
+            onPress={() => !f.active && executer(() => changerFamille(f.id), 'Changement impossible.')}
+            disabled={enCours || f.active}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: f.active }}
+          >
+            <Text style={styles.reglageLibelle}>Famille {f.nom}</Text>
+            {familles.length > 1 && (
+              <Text style={styles.aide}>{f.active ? 'Affichée' : 'Toucher pour l’afficher'}</Text>
+            )}
+          </Pressable>
+          {familles.length > 1 && (
+            <Pressable onPress={() => confirmerDepart(f.id, f.nom)} disabled={enCours} hitSlop={8}>
+              <Text style={styles.lienDiscret}>Quitter</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+
+      {mode ? (
+        <>
+          <TextInput
+            style={styles.champ}
+            placeholder={mode === 'rejoindre' ? 'Code famille (6 caractères)' : 'Nom de la nouvelle famille'}
+            placeholderTextColor={theme.colors.textMuted}
+            value={saisie}
+            onChangeText={(t) => {
+              setSaisie(t);
+              setMessage(null);
+            }}
+            autoCapitalize={mode === 'rejoindre' ? 'characters' : 'words'}
+            autoFocus
+            onSubmitEditing={valider}
+          />
+          <Pressable style={styles.bouton} onPress={valider} disabled={enCours || !saisie.trim()}>
+            {enCours ? (
+              <ActivityIndicator color={theme.colors.background} />
+            ) : (
+              <Text style={styles.boutonTexte}>{mode === 'rejoindre' ? 'Rejoindre' : 'Créer'}</Text>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setMode(null);
+              setSaisie('');
+              setMessage(null);
+            }}
+          >
+            <Text style={[styles.lienDiscret, styles.centre]}>Annuler</Text>
+          </Pressable>
+        </>
+      ) : (
+        <View style={styles.ligneLiens}>
+          <Pressable onPress={() => setMode('rejoindre')}>
+            <Text style={styles.lien}>Rejoindre une autre famille</Text>
+          </Pressable>
+          <Pressable onPress={() => setMode('creer')}>
+            <Text style={styles.lien}>Créer une autre famille</Text>
+          </Pressable>
+        </View>
+      )}
+      {enCours && !mode && <ActivityIndicator color={theme.colors.accent} />}
+      {message && <Text style={styles.erreur}>{message}</Text>}
+    </View>
+  );
+}
+
+// Écran "Profil" : familles, foyer, code d'invitation, déconnexion.
 // Un seul code (le code famille), que tout membre de la famille peut
 // partager ; le nouvel arrivant choisit ensuite son foyer.
 export default function ProfilScreen() {
@@ -158,8 +302,13 @@ export default function ProfilScreen() {
 
       {session && <CartePrenom utilisateurId={session.user.id} />}
 
+      {famille && <CarteFamilles />}
+
       {famille && (
         <CarteCode
+          // Rechargé quand la famille active change (le code est celui de
+          // la famille active).
+          key={famille.id}
           type="famille"
           titre="Code famille"
           aide="À envoyer à un proche, qu'il vive avec vous ou non : après l'avoir saisi, il choisira votre foyer ou un autre foyer de la famille, ou créera le sien."
@@ -366,6 +515,24 @@ const styles = creerStylesThemes(() => ({
     fontFamily: theme.fontBodyBold,
     fontSize: 16,
     color: theme.colors.accent,
+  },
+  lien: {
+    fontFamily: theme.fontBody,
+    fontSize: 15,
+    color: theme.colors.accent,
+    textDecorationLine: 'underline',
+  },
+  lienDiscret: {
+    fontFamily: theme.fontBody,
+    fontSize: 13,
+    color: theme.colors.textMuted,
+    textDecorationLine: 'underline',
+  },
+  ligneLiens: {
+    gap: theme.spacing.sm,
+  },
+  centre: {
+    textAlign: 'center',
   },
   boutonSecondaire: {
     borderColor: theme.colors.warning,

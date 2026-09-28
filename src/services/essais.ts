@@ -120,12 +120,14 @@ function mettreEnFormePoints(lignes: any[]): PointEssai[] {
 }
 
 // Essais d'une recette, du plus récent au plus ancien, avec le prénom de
-// l'auteur et le nom de son foyer.
-export async function listerEssais(recetteId: string): Promise<EssaiComplet[]> {
-  const { data, error } = await supabase
-    .from('essais')
-    .select(SELECTION_ESSAI)
-    .eq('recette_id', recetteId)
+// l'auteur et le nom de son foyer. Avec foyersFamille (foyers de la famille
+// active, voir useAuth), seuls les essais de la famille active sont gardés :
+// une recette partagée entre deux familles (grands-parents) ne montre pas
+// les essais de l'autre famille.
+export async function listerEssais(recetteId: string, foyersFamille: string[] = []): Promise<EssaiComplet[]> {
+  let requete = supabase.from('essais').select(SELECTION_ESSAI).eq('recette_id', recetteId);
+  if (foyersFamille.length > 0) requete = requete.in('foyer_id', foyersFamille);
+  const { data, error } = await requete
     .order('realise_le', { ascending: false })
     .order('cree_le', { ascending: false });
   if (error) throw error;
@@ -234,12 +236,17 @@ export async function supprimerEssai(essaiId: string): Promise<void> {
 
 // Astuces rattachées aux étapes d'une recette (pour le mode assistant) :
 // étape → liste des points (souci + réponse) laissés par la famille.
-export async function astucesParEtape(recetteId: string): Promise<Map<string, PointEssai[]>> {
-  const { data, error } = await supabase
+export async function astucesParEtape(
+  recetteId: string,
+  foyersFamille: string[] = []
+): Promise<Map<string, PointEssai[]>> {
+  let requete = supabase
     .from('essai_points')
-    .select('*, essai_point_reponses(*), essais!inner(recette_id)')
+    .select('*, essai_point_reponses(*), essais!inner(recette_id, foyer_id)')
     .eq('essais.recette_id', recetteId)
     .not('etape_id', 'is', null);
+  if (foyersFamille.length > 0) requete = requete.in('essais.foyer_id', foyersFamille);
+  const { data, error } = await requete;
   if (error) throw error;
   const resultat = new Map<string, PointEssai[]>();
   mettreEnFormePoints(data ?? []).forEach((p) => {

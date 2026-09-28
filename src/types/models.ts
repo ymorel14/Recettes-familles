@@ -1,7 +1,9 @@
-// Types correspondant au schéma Postgres (supabase/setup.sql), schéma "recettes".
+// Types correspondant au schéma Postgres : schéma "recettes" (supabase/setup.sql)
+// et, pour le compte famille, schéma "famille" commun à toutes les apps
+// (supabase/migrations/20260928140000_socle_famille.sql).
 
-// Une famille regroupe plusieurs foyers. Un utilisateur appartient à une
-// seule famille et à un seul foyer.
+// Une famille regroupe plusieurs foyers. Un utilisateur vit dans un seul
+// foyer ; un foyer peut appartenir à plusieurs familles (famille.famille_foyers).
 export type Famille = {
   id: string;
   nom: string;
@@ -13,7 +15,9 @@ export type Foyer = {
   id: string;
   nom: string;
   cree_par: string;
-  famille_id: string;
+  // Famille d'origine du foyer (informatif) ; appartenance réelle :
+  // famille.famille_foyers.
+  famille_id: string | null;
   cree_le: string;
 };
 

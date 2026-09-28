@@ -46,7 +46,7 @@ type SectionGroupe = {
 // Seuls les groupes qui contiennent des recettes sont affichés ; la section
 // "À classer" (catégories sans groupe) vient en dernier.
 export default function CategoriesScreen({ navigation }: any) {
-  const { foyer } = useAuth();
+  const { foyer, foyersFamille } = useAuth();
   const [recettes, setRecettes] = useState<RecetteComplete[]>([]);
   // Recettes de notre foyer seulement, ou de toute la famille (celles des
   // autres foyers sont en lecture seule).
@@ -63,10 +63,10 @@ export default function CategoriesScreen({ navigation }: any) {
 
   const charger = useCallback(() => {
     if (!foyer) return;
-    listerRecettes(foyer.id, portee)
+    listerRecettes(foyer.id, portee, foyersFamille)
       .then(setRecettes)
       .finally(() => setChargement(false));
-  }, [foyer, portee]);
+  }, [foyer, portee, foyersFamille]);
 
   // Recharge à chaque retour sur l'écran (ex. après création d'une recette).
   useFocusEffect(
