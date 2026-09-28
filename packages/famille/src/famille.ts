@@ -1,5 +1,5 @@
-import { schemaFamille } from './supabase';
-import type { CodeInvitation, TypeCodeInvitation } from '../types/models';
+import { schemaFamille } from './client';
+import type { CodeInvitation, TypeCodeInvitation } from './types';
 
 // Compte famille (schéma "famille", commun à toutes les apps) : parcours de
 // première connexion, codes d'invitation, plusieurs familles par utilisateur.

@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
-import { supabase, schemaFamille } from '../services/supabase';
+import { clientSupabase, schemaFamille } from './client';
 import {
   choisirFamilleActive,
   listerFoyersFamilleActive,
   listerMesFamilles,
   type FamilleResume,
-} from '../services/famille';
-import type { Famille, Foyer } from '../types/models';
+} from './famille';
+import type { Famille, Foyer } from './types';
 
 type AuthContextValue = {
   session: Session | null;
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // Souvent un jeton expiré (application rouverte après un long
         // moment) : on renouvelle la session puis on réessaie une fois.
-        await supabase.auth.refreshSession().catch(() => {});
+        await clientSupabase().auth.refreshSession().catch(() => {});
         resultat = await lireFamilleEtFoyer(utilisateurId);
       }
       if (numero !== numeroChargement.current) return; // résultat périmé
@@ -140,12 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // La session (éventuellement renouvelée si le jeton avait expiré) arrive
     // par l'événement INITIAL_SESSION, puis à chaque connexion/déconnexion.
-    const { data: abonnement } = supabase.auth.onAuthStateChange((evenement, nouvelleSession) => {
+    const { data: abonnement } = clientSupabase().auth.onAuthStateChange((evenement, nouvelleSession) => {
       setSession(nouvelleSession);
       if (evenement === 'INITIAL_SESSION') setChargement(false);
     });
     // Filet de sécurité si INITIAL_SESSION n'arrivait pas.
-    supabase.auth.getSession().finally(() => setChargement(false));
+    clientSupabase().auth.getSession().finally(() => setChargement(false));
 
     return () => {
       abonnement.subscription.unsubscribe();
@@ -188,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const deconnexion = useCallback(async () => {
-    await supabase.auth.signOut();
+    await clientSupabase().auth.signOut();
   }, []);
 
   const estCreateurFamille = !!famille && !!utilisateurId && famille.cree_par === utilisateurId;

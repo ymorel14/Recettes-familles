@@ -1,10 +1,14 @@
-# Déploiement de la version web sur Netlify.
+# Déploiement de la version web de l'app Cuisine sur Netlify.
+# Le dépôt contient plusieurs apps (apps/*) et du code commun (packages/*) :
+# Netlify installe les dépendances à la racine (npm workspaces), puis
+# construit l'app Cuisine.
 # Variables à définir dans Netlify (Site settings > Environment variables) :
 #   EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY
+# Dans Netlify, "Base directory" doit rester vide (racine du dépôt).
 
 [build]
-  command = "npx expo export --platform web"
-  publish = "dist"
+  command = "npm run cuisine:export:web"
+  publish = "apps/cuisine/dist"
 
 # Toutes les adresses (ex. /recette/123) renvoient vers l'application, qui
 # affiche ensuite le bon écran — évite une erreur 404 au rechargement.

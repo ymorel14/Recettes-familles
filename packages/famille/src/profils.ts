@@ -1,4 +1,4 @@
-import { schemaFamille } from './supabase';
+import { schemaFamille } from './client';
 
 // Prénom (ou surnom) de l'utilisateur, affiché sur ses essais de recettes
 // et visible par les membres de sa famille (table famille.profils, commune à toutes les apps).

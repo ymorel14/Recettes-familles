@@ -2,15 +2,26 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
-# Contexte du projet — Recettes familiales
+# Contexte du dépôt — Apps de la famille
 
-Application de recettes de cuisine partageable en famille (Android, iOS, Web),
-scaffoldée en Phase 0 avec Claude Code. Le cahier des charges complet et la
-feuille de route détaillée par phases vivent dans le document Claude ("Cahier
-des charges – App recettes familiales"), pas dans ce dépôt — s'y référer avant
-toute nouvelle fonctionnalité.
+Dépôt unique (npm workspaces) pour les apps familiales (Android, iOS, Web) qui
+partagent le compte famille :
 
-Résumé des choix retenus :
+- `apps/cuisine` : app de recettes de cuisine partageable en famille
+  (« Recettes familiales »), scaffoldée en Phase 0 avec Claude Code. Son cahier
+  des charges vit dans le document Claude "Cahier des charges – App recettes
+  familiales".
+- `apps/cadeaucommun` : app de listes de souhaits (à venir). Cahier des charges :
+  document Claude "Cahier des charges — CadeauCommun".
+- `packages/famille` : code commun (compte famille, foyers, profils, famille
+  active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
+  Supabase et le confie au paquet avec `configurerFamille(supabase)`.
+
+Les dépendances s'installent à la racine (`npm install`). Les commandes Expo et
+EAS se lancent depuis le dossier de l'app. Se référer au cahier des charges de
+l'app concernée avant toute nouvelle fonctionnalité.
+
+Résumé des choix retenus (app Cuisine, valables aussi pour les suivantes) :
 
 - Stack : React Native + Expo (SDK 57), une seule base pour Android/iOS/Web
 - Navigation : React Navigation, bottom tabs (Recettes / Courses / Assistant)
@@ -23,13 +34,14 @@ Résumé des choix retenus :
   de base se font désormais par fichiers numérotés dans `supabase/migrations/` (voir
   LISEZMOI.md) ; `setup.sql` ne doit plus être relancé. L'authentification, elle, reste
   celle du projet (`auth.users`), partagée avec l'autre application du même compte.
-  Client dans `src/services/supabase.ts`, clés à renseigner dans `.env` (voir `.env.example`)
-- Thème "Sceau" : palette et polices dans `src/theme/theme.ts` (vert forêt sombre + or,
+  Client dans `apps/cuisine/src/services/supabase.ts`, clés à renseigner dans
+  `apps/cuisine/.env` (voir `apps/cuisine/.env.example`)
+- Thème "Sceau" : palette et polices dans `apps/cuisine/src/theme/theme.ts` (vert forêt sombre + or,
   titres en Cinzel, corps de texte en EB Garamond)
 - Phase 0 (ce commit) : squelette + navigation + démonstration statique, sans
   données réelles. La Phase 1 (MVP) ajoute l'authentification, le foyer, la
   création de recettes et la liste de courses connectées à Supabase.
 
 Convention de code : composants fonctionnels TypeScript, un écran par fichier
-dans `src/screens`, styles via `StyleSheet.create` en réutilisant `theme.ts`
+dans `src/screens` de chaque app, styles via `StyleSheet.create` en réutilisant `theme.ts`
 plutôt que des couleurs ou tailles codées en dur.

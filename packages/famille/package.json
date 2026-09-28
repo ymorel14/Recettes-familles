@@ -1,0 +1,13 @@
+{
+  "name": "@apps-famille/famille",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Compte famille commun aux apps de la famille (Cuisine, CadeauCommun) : familles, foyers, profils, famille active.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "react": "*",
+    "react-native": "*"
+  }
+}
