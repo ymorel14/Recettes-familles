@@ -91,7 +91,11 @@ export type Personne = {
   id: string;
   utilisateur_id: string | null;
   foyer_id: string | null;
+  // Nom à afficher : le prénom, ou à défaut "Quelqu’un de <foyer>" (jamais vide).
   prenom: string;
+  // Faux quand la personne n'a pas encore saisi son prénom.
+  prenom_renseigne: boolean;
+  foyer_nom: string | null;
   date_naissance: string | null;
   gere_par: string | null;
 };
@@ -100,15 +104,32 @@ export type Personne = {
 // Personnes de la famille (schéma famille, commun aux apps)
 // ---------------------------------------------------------------------------
 
+const SELECTION_PERSONNE = 'id, utilisateur_id, foyer_id, prenom, date_naissance, gere_par, foyer:foyers(nom)';
+
+function versPersonne(ligne: any): Personne {
+  const prenom = (ligne.prenom ?? '').trim();
+  const foyerNom = ligne.foyer?.nom ?? null;
+  return {
+    id: ligne.id,
+    utilisateur_id: ligne.utilisateur_id,
+    foyer_id: ligne.foyer_id,
+    prenom: prenom || (foyerNom ? `Quelqu’un de ${foyerNom}` : 'Sans prénom'),
+    prenom_renseigne: prenom.length > 0,
+    foyer_nom: foyerNom,
+    date_naissance: ligne.date_naissance,
+    gere_par: ligne.gere_par,
+  };
+}
+
 export async function listerPersonnes(foyers: string[]): Promise<Personne[]> {
   if (foyers.length === 0) return [];
   const { data, error } = await schemaFamille()
     .from('personnes')
-    .select('id, utilisateur_id, foyer_id, prenom, date_naissance, gere_par')
+    .select(SELECTION_PERSONNE)
     .in('foyer_id', foyers)
     .order('prenom');
   if (error) throw error;
-  return (data ?? []) as Personne[];
+  return (data ?? []).map(versPersonne);
 }
 
 // Personne sans compte (bébé, enfant, grand-parent) dans son foyer.
@@ -485,9 +506,9 @@ export function libellePrix(prix: number | null, typePrix: TypePrix | null | und
 export async function obtenirMaPersonne(utilisateurId: string): Promise<Personne | null> {
   const { data, error } = await schemaFamille()
     .from('personnes')
-    .select('id, utilisateur_id, foyer_id, prenom, date_naissance, gere_par')
+    .select(SELECTION_PERSONNE)
     .eq('utilisateur_id', utilisateurId)
     .maybeSingle();
   if (error) throw error;
-  return (data as Personne | null) ?? null;
+  return data ? versPersonne(data) : null;
 }

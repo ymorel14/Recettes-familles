@@ -27,7 +27,7 @@ function prochaineDate(jour: number, mois: number): string {
 
 // Titre proposé selon le type et la personne fêtée.
 function titrePropose(type: TypeEvenement, personne: Personne | null, date: string): string {
-  const prenom = personne?.prenom?.trim();
+  const prenom = personne?.prenom_renseigne ? personne.prenom : null;
   switch (type) {
     case 'noel':
       return `Noël ${date.slice(-4)}`;
@@ -128,7 +128,7 @@ export default function EvenementFormScreen({ navigation }: any) {
     }
   };
 
-  const nomAffiche = (p: Personne) => (p.id === moi?.id ? `${p.prenom || 'Moi'} (moi)` : p.prenom || 'Sans prénom');
+  const nomAffiche = (p: Personne) => (p.id === moi?.id ? `${p.prenom_renseigne ? p.prenom : 'Moi'} (moi)` : p.prenom);
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">

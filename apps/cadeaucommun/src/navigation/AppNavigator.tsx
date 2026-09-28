@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -19,6 +19,8 @@ import SouhaitFormScreen from '../screens/SouhaitFormScreen';
 import AOffrirScreen from '../screens/AOffrirScreen';
 import MesEnviesScreen from '../screens/MesEnviesScreen';
 import ProfilScreen from '../screens/ProfilScreen';
+import PrenomScreen from '../screens/PrenomScreen';
+import { obtenirMonPrenom } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
 const Onglets = createBottomTabNavigator();
@@ -112,8 +114,27 @@ function BarreOnglets({ navigation }: any) {
 export default function AppNavigator() {
   const { session, chargement, famille, foyer, chargementFoyer, erreurFoyer, rafraichirFoyer, deconnexion } = useAuth();
   const { themeId } = usePreferences();
+  // Prénom de l'utilisateur : demandé une fois s'il manque (null = pas encore vérifié).
+  const [prenomRenseigne, setPrenomRenseigne] = useState<boolean | null>(null);
+  const utilisateurId = session?.user.id ?? null;
+
+  useEffect(() => {
+    setPrenomRenseigne(null);
+    if (!utilisateurId || !famille || !foyer) return;
+    let actif = true;
+    obtenirMonPrenom(utilisateurId)
+      .then((p) => actif && setPrenomRenseigne(!!p?.trim()))
+      .catch(() => actif && setPrenomRenseigne(true)); // en cas de doute, on ne bloque pas l'app
+    return () => {
+      actif = false;
+    };
+  }, [utilisateurId, famille?.id, foyer?.id]);
 
   if (chargement || (session && chargementFoyer)) return <Chargement />;
+  if (session && famille && foyer && prenomRenseigne === null) return <Chargement />;
+  if (session && famille && foyer && prenomRenseigne === false) {
+    return <PrenomScreen onTermine={() => setPrenomRenseigne(true)} />;
+  }
 
   if (session && erreurFoyer && !foyer) {
     return (
