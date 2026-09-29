@@ -13,7 +13,10 @@ import {
   libelleCompteARebours,
   listerPersonnes,
   marquerAchete,
+  marquerVerse,
+  mesParticipations,
   mesReservations,
+  type MaParticipation,
   type MaReservation,
   type Personne,
   dateCle,
@@ -21,11 +24,13 @@ import {
 } from '../services/wishlist';
 import { Chargement, MessageVide, Pastille } from '../components/ui';
 
-// Onglet "À offrir" : tout ce que j'ai réservé, regroupé par événement, avec
-// ce qui reste à acheter et le budget. Personne d'autre ne voit cet écran.
+// Onglet "À offrir" : tout ce que j'ai réservé et mes participations aux
+// pots communs, regroupés par événement, avec ce qui reste à acheter ou à
+// verser et le budget. Personne d'autre ne voit cet écran.
 export default function AOffrirScreen({ navigation }: any) {
   const { foyersFamille } = useAuth();
   const [reservations, setReservations] = useState<MaReservation[] | null>(null);
+  const [participations, setParticipations] = useState<MaParticipation[]>([]);
   const [personnes, setPersonnes] = useState<Personne[]>([]);
   const [rechargement, setRechargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -33,8 +38,9 @@ export default function AOffrirScreen({ navigation }: any) {
   const charger = useCallback(async () => {
     try {
       setErreur(null);
-      const [r, p] = await Promise.all([mesReservations(), listerPersonnes(foyersFamille)]);
+      const [r, pa, p] = await Promise.all([mesReservations(), mesParticipations(), listerPersonnes(foyersFamille)]);
       setReservations(r);
+      setParticipations(pa);
       setPersonnes(p);
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
@@ -61,14 +67,28 @@ export default function AOffrirScreen({ navigation }: any) {
     }
   };
 
+  const basculerVerse = async (p: MaParticipation) => {
+    setParticipations((liste) => liste.map((x) => (x.id === p.id ? { ...x, verse: !p.verse } : x)));
+    try {
+      await marquerVerse(p.id, !p.verse);
+    } catch (e) {
+      setErreur(extraireMessageErreur(e, 'Enregistrement impossible.'));
+      charger();
+    }
+  };
+
   // Regroupement par événement, les plus proches d'abord (passés à la fin).
-  const groupes = new Map<string, { titre: string; date: string; libelle: string; lignes: MaReservation[] }>();
-  reservations.forEach((r) => {
-    const ev = r.souhait?.liste?.evenement;
+  type Groupe = { titre: string; date: string; libelle: string; lignes: MaReservation[]; pots: MaParticipation[] };
+  const groupes = new Map<string, Groupe>();
+  const groupeDe = (souhait: MaReservation['souhait']) => {
+    const ev = souhait?.liste?.evenement;
     const cle = ev?.id ?? 'autre';
-    if (!groupes.has(cle)) groupes.set(cle, { titre: ev?.titre ?? 'Autre', date: ev ? dateCle(ev) : '', libelle: ev ? libelleDates(ev) : '', lignes: [] });
-    groupes.get(cle)!.lignes.push(r);
-  });
+    if (!groupes.has(cle))
+      groupes.set(cle, { titre: ev?.titre ?? 'Autre', date: ev ? dateCle(ev) : '', libelle: ev ? libelleDates(ev) : '', lignes: [], pots: [] });
+    return groupes.get(cle)!;
+  };
+  reservations.forEach((r) => groupeDe(r.souhait).lignes.push(r));
+  participations.forEach((p) => groupeDe(p.souhait).pots.push(p));
   const ordre = [...groupes.values()].sort((a, b) => {
     const pa = a.date && joursAvant(a.date) < 0;
     const pb = b.date && joursAvant(b.date) < 0;
@@ -95,15 +115,22 @@ export default function AOffrirScreen({ navigation }: any) {
       }
     >
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-      {reservations.length === 0 ? (
+      {reservations.length === 0 && participations.length === 0 ? (
         <MessageVide
           titre="Rien à offrir pour l'instant"
-          texte="Réservez un cadeau dans la liste d'un proche : il apparaîtra ici. Vous seul le voyez."
+          texte="Réservez un cadeau ou participez à un pot commun dans la liste d'un proche : il apparaîtra ici. Vous seul le voyez."
         />
       ) : (
         ordre.map((g) => {
-          const total = g.lignes.reduce((s, r) => s + (r.souhait?.prix ?? 0) * r.quantite, 0);
+          const total =
+            g.lignes.reduce((s, r) => s + (r.souhait?.prix ?? 0) * r.quantite, 0) +
+            g.pots.reduce((s, p) => s + p.montant, 0);
           const restants = g.lignes.filter((r) => !r.achete).length;
+          const aVerser = g.pots.filter((p) => !p.verse).length;
+          const resume = [
+            restants > 0 ? `${restants} à acheter` : null,
+            aVerser > 0 ? `${aVerser} participation${aVerser > 1 ? 's' : ''} à verser` : null,
+          ].filter(Boolean);
           return (
             <View key={g.titre + g.date} style={styles.groupe}>
               <View style={styles.groupeEntete}>
@@ -114,7 +141,7 @@ export default function AOffrirScreen({ navigation }: any) {
                 {g.date ? <Pastille texte={libelleCompteARebours(g.date)} /> : null}
               </View>
               <Text style={styles.detail}>
-                {restants === 0 ? 'Tout est acheté' : `${restants} à acheter`}
+                {resume.length === 0 ? 'Tout est réglé' : resume.join(' · ')}
                 {total > 0 ? ` · budget ${formaterPrix(total)}` : ''}
               </Text>
               {g.lignes.map((r) => (
@@ -149,6 +176,47 @@ export default function AOffrirScreen({ navigation }: any) {
                     </Text>
                     {r.souhait?.supprime_le && (
                       <Text style={styles.alerte}>Retiré de sa liste depuis : vérifiez avant d'acheter.</Text>
+                    )}
+                  </Pressable>
+                </View>
+              ))}
+              {g.pots.map((p) => (
+                <View key={p.id} style={styles.ligne}>
+                  <Pressable
+                    onPress={() => basculerVerse(p)}
+                    style={styles.case}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: p.verse }}
+                    accessibilityLabel={`Participation à ${p.souhait?.titre ?? 'un pot commun'} versée`}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={p.verse ? 'checkbox' : 'square-outline'}
+                      size={26}
+                      color={p.verse ? theme.colors.success : theme.colors.textMuted}
+                    />
+                  </Pressable>
+                  <Pressable
+                    style={styles.ligneTextes}
+                    onPress={() =>
+                      p.souhait?.liste &&
+                      navigation.navigate('Participation', {
+                        listeId: p.souhait.liste.id,
+                        souhaitId: p.souhait_id,
+                        prenom: prenomDe(p.souhait.liste.destinataire_id),
+                      })
+                    }
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.ligneTitre, p.verse && styles.barre]}>
+                      {p.souhait?.titre ?? 'Pot commun'} · {formaterPrix(p.montant)}
+                    </Text>
+                    <Text style={styles.detail}>
+                      Pot commun pour {prenomDe(p.souhait?.liste?.destinataire_id)}
+                      {p.verse ? ' · versé' : ' · à verser'}
+                    </Text>
+                    {p.souhait?.supprime_le && (
+                      <Text style={styles.alerte}>Retiré de sa liste depuis : voyez avec la famille.</Text>
                     )}
                   </Pressable>
                 </View>

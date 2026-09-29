@@ -11,7 +11,9 @@ import {
   changerStatutListe,
   droitsSurListe,
   etatReservations,
+  etatPots,
   formaterDate,
+  formaterPrix,
   libellePrix,
   libelleCompteARebours,
   listerPersonnes,
@@ -21,6 +23,7 @@ import {
   retirerSouhait,
   supprimerIdee,
   type EtatReservation,
+  type EtatPot,
   type Evenement,
   type Liste,
   type Personne,
@@ -29,6 +32,7 @@ import {
   libelleDates,
 } from '../services/wishlist';
 import { Bouton, Chargement, Pastille } from '../components/ui';
+import JaugePot from '../components/JaugePot';
 
 type Mode = 'destinataire' | 'gestionnaire' | 'donateur';
 
@@ -42,7 +46,8 @@ function nomSite(lien: string): string {
 //  - destinataire : ses propres souhaits, rien d'autre (ni idées cachées, ni
 //    réservations — la base ne les lui envoie même pas) ;
 //  - donateur : souhaits et idées de la famille, avec "Réservé" (sans savoir
-//    par qui) et ce qu'il offre lui-même ;
+//    par qui) et ce qu'il offre lui-même ; pour un pot commun, la somme
+//    réunie et sa propre participation (jamais celle des autres) ;
 //  - gestionnaire (parent d'un enfant sans compte) : comme un donateur, et il
 //    remplit aussi la liste à la place de l'enfant.
 export default function ListeScreen({ route, navigation }: any) {
@@ -52,6 +57,7 @@ export default function ListeScreen({ route, navigation }: any) {
   const [mode, setMode] = useState<Mode | null>(null);
   const [souhaits, setSouhaits] = useState<Souhait[]>([]);
   const [etat, setEtat] = useState<Map<string, EtatReservation>>(new Map());
+  const [pots, setPots] = useState<Map<string, EtatPot>>(new Map());
   const [personnes, setPersonnes] = useState<Personne[]>([]);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -73,7 +79,14 @@ export default function ListeScreen({ route, navigation }: any) {
       setSouhaits(s);
       setPersonnes(p);
       // Jamais demandé pour le destinataire (la base le refuserait de toute façon).
-      setEtat(m === 'destinataire' ? new Map() : await etatReservations(listeId));
+      if (m === 'destinataire') {
+        setEtat(new Map());
+        setPots(new Map());
+      } else {
+        const [r, pt] = await Promise.all([etatReservations(listeId), etatPots(listeId)]);
+        setEtat(r);
+        setPots(pt);
+      }
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
     }
@@ -107,7 +120,10 @@ export default function ListeScreen({ route, navigation }: any) {
 
   const peutRemplir = mode === 'destinataire' || mode === 'gestionnaire';
   const souhaitsVisibles = souhaits.filter(
-    (s) => !s.secret && (!s.supprime_le || (mode !== 'destinataire' && etat.get(s.id)?.reserve_par_moi))
+    (s) =>
+      !s.secret &&
+      (!s.supprime_le ||
+        (mode !== 'destinataire' && (etat.get(s.id)?.reserve_par_moi || pots.get(s.id)?.ma_participation != null)))
   );
   const idees = souhaits.filter((s) => s.secret && !s.supprime_le);
 
@@ -158,16 +174,44 @@ export default function ListeScreen({ route, navigation }: any) {
     const nbReserves = e?.nb_reserves ?? 0;
     const complet = nbReserves >= s.quantite;
     const parMoi = !!e?.reserve_par_moi;
+    const pot = pots.get(s.id);
+    // Pot commun, ou ancien pot où j'ai encore une participation.
+    const estPot = s.pot_commun || pot?.ma_participation != null;
+    const jeParticipe = pot?.ma_participation != null;
     const infos = [
-      libellePrix(s.prix, s.type_prix),
+      s.pot_commun ? (s.prix != null ? `À réunir : ${formaterPrix(s.prix)}` : 'Pot commun') : libellePrix(s.prix, s.type_prix),
       s.taille,
-      s.quantite > 1 ? `${s.quantite} souhaités` : null,
+      !s.pot_commun && s.quantite > 1 ? `${s.quantite} souhaités` : null,
       s.priorite === 3 ? 'Très envie' : null,
     ].filter(Boolean);
 
     let statut: React.ReactNode = null;
     let action: React.ReactNode = null;
-    if (mode !== 'destinataire') {
+    if (estPot && mode === 'destinataire') {
+      statut = (
+        <View style={styles.cache}>
+          <Ionicons name="people-outline" size={14} color={theme.colors.accent} />
+          <Text style={styles.cacheTexte}>Pot commun : la famille peut participer à plusieurs</Text>
+        </View>
+      );
+    } else if (estPot) {
+      statut = (
+        <View style={styles.pot}>
+          <JaugePot total={pot?.total ?? 0} objectif={s.pot_commun ? s.prix : null} compact />
+          {jeParticipe && (
+            <Text style={styles.statutMoi}>Vous participez : {formaterPrix(pot!.ma_participation)} (vous seul le voyez)</Text>
+          )}
+        </View>
+      );
+      action = (
+        <Bouton
+          titre={jeParticipe ? 'Modifier' : 'Participer'}
+          variante={jeParticipe ? 'contour' : 'plein'}
+          onPress={() => navigation.navigate('Participation', { listeId, souhaitId: s.id, prenom })}
+          accessibilityLabel={`${jeParticipe ? 'Modifier ma participation à' : 'Participer à'} ${s.titre}`}
+        />
+      );
+    } else if (mode !== 'destinataire') {
       if (parMoi) {
         statut = <Text style={styles.statutMoi}>Vous l'offrez</Text>;
         action = (
@@ -206,14 +250,14 @@ export default function ListeScreen({ route, navigation }: any) {
         style={[
           styles.carte,
           s.secret && styles.carteIdee,
-          parMoi && styles.carteMoi,
-          complet && !parMoi && mode !== 'destinataire' && styles.carteReservee,
+          (parMoi || jeParticipe) && styles.carteMoi,
+          !estPot && complet && !parMoi && mode !== 'destinataire' && styles.carteReservee,
         ]}
       >
         <View style={styles.carteLigne}>
           {s.image ? <Image source={{ uri: s.image }} style={styles.vignette} accessibilityLabel={s.titre} /> : null}
           <View style={styles.carteTextes}>
-            <Text style={[styles.carteTitre, complet && !parMoi && mode !== 'destinataire' && styles.texteAttenue]}>
+            <Text style={[styles.carteTitre, !estPot && complet && !parMoi && mode !== 'destinataire' && styles.texteAttenue]}>
               {s.titre}
             </Text>
             {infos.length > 0 && <Text style={styles.carteDetail}>{infos.join(' · ')}</Text>}
@@ -240,6 +284,14 @@ export default function ListeScreen({ route, navigation }: any) {
               <Text style={styles.lien}>Voir sur {nomSite(s.lien)}</Text>
             </Pressable>
           ) : null}
+          {estPot && parMoi && mode !== 'destinataire' && (
+            <Pressable
+              onPress={() => executer(s.id, () => annulerReservation(s.id, moiId), 'Annulation impossible.')}
+              hitSlop={8}
+            >
+              <Text style={styles.lienDiscret}>Annuler ma réservation d’avant le pot</Text>
+            </Pressable>
+          )}
           {modifiable && !s.supprime_le && (
             <Pressable onPress={() => navigation.navigate('Souhait', { listeId, souhaitId: s.id, idee: s.secret, prenom })} hitSlop={8}>
               <Text style={styles.lien}>Modifier</Text>
@@ -262,7 +314,7 @@ export default function ListeScreen({ route, navigation }: any) {
 
   const nbSouhaitsActifs = souhaitsVisibles.filter((s) => !s.supprime_le).length;
   const nbReservesActifs = souhaitsVisibles.filter(
-    (s) => !s.supprime_le && (etat.get(s.id)?.nb_reserves ?? 0) >= s.quantite
+    (s) => !s.supprime_le && !s.pot_commun && (etat.get(s.id)?.nb_reserves ?? 0) >= s.quantite
   ).length;
 
   return (
@@ -400,6 +452,7 @@ const styles = creerStylesThemes(() => ({
   description: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.text },
   statutMoi: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.success },
   statutReserve: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
+  pot: { gap: 4, marginTop: 4 },
   statutPartiel: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.accent },
   liens: { flexDirection: 'row', gap: theme.spacing.md, flexWrap: 'wrap' },
   lien: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent, textDecorationLine: 'underline' },

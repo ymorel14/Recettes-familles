@@ -16,6 +16,7 @@ import EvenementFormScreen from '../screens/EvenementFormScreen';
 import EvenementScreen from '../screens/EvenementScreen';
 import ListeScreen from '../screens/ListeScreen';
 import SouhaitFormScreen from '../screens/SouhaitFormScreen';
+import ParticipationScreen from '../screens/ParticipationScreen';
 import AOffrirScreen from '../screens/AOffrirScreen';
 import MesEnviesScreen from '../screens/MesEnviesScreen';
 import ProfilScreen from '../screens/ProfilScreen';
@@ -192,6 +193,7 @@ export default function AppNavigator() {
             <Pile.Screen name="Evenement" component={EvenementScreen} options={{ title: 'Événement' }} />
             <Pile.Screen name="Liste" component={ListeScreen} options={{ title: 'Liste de souhaits' }} />
             <Pile.Screen name="Souhait" component={SouhaitFormScreen} options={{ title: 'Souhait' }} />
+            <Pile.Screen name="Participation" component={ParticipationScreen} options={{ title: 'Pot commun' }} />
             <Pile.Screen name="Profil" component={ProfilScreen} options={{ title: 'Profil' }} />
           </>
         )}

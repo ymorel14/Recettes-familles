@@ -24,6 +24,7 @@ const VIDE: FormulaireSouhait = {
   taille: '',
   priorite: 2,
   quantite: 1,
+  potCommun: false,
 };
 
 const PRIORITES: { valeur: 1 | 2 | 3; libelle: string }[] = [
@@ -64,6 +65,7 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           taille: s.taille ?? '',
           priorite: s.priorite,
           quantite: s.quantite,
+          potCommun: !!s.pot_commun,
         })
       )
       .catch((e) => setErreur(extraireMessageErreur(e, 'Chargement impossible.')));
@@ -164,7 +166,30 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
 
       {champ('lien', 'Lien vers un site marchand', { placeholder: 'https://…', clavier: 'url' })}
 
-      <Text style={styles.libelle}>Prix</Text>
+      <Pressable
+        onPress={() => changer({ potCommun: !form.potCommun })}
+        style={[styles.pot, form.potCommun && styles.potActif]}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: form.potCommun }}
+        accessibilityLabel="Pot commun"
+      >
+        <Ionicons
+          name={form.potCommun ? 'checkbox' : 'square-outline'}
+          size={24}
+          color={form.potCommun ? theme.colors.accent : theme.colors.textMuted}
+        />
+        <View style={styles.potTextes}>
+          <Text style={styles.potTitre}>Pot commun</Text>
+          <Text style={styles.potAide}>
+            {idee
+              ? `Cadeau cher ou voyage : chacun participe de la somme qu’il veut. ${prenom ?? 'La personne'} ne verra rien.`
+              : 'Cadeau cher ou voyage : la famille participe à plusieurs. Chacun ne voit que son propre montant ; la somme réunie reste une surprise pour vous.'}
+          </Text>
+        </View>
+      </Pressable>
+
+      {!form.potCommun && <Text style={styles.libelle}>Prix</Text>}
+      {!form.potCommun && (
       <View style={styles.puces}>
         {([
           ['estime', 'Prix estimé'],
@@ -181,10 +206,11 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           </Pressable>
         ))}
       </View>
+      )}
       <View style={styles.ligne}>
         <View style={styles.moitie}>
-          {champ('prix', form.typePrix === 'budget' ? 'Jusqu’à (€)' : 'Environ (€)', {
-            placeholder: form.typePrix === 'budget' ? '50' : '25',
+          {champ('prix', form.potCommun ? 'Montant à réunir (€)' : form.typePrix === 'budget' ? 'Jusqu’à (€)' : 'Environ (€)', {
+            placeholder: form.potCommun ? '600' : form.typePrix === 'budget' ? '50' : '25',
             clavier: 'decimal-pad',
           })}
         </View>
@@ -207,7 +233,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         ))}
       </View>
 
-      <Text style={styles.libelle}>Quantité souhaitée</Text>
+      {!form.potCommun && <Text style={styles.libelle}>Quantité souhaitée</Text>}
+      {!form.potCommun && (
       <View style={styles.quantite}>
         <Pressable
           style={styles.boutonRond}
@@ -227,6 +254,7 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           <Text style={styles.boutonRondTexte}>+</Text>
         </Pressable>
       </View>
+      )}
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
       <Bouton titre="Enregistrer" onPress={enregistrer} enCours={enCours} style={styles.enregistrer} />
@@ -298,5 +326,20 @@ const styles = creerStylesThemes(() => ({
     justifyContent: 'center',
   },
   photoActions: { flex: 1, gap: theme.spacing.xs },
+  pot: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    alignItems: 'flex-start',
+    marginTop: theme.spacing.xs,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  potActif: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentTransparent },
+  potTextes: { flex: 1, gap: 2 },
+  potTitre: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  potAide: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, lineHeight: 18 },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning, padding: theme.spacing.sm },
 }));

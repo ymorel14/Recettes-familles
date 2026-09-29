@@ -12,6 +12,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20260928170000_wishlist_evenement_destinataire.sql` | CadeauCommun : personne fêtée d'un événement (anniversaire de…) |
 | `20260928180000_wishlist_photos_budget.sql` | CadeauCommun : prix estimé ou budget, espace de stockage des photos de cadeaux |
 | `20260928190000_wishlist_date_remise.sql` | CadeauCommun : date de remise des cadeaux (repas), distincte de la date de l'événement |
+| `20260929090000_wishlist_pot_commun.sql` | CadeauCommun : pot commun par cadeau (participations dont seul l'auteur voit le montant ; somme réunie cachée au destinataire) |
 
 ## Exécution
 

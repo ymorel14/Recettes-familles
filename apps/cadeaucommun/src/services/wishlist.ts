@@ -12,7 +12,9 @@ const BUCKET_PHOTOS_CADEAUX = 'cadeaux-photos';
 //  - le destinataire d'une liste ne reçoit jamais les idées cachées, ni les
 //    réservations, ni l'état "réservé" ;
 //  - un donateur ne lit que SES réservations ; l'état des autres souhaits
-//    (nombre d'unités réservées, sans les noms) vient de etat_reservations.
+//    (nombre d'unités réservées, sans les noms) vient de etat_reservations ;
+//  - pot commun (migration 7) : chacun ne lit que SA participation ; la somme
+//    réunie vient de etat_pots, refusée au destinataire.
 
 export type TypeEvenement =
   | 'noel'
@@ -75,6 +77,9 @@ export type Souhait = {
   priorite: 1 | 2 | 3;
   quantite: number;
   secret: boolean;
+  // Cadeau financé à plusieurs : on y participe au lieu de le réserver ;
+  // prix = montant à réunir (facultatif).
+  pot_commun: boolean;
   cree_par: string;
   cree_le: string;
   supprime_le: string | null;
@@ -87,6 +92,14 @@ export type EtatReservation = {
   quantite: number;
   nb_reserves: number;
   reserve_par_moi: boolean;
+};
+
+// Pot commun d'un cadeau, vu par un donateur : la somme réunie et MA
+// participation (null si je n'ai pas participé). Jamais les autres montants.
+export type EtatPot = {
+  souhait_id: string;
+  total: number;
+  ma_participation: number | null;
 };
 
 export type Personne = {
@@ -315,6 +328,7 @@ export type FormulaireSouhait = {
   taille: string;
   priorite: 1 | 2 | 3;
   quantite: number;
+  potCommun: boolean;
 };
 
 // Envoie une photo choisie sur l'appareil et renvoie son adresse publique
@@ -352,7 +366,8 @@ async function lignePourBase(f: FormulaireSouhait) {
     prix: prix && !Number.isNaN(Number(prix)) ? Number(prix) : null,
     taille: f.taille.trim() || null,
     priorite: f.priorite,
-    quantite: Math.max(1, Math.round(f.quantite)),
+    quantite: f.potCommun ? 1 : Math.max(1, Math.round(f.quantite)),
+    pot_commun: f.potCommun,
   };
 }
 
@@ -448,6 +463,82 @@ export async function mesReservations(): Promise<MaReservation[]> {
 
 export async function marquerAchete(reservationId: string, achete: boolean) {
   const { error } = await supabase.from('reservations').update({ achete }).eq('id', reservationId);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Pots communs (un par cadeau)
+// ---------------------------------------------------------------------------
+
+// Somme réunie et ma participation pour chaque pot d'une liste (refusé au
+// destinataire).
+export async function etatPots(listeId: string): Promise<Map<string, EtatPot>> {
+  const { data, error } = await supabase.rpc('etat_pots', { id_liste: listeId });
+  if (error) throw error;
+  const resultat = new Map<string, EtatPot>();
+  ((data ?? []) as any[]).forEach((e) =>
+    resultat.set(e.souhait_id, {
+      souhait_id: e.souhait_id,
+      total: Number(e.total ?? 0),
+      ma_participation: e.ma_participation == null ? null : Number(e.ma_participation),
+    })
+  );
+  return resultat;
+}
+
+// "25,50 €" → 25.5 (null si vide ou invalide)
+export function lireMontant(texte: string): number | null {
+  const propre = texte.trim().replace(',', '.').replace(/\s|€/g, '');
+  if (!propre) return null;
+  const n = Number(propre);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+// Crée ou modifie ma participation à un pot (une seule par personne et par pot).
+export async function participer(souhaitId: string, auteurId: string, montant: number) {
+  const { data, error } = await supabase
+    .from('participations')
+    .update({ montant })
+    .eq('souhait_id', souhaitId)
+    .eq('participant', auteurId)
+    .select('id');
+  if (error) throw error;
+  if (data && data.length > 0) return;
+  const ajout = await supabase.from('participations').insert({ souhait_id: souhaitId, participant: auteurId, montant });
+  if (ajout.error) throw ajout.error;
+}
+
+export async function retirerParticipation(souhaitId: string, auteurId: string) {
+  const { error } = await supabase
+    .from('participations')
+    .delete()
+    .eq('souhait_id', souhaitId)
+    .eq('participant', auteurId);
+  if (error) throw error;
+}
+
+export type MaParticipation = {
+  id: string;
+  souhait_id: string;
+  montant: number;
+  verse: boolean;
+  souhait: MaReservation['souhait'];
+};
+
+// "À offrir" : mes participations aux pots communs.
+export async function mesParticipations(): Promise<MaParticipation[]> {
+  const { data, error } = await supabase
+    .from('participations')
+    .select(
+      'id, souhait_id, montant, verse, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, evenement:evenements(*)))'
+    )
+    .order('cree_le', { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((p) => ({ ...p, montant: Number(p.montant) }));
+}
+
+export async function marquerVerse(participationId: string, verse: boolean) {
+  const { error } = await supabase.from('participations').update({ verse }).eq('id', participationId);
   if (error) throw error;
 }
 
