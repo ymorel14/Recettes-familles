@@ -6,6 +6,8 @@ node_modules/
 # Expo
 .expo/
 dist/
+# CadeauCommun : le build web est versionné et publié tel quel par Netlify
+!apps/cadeaucommun/dist/
 web-build/
 expo-env.d.ts
 

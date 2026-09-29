@@ -39,6 +39,11 @@ Le fichier `.env` de chaque app se place dans son dossier (`apps/cuisine/.env`,
 - **Web (Netlify)** : `netlify.toml` à la racine construit l'app Cuisine
   (`npm run cuisine:export:web`, publication de `apps/cuisine/dist`). Dans
   Netlify, le réglage « Base directory » doit rester vide.
+- **Web CadeauCommun (Netlify, sans build)** : le dossier `apps/cadeaucommun/dist`
+  est versionné. Le reconstruire avec `npm run cadeau:export:web`, puis committer
+  et pousser. Site Netlify dédié : « Base directory » = `apps/cadeaucommun/dist`,
+  commande de build vide, « Publish directory » = `apps/cadeaucommun/dist`.
+  Le fichier `public/_redirects` est recopié dans `dist` à chaque build.
 
 ## Base de données (Supabase)
 
