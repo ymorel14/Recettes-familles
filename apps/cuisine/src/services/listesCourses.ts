@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { normaliserTexte } from '../utils/texte';
+import { etatSurprise } from './recettes';
 import type { ListeCourses, ArticleListeCourses, ContributionListeCourses, RecetteComplete } from '../types/models';
 
 function normaliser(texte: string): string {
@@ -348,7 +349,9 @@ export async function ajouterRecettesALaListe(
     return recette.ingredients.map((ing) => ({
       liste_id: listeId,
       recette_id: recette.id,
-      recette_titre: recette.titre,
+      // La liste est partagée par tout le foyer : une recette surprise
+      // cachée à son foyer n'y apparaît pas sous son vrai nom.
+      recette_titre: etatSurprise(recette)?.portee === 'moi' ? 'Recette surprise' : recette.titre,
       ajout_id: ajoutId,
       libelle: nomProduit(ing.libelle),
       quantite: ing.quantite != null ? ing.quantite * facteur : null,

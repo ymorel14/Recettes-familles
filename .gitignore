@@ -8,6 +8,8 @@ node_modules/
 dist/
 # CadeauCommun : le build web est versionné et publié tel quel par Netlify
 !apps/cadeaucommun/dist/
+# SouvenirsFamille : idem, build web versionné pour Netlify
+!apps/souvenirs/dist/
 web-build/
 expo-env.d.ts
 

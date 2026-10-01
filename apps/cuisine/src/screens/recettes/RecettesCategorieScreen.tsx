@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { listerRecettes, type PorteeRecettes } from '../../services/recettes';
+import { listerRecettes, etatSurprise, type PorteeRecettes } from '../../services/recettes';
 import { supabase } from '../../services/supabase';
 import type { RecetteComplete } from '../../types/models';
 import { useGrilleVignettes } from '../../utils/grilleVignettes';
@@ -116,6 +116,7 @@ export default function RecettesCategorieScreen({ navigation, route }: any) {
                 )}
                 <View style={styles.etiquette}>
                   <Text style={[styles.nomRecette, { fontSize: taillePolice }]} numberOfLines={1}>
+                    {etatSurprise(item.recette) ? '🤫 ' : ''}
                     {item.recette.titre}
                   </Text>
                   {/* Recette d'un autre foyer de la famille : on indique lequel. */}

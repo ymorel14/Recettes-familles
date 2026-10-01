@@ -21,6 +21,8 @@ import {
   resoudreEtapePourAffichage,
   resoudreLibelleIngredient,
   supprimerRecette,
+  etatSurprise,
+  revelerRecette,
 } from '../../services/recettes';
 import {
   LIBELLES_DIFFICULTE,
@@ -127,6 +129,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const [chargement, setChargement] = useState(true);
   const [suppression, setSuppression] = useState(false);
   const [ajoutListe, setAjoutListe] = useState(false);
+  const [revelation, setRevelation] = useState(false);
   const [essais, setEssais] = useState<EssaiComplet[]>([]);
   // Quantités adaptées au moment de faire la recette (parts, ou "ce que
   // j'ai" — ex. 6 œufs au lieu de 8) ; transmises au mode assistant.
@@ -183,6 +186,9 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const estCreateur = session?.user.id === recette.cree_par;
   // Recette d'un autre foyer de la famille : visible, mais non modifiable.
   const estDeMonFoyer = recette.foyer_id === foyer?.id;
+  // Recette surprise encore cachée (null si visible de toute la famille).
+  const surprise = etatSurprise(recette);
+  const cacheeParMoi = recette.cachee_par === session?.user.id;
   const { note, nbAvis } = noteMoyenne(recette);
   const synthese = syntheseEssais(essais);
   // Mon dernier essai encore sans verdict : on propose de le compléter.
@@ -216,6 +222,27 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     } finally {
       setAjoutListe(false);
     }
+  };
+
+  // Recette surprise : la rendre visible de toute la famille dès maintenant.
+  const demanderRevelation = () => {
+    alerte('Révéler la recette ?', `"${recette.titre}" sera visible de toute la famille dès maintenant.`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Révéler',
+        onPress: async () => {
+          setRevelation(true);
+          try {
+            await revelerRecette(recette.id);
+            setRecette({ ...recette, cachee: null, revelee_le: null, cachee_par: null });
+          } catch (e) {
+            alerte('Échec', e instanceof Error ? e.message : 'Veuillez réessayer.');
+          } finally {
+            setRevelation(false);
+          }
+        },
+      },
+    ]);
   };
 
   const confirmerSuppression = async () => {
@@ -276,6 +303,34 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
 
       {!estDeMonFoyer && recette.foyer?.nom && (
         <Text style={styles.foyerOrigine}>Recette de {recette.foyer.nom}</Text>
+      )}
+
+      {surprise && (
+        <View style={styles.bandeauSurprise}>
+          <Text style={styles.bandeauSurpriseTitre}>🤫 Recette surprise</Text>
+          <Text style={styles.bandeauSurpriseTexte}>
+            {surprise.portee === 'moi'
+              ? cacheeParMoi
+                ? 'Visible de vous seul : cachée à tout le reste de la famille, votre foyer compris.'
+                : 'Visible de la personne qui l’a cachée seulement.'
+              : 'Visible de votre foyer seulement : cachée au reste de la famille.'}
+            {surprise.reveleeLe
+              ? ` Elle sera révélée automatiquement le ${formaterDate(surprise.reveleeLe)}.`
+              : ' Elle reste cachée jusqu’à ce que vous la révéliez.'}
+          </Text>
+          {surprise.portee === 'moi' && (
+            <Text style={styles.bandeauSurpriseAide}>
+              Ajoutée à la liste de courses, elle y apparaît sous le nom « Recette surprise ».
+            </Text>
+          )}
+          <Pressable style={styles.boutonReveler} onPress={demanderRevelation} disabled={revelation}>
+            {revelation ? (
+              <ActivityIndicator color={theme.colors.accent} />
+            ) : (
+              <Text style={styles.boutonRevelerTexte}>Révéler maintenant</Text>
+            )}
+          </Pressable>
+        </View>
       )}
 
       {recette.categories.length > 0 && (
@@ -422,6 +477,29 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
 }
 
 const styles = creerStylesThemes(() => ({
+  bandeauSurprise: {
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+    marginBottom: theme.spacing.md,
+  },
+  bandeauSurpriseTitre: { fontFamily: theme.fontBodyBold, color: theme.colors.accent, fontSize: 16 },
+  bandeauSurpriseTexte: { fontFamily: theme.fontBody, color: theme.colors.text, fontSize: 15, lineHeight: 21 },
+  bandeauSurpriseAide: { fontFamily: theme.fontBody, color: theme.colors.textMuted, fontSize: 13 },
+  boutonReveler: {
+    alignSelf: 'flex-start',
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.xs,
+  },
+  boutonRevelerTexte: { fontFamily: theme.fontBodyBold, color: theme.colors.accent, fontSize: 14 },
   container: { flex: 1, backgroundColor: theme.colors.background },
   contenu: { padding: theme.spacing.md, gap: theme.spacing.sm },
   centre: { flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' },

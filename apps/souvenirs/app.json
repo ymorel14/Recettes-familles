@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "SouvenirsFamille",
+    "slug": "souvenirsfamille",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "souvenirsfamille",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.souvenirsfamille"
+    },
+    "android": {
+      "package": "fr.morel.souvenirsfamille",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF5E6",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FBF5E6"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet d'ajouter des photos et des vidéos à un souvenir de famille.",
+          "cameraPermission": "Permet de photographier un moment pour l'ajouter aux souvenirs de la famille."
+        }
+      ]
+    ]
+  }
+}

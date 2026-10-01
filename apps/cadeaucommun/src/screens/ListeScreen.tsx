@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Linking, Image } from 'react-native';
+import { View, Text, ScrollView, Pressable, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -15,6 +15,7 @@ import {
   formaterDate,
   formaterPrix,
   libellePrix,
+  libellePriorite,
   libelleCompteARebours,
   listerPersonnes,
   listerSouhaits,
@@ -33,6 +34,7 @@ import {
 } from '../services/wishlist';
 import { Bouton, Chargement, Pastille } from '../components/ui';
 import JaugePot from '../components/JaugePot';
+import PhotoAgrandie from '../components/PhotoAgrandie';
 
 type Mode = 'destinataire' | 'gestionnaire' | 'donateur';
 
@@ -182,7 +184,7 @@ export default function ListeScreen({ route, navigation }: any) {
       s.pot_commun ? (s.prix != null ? `À réunir : ${formaterPrix(s.prix)}` : 'Pot commun') : libellePrix(s.prix, s.type_prix),
       s.taille,
       !s.pot_commun && s.quantite > 1 ? `${s.quantite} souhaités` : null,
-      s.priorite === 3 ? 'Très envie' : null,
+      s.priorite === 3 ? libellePriorite(s.priorite, s.secret) : null,
     ].filter(Boolean);
 
     let statut: React.ReactNode = null;
@@ -255,7 +257,7 @@ export default function ListeScreen({ route, navigation }: any) {
         ]}
       >
         <View style={styles.carteLigne}>
-          {s.image ? <Image source={{ uri: s.image }} style={styles.vignette} accessibilityLabel={s.titre} /> : null}
+          {s.image ? <PhotoAgrandie uri={s.image} style={styles.vignette} libelle={s.titre} /> : null}
           <View style={styles.carteTextes}>
             <Text style={[styles.carteTitre, !estPot && complet && !parMoi && mode !== 'destinataire' && styles.texteAttenue]}>
               {s.titre}

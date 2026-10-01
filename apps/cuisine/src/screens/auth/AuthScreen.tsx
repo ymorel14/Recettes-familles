@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase, URL_RETOUR_EMAIL } from '../../services/supabase';
 import { theme, creerStylesThemes } from '../../theme/theme';
 import { extraireMessageErreur } from '../../services/famille';
 import { alerte } from '../../utils/alerte';
+import { ConnexionAutresApps } from '@apps-famille/famille';
 import ZoneClavier from '../../components/ZoneClavier';
 
 type Mode = 'connexion' | 'inscription' | 'motDePasse';
@@ -189,7 +190,7 @@ export default function AuthScreen() {
 
   return (
     <ZoneClavier sansEnTete>
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={styles.titre}>Recettes familiales</Text>
       <Text style={styles.sousTitre}>{sousTitre}</Text>
 
@@ -273,14 +274,21 @@ export default function AuthScreen() {
           </Text>
         </Pressable>
       )}
-    </View>
+
+      {mode === 'connexion' && (
+        <View style={styles.autresApps}>
+          <ConnexionAutresApps polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
+        </View>
+      )}
+    </ScrollView>
     </ZoneClavier>
   );
 }
 
 const styles = creerStylesThemes(() => ({
+  autresApps: { marginTop: theme.spacing.lg },
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: theme.colors.background,
     padding: theme.spacing.lg,
     justifyContent: 'center',

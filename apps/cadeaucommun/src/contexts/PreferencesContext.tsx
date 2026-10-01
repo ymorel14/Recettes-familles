@@ -1,10 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appliquerTheme, THEME_PAR_DEFAUT, type IdTheme } from '../theme/theme';
 
 // Réglages propres à cet appareil, enregistrés localement : pour l'instant,
 // le thème de couleurs (modifiable depuis le Profil).
-const CLE_THEME = 'preferences.theme';
+// Clé propre à l'app : sur le site web commun, toutes les apps partagent le
+// même stockage du navigateur, et chacune garde son propre thème.
+const CLE_THEME = 'cadeaucommun.preferences.theme';
+// Clé d'avant le site commun, encore relue sur téléphone (stockage propre à
+// chaque app) pour garder le thème déjà choisi.
+const ANCIENNE_CLE_THEME = 'preferences.theme';
 
 type PreferencesContextValue = {
   themeId: IdTheme;
@@ -21,6 +27,9 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   // le thème par défaut).
   useEffect(() => {
     AsyncStorage.getItem(CLE_THEME)
+      .then((enregistre) =>
+        enregistre ?? (Platform.OS === 'web' ? null : AsyncStorage.getItem(ANCIENNE_CLE_THEME))
+      )
       .then((enregistre) => setThemeId(appliquerTheme(enregistre).id))
       .catch(() => {})
       .finally(() => setPret(true));

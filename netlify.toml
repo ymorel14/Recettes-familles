@@ -1,18 +1,21 @@
-# Déploiement de la version web de l'app Cuisine sur Netlify.
+# Site web commun aux apps de la famille, sur Netlify : une seule adresse,
+# donc une seule connexion pour toutes les apps.
+#   /            accueil (choix de l'app)
+#   /cuisine/    Recettes familiales
+#   /cadeaux/    CadeauCommun
+#   /voyages/    VoyageCommun
+#   /souvenirs/  SouvenirsFamille
+# Les anciennes adresses de Cuisine (ex. /recette/123) sont redirigées vers
+# /cuisine/… (règles écrites par scripts/construire-site.mjs dans
+# site/dist/_redirects).
+#
 # Le dépôt contient plusieurs apps (apps/*) et du code commun (packages/*) :
 # Netlify installe les dépendances à la racine (npm workspaces), puis
-# construit l'app Cuisine.
+# construit les quatre apps.
 # Variables à définir dans Netlify (Site settings > Environment variables) :
 #   EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY
 # Dans Netlify, "Base directory" doit rester vide (racine du dépôt).
 
 [build]
-  command = "npm run cuisine:export:web"
-  publish = "apps/cuisine/dist"
-
-# Toutes les adresses (ex. /recette/123) renvoient vers l'application, qui
-# affiche ensuite le bon écran — évite une erreur 404 au rechargement.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+  command = "npm run site:export:web"
+  publish = "site/dist"

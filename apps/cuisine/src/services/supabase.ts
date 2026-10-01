@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import { configurerFamille, schemaFamille } from '@apps-famille/famille';
+import { configurerFamille, schemaFamille, urlRetourEmail } from '@apps-famille/famille';
 import { AppState, Platform } from 'react-native';
 
 // Client Supabase — backend retenu au §3 de la feuille de route (cahier des charges, onglet 2).
@@ -49,15 +49,16 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
 // CadeauCommun…) : familles, foyers, membres, profils, codes d'invitation,
 // famille active, dans le schéma "famille". Le code vit dans le paquet
 // commun packages/famille, qui passe par ce client.
-configurerFamille(supabase);
+// app et baseWeb : connexion partagée entre les apps de la famille (site web
+// commun, « Continuer avec mon compte » sur téléphone).
+configurerFamille(supabase, { app: 'cuisine', baseWeb: process.env.EXPO_PUBLIC_BASE_WEB });
 export { schemaFamille };
 
 // Adresse vers laquelle renvoient les liens des emails (confirmation
 // d'inscription) : le site lui-même sur le web. Sur téléphone : non précisée,
 // Supabase utilise alors la "Site URL" du projet. L'adresse doit figurer dans
 // Authentication > URL Configuration > Redirect URLs, sinon Supabase l'ignore.
-export const URL_RETOUR_EMAIL: string | undefined =
-  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+export const URL_RETOUR_EMAIL: string | undefined = urlRetourEmail();
 
 // Stockage des photos : utiliser un bucket au nom distinct (ex. "recettes-photos"),
 // pour ne pas entrer en collision avec un bucket déjà utilisé par une autre application

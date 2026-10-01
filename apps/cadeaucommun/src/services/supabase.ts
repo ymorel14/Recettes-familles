@@ -2,7 +2,7 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
-import { configurerFamille, schemaFamille } from '@apps-famille/famille';
+import { configurerFamille, schemaFamille, urlRetourEmail } from '@apps-famille/famille';
 
 // Client Supabase de CadeauCommun : même projet Supabase que l'app Cuisine
 // (mêmes comptes, mêmes familles), mais les données de l'app vivent dans le
@@ -30,12 +30,13 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   },
 });
 
-configurerFamille(supabase);
+// app et baseWeb : connexion partagée entre les apps de la famille (site web
+// commun, « Continuer avec mon compte » sur téléphone).
+configurerFamille(supabase, { app: 'cadeaucommun', baseWeb: process.env.EXPO_PUBLIC_BASE_WEB });
 export { schemaFamille };
 
 // Adresse de retour des emails de confirmation (version web uniquement).
-export const URL_RETOUR_EMAIL: string | undefined =
-  Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+export const URL_RETOUR_EMAIL: string | undefined = urlRetourEmail();
 
 // Sur téléphone, le renouvellement du jeton ne tourne qu'au premier plan
 // (recommandation Supabase pour React Native).

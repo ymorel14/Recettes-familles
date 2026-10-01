@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "VoyageCommun",
+    "slug": "voyagecommun",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "voyagecommun",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.voyagecommun"
+    },
+    "android": {
+      "package": "fr.morel.voyagecommun",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF8F0",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FBF8F0"
+    }
+  }
+}

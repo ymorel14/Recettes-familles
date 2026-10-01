@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { supabase, URL_RETOUR_EMAIL } from '../services/supabase';
-import { extraireMessageErreur } from '@apps-famille/famille';
+import { ConnexionAutresApps, extraireMessageErreur } from '@apps-famille/famille';
 import { Bouton } from '../components/ui';
 
 // Connexion avec le même compte que l'app Cuisine (comptes communs à toutes
@@ -99,6 +99,10 @@ export default function ConnexionScreen() {
             }}
           />
         </View>
+
+        {mode === 'connexion' && (
+          <ConnexionAutresApps polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

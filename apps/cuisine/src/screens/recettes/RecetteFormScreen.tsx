@@ -35,6 +35,7 @@ import type { RecetteFormulaire, PhotoBrouillon, EtapeBrouillon } from '../../se
 import type { RecetteLiee } from '../../types/models';
 import ZoneClavier from '../../components/ZoneClavier';
 import ChampExtensible from '../../components/ChampExtensible';
+import ReglageSurprise from '../../components/ReglageSurprise';
 import { decouperIngredients, reconnaitreTexteZone, texteScanneEnEtape } from '../../services/ocr';
 
 // Formulaire de création ET de modification d'une recette (cahier des
@@ -947,6 +948,13 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         placeholderTextColor={theme.colors.textMuted}
         value={form.notes}
         onChangeText={(v) => setForm((f) => ({ ...f, notes: v }))}
+      />
+
+      {/* Recette surprise : cachée à la famille (ou à tous sauf moi) jusqu'au
+          jour du repas — garanti par la base, voir ReglageSurprise. */}
+      <ReglageSurprise
+        valeur={{ cachee: form.cachee ?? null, reveleeLe: form.reveleeLe ?? null }}
+        onChange={(v) => setForm((f) => ({ ...f, cachee: v.cachee, reveleeLe: v.reveleeLe }))}
       />
 
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}

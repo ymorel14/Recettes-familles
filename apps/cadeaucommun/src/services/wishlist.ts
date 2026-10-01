@@ -352,10 +352,27 @@ export async function televerserPhoto(uriLocale: string): Promise<string> {
   return supabase.storage.from(BUCKET_PHOTOS_CADEAUX).getPublicUrl(nomFichier).data.publicUrl;
 }
 
+// Texte copié depuis une appli ou un site marchand → le lien, et le nom du
+// produit quand il l'accompagne. Le bouton "Partager" d'Amazon copie par
+// exemple « Nom du produit https://amzn.eu/d/abc » : on garde l'adresse seule.
+export function extraireLien(texte: string): { lien: string; titre: string | null } {
+  const brut = texte.trim();
+  const trouve = brut.match(/https?:\/\/[^\s<>"']+/i);
+  if (!trouve) return { lien: brut, titre: null };
+  const lien = trouve[0].replace(/[.,;:!?)\]»]+$/, '');
+  const avant = brut
+    .slice(0, trouve.index)
+    .replace(/^(découvrez|regardez|voir|check out|look at)\s*:?\s*/i, '')
+    .replace(/[\s:«»"'\-–—|]+$/, '')
+    .replace(/^[\s«»"']+/, '')
+    .trim();
+  return { lien, titre: avant.length >= 3 ? avant : null };
+}
+
 async function lignePourBase(f: FormulaireSouhait) {
   const prix = f.prix.trim().replace(',', '.').replace(/\s|€/g, '');
   const image = f.photoLocale ? await televerserPhoto(f.photoLocale) : f.image;
-  let lien = f.lien.trim();
+  let lien = extraireLien(f.lien).lien;
   if (lien && !/^https?:\/\//i.test(lien)) lien = `https://${lien}`;
   return {
     titre: f.titre.trim(),
@@ -622,6 +639,23 @@ export function prochainAnniversaire(dateNaissance: string): string | null {
   let annee = aujourdHui.getFullYear();
   if (new Date(annee, m - 1, j) < debut) annee += 1;
   return `${String(j).padStart(2, '0')}/${String(m).padStart(2, '0')}/${annee}`;
+}
+
+// Niveau d'envie d'un souhait (1 à 3). Pour une idée cachée, c'est l'avis
+// de son auteur sur l'idée : on ignore l'envie du destinataire.
+export const PRIORITES_SOUHAIT: { valeur: 1 | 2 | 3; libelle: string }[] = [
+  { valeur: 1, libelle: 'Si possible' },
+  { valeur: 2, libelle: 'Ça me ferait plaisir' },
+  { valeur: 3, libelle: 'Très envie' },
+];
+export const PRIORITES_IDEE: { valeur: 1 | 2 | 3; libelle: string }[] = [
+  { valeur: 1, libelle: 'Petite idée' },
+  { valeur: 2, libelle: 'Bonne idée' },
+  { valeur: 3, libelle: 'Coup de cœur' },
+];
+
+export function libellePriorite(priorite: 1 | 2 | 3, idee: boolean): string {
+  return (idee ? PRIORITES_IDEE : PRIORITES_SOUHAIT).find((p) => p.valeur === priorite)?.libelle ?? '';
 }
 
 export function formaterPrix(prix: number | null): string | null {

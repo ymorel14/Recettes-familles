@@ -50,6 +50,13 @@ export type Recette = {
   cree_par: string;
   cree_le: string;
   maj_le: string;
+  // Recette surprise (voir migration 20261001130000_recettes_surprise.sql) :
+  // 'moi' = visible de cachee_par seul, 'foyer' = cachée au reste de la
+  // famille, null = recette normale. revelee_le (AAAA-MM-JJ) : date de
+  // révélation automatique, facultative.
+  cachee?: 'moi' | 'foyer' | null;
+  cachee_par?: string | null;
+  revelee_le?: string | null;
 };
 
 // Élément d'une recette (ex. "Génoise au chocolat", "Crème chantilly" pour

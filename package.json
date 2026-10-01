@@ -11,6 +11,13 @@
     "cuisine:export:web": "npm run export:web -w recettes-familiales",
     "cadeau": "npm run start -w cadeaucommun",
     "cadeau:web": "npm run web -w cadeaucommun",
-    "cadeau:export:web": "npm run export:web -w cadeaucommun"
+    "cadeau:export:web": "npm run export:web -w cadeaucommun",
+    "voyage": "npm run start -w voyagecommun",
+    "voyage:web": "npm run web -w voyagecommun",
+    "voyage:export:web": "npm run export:web -w voyagecommun",
+    "souvenirs": "npm run start -w souvenirsfamille",
+    "souvenirs:web": "npm run web -w souvenirsfamille",
+    "souvenirs:export:web": "npm run export:web -w souvenirsfamille",
+    "site:export:web": "node scripts/construire-site.mjs"
   }
 }

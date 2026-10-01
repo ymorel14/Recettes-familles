@@ -8,6 +8,7 @@ import { Caveat_600SemiBold } from '@expo-google-fonts/caveat';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+import { PassageConnexion } from '@apps-famille/famille';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { PreferencesProvider, usePreferences } from './src/contexts/PreferencesContext';
 import { theme, themeActuel, EST_WEB, LARGEUR_MAX_WEB } from './src/theme/theme';
@@ -84,6 +85,8 @@ function Racine() {
   const application = (
     <AuthProvider>
       <AppNavigator />
+      {/* Connexion transmise par une autre app de la famille (téléphone) */}
+      <PassageConnexion polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
     </AuthProvider>
   );
 

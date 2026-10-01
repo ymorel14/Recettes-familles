@@ -15,9 +15,30 @@ partagent le compte famille :
   cachées, réservations anonymes), données dans le schéma `wishlist`. Cahier des
   charges : document Claude "Cahier des charges — CadeauCommun". La surprise est
   garantie par les règles RLS de la base, jamais seulement par l'interface.
+- `apps/voyage` : app VoyageCommun (préparer un voyage en famille : calendrier
+  commun des disponibilités, voyages et invités, sondage de dates, hébergements,
+  trajets, activités, budget), données dans le schéma `voyage`. Cahier des
+  charges : document Claude "Cahier des charges — VoyageCommun". Qui voit un
+  voyage privé est garanti par les règles RLS de la base.
+- `apps/souvenirs` : app SouvenirsFamille (la mémoire de la famille : souvenirs
+  datés et catégorisés, personnes concernées avec leur âge, photos, vidéos, sons
+  et PDF dans l'espace privé `souvenirs-medias`, commentaires, recherche en
+  français par `souvenirs.rechercher`), données dans le schéma `souvenirs`.
+  Cahier des charges : document Claude "Cahier des charges — SouvenirsFamille".
+  Qui voit un souvenir est garanti par les règles RLS de la base ; les photos
+  s'affichent par adresses signées, jamais publiques.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
-  Supabase et le confie au paquet avec `configurerFamille(supabase)`.
+  Supabase et le confie au paquet avec
+  `configurerFamille(supabase, { app, baseWeb: process.env.EXPO_PUBLIC_BASE_WEB })`.
+  Une seule connexion pour toutes les apps : sur le web, site commun
+  (`scripts/construire-site.mjs`, chaque app sous son chemin, ex. `/voyages/`) ;
+  sur téléphone, « Continuer avec mon compte » (`connexionPartagee.ts`,
+  `<PassageConnexion>` à monter dans chaque app, `<ConnexionAutresApps>` sur
+  l'écran de connexion, fonction Edge `transfert-session`). Une nouvelle app
+  s'ajoute à `APPS_FAMILLE` (appsFamille.ts) et à `scripts/construire-site.mjs`.
+  Les clés de stockage local d'une app sont préfixées par son nom (le site
+  commun partage le stockage du navigateur).
 - `packages/theme` : thèmes de couleurs communs (Sceau, Charlotte aux fraises,
   Papier kraft…) et `creerStylesThemes`. Chaque app fixe son thème par défaut
   (`definirThemeParDefaut`) et ses polices dans son `src/theme/theme.ts`.

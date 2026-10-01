@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appliquerTheme, THEME_PAR_DEFAUT, type IdTheme } from '../theme/theme';
 
@@ -10,7 +11,12 @@ import { appliquerTheme, THEME_PAR_DEFAUT, type IdTheme } from '../theme/theme';
 export const LECTURE_AUTO_ASSISTANT_PAR_DEFAUT = false;
 
 const CLE_LECTURE_AUTO_ASSISTANT = 'preferences.lectureAutoAssistant';
-const CLE_THEME = 'preferences.theme';
+// Clé propre à l'app : sur le site web commun, toutes les apps partagent le
+// même stockage du navigateur, et chacune garde son propre thème.
+const CLE_THEME = 'cuisine.preferences.theme';
+// Clé d'avant le site commun, encore relue sur téléphone (stockage propre à
+// chaque app) pour garder le thème déjà choisi.
+const ANCIENNE_CLE_THEME = 'preferences.theme';
 
 type PreferencesContextValue = {
   lectureAutoAssistant: boolean;
@@ -32,10 +38,11 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   // appliqué avant que les écrans ne lisent leurs couleurs (sinon on verrait
   // brièvement le thème par défaut).
   useEffect(() => {
-    AsyncStorage.multiGet([CLE_LECTURE_AUTO_ASSISTANT, CLE_THEME])
+    AsyncStorage.multiGet([CLE_LECTURE_AUTO_ASSISTANT, CLE_THEME, ANCIENNE_CLE_THEME])
       .then((valeurs) => {
-        const lecture = valeurs.find(([cle]) => cle === CLE_LECTURE_AUTO_ASSISTANT)?.[1];
-        const themeEnregistre = valeurs.find(([cle]) => cle === CLE_THEME)?.[1];
+        const lire = (cle: string) => valeurs.find(([c]) => c === cle)?.[1] ?? null;
+        const lecture = lire(CLE_LECTURE_AUTO_ASSISTANT);
+        const themeEnregistre = lire(CLE_THEME) ?? (Platform.OS === 'web' ? null : lire(ANCIENNE_CLE_THEME));
         if (lecture != null) setLectureAutoAssistant(lecture === 'true');
         setThemeId(appliquerTheme(themeEnregistre).id);
       })

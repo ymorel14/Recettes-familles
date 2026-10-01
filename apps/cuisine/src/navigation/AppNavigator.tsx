@@ -5,7 +5,10 @@ import {
   DefaultTheme,
   Theme as NavTheme,
   LinkingOptions,
+  getStateFromPath,
+  getPathFromState,
 } from '@react-navigation/native';
+import { baseWeb } from '@apps-famille/famille';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, Text, Pressable } from 'react-native';
@@ -70,9 +73,21 @@ function creerThemeNavigation(): NavTheme {
 const sansURL = () => 'undefined';
 const versBooleen = (valeur: string) => valeur === 'true';
 
+// Sur le site web commun, l'app vit sous /cuisine (voir baseWeb) : ce
+// préfixe est retiré de l'adresse avant de chercher l'écran, et remis
+// devant l'adresse de chaque écran.
+function sansBase(chemin: string): string {
+  const base = baseWeb();
+  if (!base || !chemin.startsWith(base)) return chemin;
+  const reste = chemin.slice(base.length);
+  return reste.startsWith('/') ? reste : `/${reste}`;
+}
+
 const liens: LinkingOptions<any> = {
   enabled: EST_WEB,
   prefixes: [],
+  getStateFromPath: (chemin, options) => getStateFromPath(sansBase(chemin), options),
+  getPathFromState: (etat, options) => `${baseWeb()}${getPathFromState(etat, options)}`,
   config: {
     // Un lien direct vers une recette (ou un rechargement de page) place
     // toujours les onglets en dessous : la flèche « retour » de l'en-tête

@@ -1,17 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Image, Platform } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import {
   creerSouhait,
+  extraireLien,
   modifierSouhait,
   obtenirSouhait,
+  PRIORITES_IDEE,
+  PRIORITES_SOUHAIT,
   type FormulaireSouhait,
 } from '../services/wishlist';
 import { Bouton, Chargement } from '../components/ui';
+import PhotoAgrandie from '../components/PhotoAgrandie';
 
 const VIDE: FormulaireSouhait = {
   titre: '',
@@ -26,12 +31,6 @@ const VIDE: FormulaireSouhait = {
   quantite: 1,
   potCommun: false,
 };
-
-const PRIORITES: { valeur: 1 | 2 | 3; libelle: string }[] = [
-  { valeur: 1, libelle: 'Si possible' },
-  { valeur: 2, libelle: 'Ça me ferait plaisir' },
-  { valeur: 3, libelle: 'Très envie' },
-];
 
 // Ajout ou modification d'un souhait (par le destinataire ou son
 // gestionnaire) ou d'une idée cachée (par un proche : `idee` vrai).
@@ -74,6 +73,32 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
   if (!form) return erreur ? <Text style={styles.erreur}>{erreur}</Text> : <Chargement />;
 
   const changer = (champ: Partial<FormulaireSouhait>) => setForm({ ...form, ...champ });
+
+  // Idée cachée : on ne connaît pas l'envie du destinataire, on note son
+  // propre avis sur l'idée.
+  const priorites = idee ? PRIORITES_IDEE : PRIORITES_SOUHAIT;
+
+  // Lien collé ou tapé : si le texte contient une adresse accompagnée d'autre
+  // chose (partage Amazon : « Nom du produit https://… »), on garde l'adresse
+  // et on reprend le nom du produit quand le champ Nom est vide.
+  const recevoirLien = (texte: string) => {
+    const { lien, titre } = extraireLien(texte);
+    const complet = /https?:\/\//i.test(texte) && lien !== texte.trim();
+    if (!complet) return changer({ lien: texte });
+    changer({ lien, ...(titre && !form.titre.trim() ? { titre } : {}) });
+  };
+
+  const collerLien = async () => {
+    setErreur(null);
+    try {
+      const texte = (await Clipboard.getStringAsync()).trim();
+      if (!texte) return setErreur('Rien à coller : copiez d’abord le lien depuis le site ou l’appli.');
+      if (!/https?:\/\/|www\./i.test(texte)) return setErreur('Le texte copié ne contient pas de lien.');
+      recevoirLien(texte);
+    } catch {
+      setErreur('Impossible de lire le presse-papiers : collez le lien dans le champ (appui long > Coller).');
+    }
+  };
 
   const enregistrer = async () => {
     setErreur(null);
@@ -149,7 +174,7 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       <Text style={styles.libelle}>Photo</Text>
       <View style={styles.photoBloc}>
         {apercu ? (
-          <Image source={{ uri: apercu }} style={styles.photo} accessibilityLabel="Photo du cadeau" />
+          <PhotoAgrandie uri={apercu} style={styles.photo} libelle={form.titre || 'photo du cadeau'} />
         ) : (
           <View style={[styles.photo, styles.photoVide]}>
             <Ionicons name="image-outline" size={32} color={theme.colors.textMuted} />
@@ -164,7 +189,28 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         </View>
       </View>
 
-      {champ('lien', 'Lien vers un site marchand', { placeholder: 'https://…', clavier: 'url' })}
+      <View style={styles.bloc}>
+        <Text style={styles.libelle} nativeID="libelle-lien">
+          Lien vers un site marchand
+        </Text>
+        <View style={styles.ligneLien}>
+          <TextInput
+            style={[styles.champ, styles.champLien]}
+            value={form.lien}
+            onChangeText={recevoirLien}
+            placeholder="https://…"
+            placeholderTextColor={theme.colors.textMuted}
+            keyboardType="url"
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabelledBy="libelle-lien"
+          />
+          <Bouton variante="contour" titre="Coller" onPress={collerLien} accessibilityLabel="Coller le lien copié" />
+        </View>
+        <Text style={styles.aideLien}>
+          Sur Amazon ou un autre site : Partager › Copier le lien, puis « Coller ».
+        </Text>
+      </View>
 
       <Pressable
         onPress={() => changer({ potCommun: !form.potCommun })}
@@ -218,9 +264,9 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       </View>
       {champ('description', 'Précisions', { placeholder: 'Couleur, modèle, où le trouver…', multiligne: true })}
 
-      <Text style={styles.libelle}>Envie</Text>
+      <Text style={styles.libelle}>{idee ? 'Votre avis sur cette idée' : 'Envie'}</Text>
       <View style={styles.puces}>
-        {PRIORITES.map((p) => (
+        {priorites.map((p) => (
           <Pressable
             key={p.valeur}
             onPress={() => changer({ priorite: p.valeur })}
@@ -288,6 +334,9 @@ const styles = creerStylesThemes(() => ({
     fontFamily: theme.fontBody,
     fontSize: 16,
   },
+  ligneLien: { flexDirection: 'row', gap: theme.spacing.xs, alignItems: 'center' },
+  champLien: { flex: 1 },
+  aideLien: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
   champMultiligne: { minHeight: 88, paddingTop: theme.spacing.sm, textAlignVertical: 'top' },
   puces: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   puce: {

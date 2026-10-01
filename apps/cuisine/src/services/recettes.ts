@@ -75,6 +75,10 @@ export type RecetteFormulaire = {
   // affiché sur la fiche recette (§6 : "conservation d'un lien vers la page
   // d'origine").
   sourceUrl: string | null;
+  // Recette surprise (voir `etatSurprise`) : à qui elle est cachée, et date
+  // de révélation automatique facultative (AAAA-MM-JJ).
+  cachee?: 'moi' | 'foyer' | null;
+  reveleeLe?: string | null;
 };
 
 function nouvelleClefLocale(): string {
@@ -146,6 +150,8 @@ export function formulaireVide(): RecetteFormulaire {
     elements: [nouvelElementBrouillon()],
     source: 'manuelle',
     sourceUrl: null,
+    cachee: null,
+    reveleeLe: null,
   };
 }
 
@@ -156,7 +162,7 @@ export function formulaireVide(): RecetteFormulaire {
 // `recette_liee_id`), et PostgREST refuse sinon de deviner laquelle utiliser
 // ("more than one relationship was found").
 const SELECTION_RECETTE_COMPLETE =
-  'id, foyer_id, titre, photo_url, parts_defaut, temps_preparation_minutes, temps_cuisson_minutes, notes, note, source, source_url, cree_par, cree_le, maj_le, ingredients(*), etapes!etapes_recette_id_fkey(*, recette_liee:recette_liee_id(id, titre)), recette_categories(categories(*)), photos_recette(*), elements(*), foyer:foyers(id, nom), essais(verdict)';
+  'id, foyer_id, titre, photo_url, parts_defaut, temps_preparation_minutes, temps_cuisson_minutes, notes, note, source, source_url, cree_par, cree_le, maj_le, cachee, cachee_par, revelee_le, ingredients(*), etapes!etapes_recette_id_fkey(*, recette_liee:recette_liee_id(id, titre)), recette_categories(categories(*)), photos_recette(*), elements(*), foyer:foyers(id, nom), essais(verdict)';
 
 // Liste légère (id + titre seulement) des recettes du foyer, pour le
 // sélecteur "Lier à une recette" du formulaire (§8/§4) — exclut la recette
@@ -349,6 +355,10 @@ export async function creerRecette(foyerId: string, utilisateurId: string, form:
       source: form.source,
       source_url: form.sourceUrl,
       cree_par: utilisateurId,
+      // Cachée dès sa création : jamais visible, même un instant, du reste
+      // de la famille.
+      cachee: form.cachee ?? null,
+      revelee_le: form.cachee ? form.reveleeLe ?? null : null,
     })
     .select()
     .single();
@@ -384,6 +394,8 @@ export async function mettreAJourRecette(recetteId: string, form: RecetteFormula
       temps_cuisson_minutes: form.tempsCuissonMinutes,
       notes: form.notes.trim() || null,
       note: form.note,
+      cachee: form.cachee ?? null,
+      revelee_le: form.cachee ? form.reveleeLe ?? null : null,
     })
     .eq('id', recetteId);
   if (erreurRecette) throw erreurRecette;
@@ -407,6 +419,34 @@ export async function mettreAJourRecette(recetteId: string, form: RecetteFormula
   if (erreurSuppressionCategories) throw erreurSuppressionCategories;
 
   await inserreIngredientsEtapesEtCategories(recetteId, form);
+}
+
+// ---------------------------------------------------------------------------
+// Recettes surprises
+// ---------------------------------------------------------------------------
+
+// Date du jour (heure locale) au format AAAA-MM-JJ.
+function aujourdhuiIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export type EtatSurprise = { portee: 'moi' | 'foyer'; reveleeLe: string | null };
+
+// La recette est-elle (encore) une surprise ? null si elle est visible de
+// toute la famille : jamais cachée, révélée, ou date de révélation atteinte.
+// Seules les personnes qui la voient malgré tout (celle qui l'a cachée, ou
+// son foyer) reçoivent une recette cachée : la base filtre pour les autres.
+export function etatSurprise(recette: Pick<RecetteComplete, 'cachee' | 'revelee_le'>): EtatSurprise | null {
+  if (!recette.cachee) return null;
+  if (recette.revelee_le && recette.revelee_le <= aujourdhuiIso()) return null;
+  return { portee: recette.cachee, reveleeLe: recette.revelee_le ?? null };
+}
+
+// Rend la recette visible de toute la famille, tout de suite.
+export async function revelerRecette(recetteId: string): Promise<void> {
+  const { error } = await supabase.from('recettes').update({ cachee: null, revelee_le: null }).eq('id', recetteId);
+  if (error) throw error;
 }
 
 // Supprime définitivement une recette (et, en cascade côté base, ses
@@ -563,6 +603,8 @@ export function recetteVersFormulaire(recette: RecetteComplete): RecetteFormulai
         : [nouvelleEtapeBrouillon()],
     source: recette.source,
     sourceUrl: recette.source_url,
+    cachee: recette.cachee ?? null,
+    reveleeLe: recette.revelee_le ?? null,
   });
 }
 
