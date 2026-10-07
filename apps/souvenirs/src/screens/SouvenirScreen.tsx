@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { useFamilleDonnees } from '../contexts/FamilleDonneesContext';
-import { extraireMessageErreur, prenomsDe } from '@apps-famille/famille';
+import { Avatar, NomAvecAvatar, extraireMessageErreur, prenomsDe } from '@apps-famille/famille';
 import {
   ajouterAuxAlbums,
   albumsDuSouvenir,
@@ -301,10 +301,11 @@ export default function SouvenirScreen({ route, navigation }: any) {
                 <Pressable
                   key={sp.personne_id}
                   onLongPress={retirable ? () => meRetirer(sp.personne_id, prenom) : undefined}
-                  style={[styles.personne, sp.role === 'principal' && styles.personnePrincipale]}
+                  style={[styles.personne, styles.personneAvecPhoto, sp.role === 'principal' && styles.personnePrincipale]}
                   accessibilityLabel={`${prenom}${age ? `, ${age}` : ''}${sp.role === 'present' ? ', présent' : ''}`}
                   accessibilityHint={retirable ? 'Appui long pour retirer' : undefined}
                 >
+                  <Avatar personneId={sp.personne_id} prenom={p?.prenom} taille={24} />
                   <Text style={[styles.personneTexte, sp.role === 'principal' && styles.personneTextePrincipal]}>
                     {prenom}
                     {age ? <Text style={styles.age}> · {age}</Text> : null}
@@ -332,9 +333,10 @@ export default function SouvenirScreen({ route, navigation }: any) {
                 <Pressable
                   key={p.id}
                   onPress={() => ajouterPresent(p.id)}
-                  style={[styles.personne, styles.jyEtais]}
+                  style={[styles.personne, styles.personneAvecPhoto, styles.jyEtais]}
                   accessibilityRole="button"
                 >
+                  <Avatar personneId={p.id} prenom={p.prenom} taille={24} />
                   <Text style={styles.jyEtaisTexte}>{p.utilisateur_id === moi ? 'Moi' : p.prenom}</Text>
                 </Pressable>
               ))}
@@ -394,10 +396,10 @@ export default function SouvenirScreen({ route, navigation }: any) {
           </View>
         )}
 
-        <Text style={styles.signature}>
+        <NomAvecAvatar utilisateurId={souvenir.cree_par} prenom={auteur} taille={22} styleTexte={styles.signature}>
           Ajouté par {souvenir.cree_par === moi ? 'vous' : auteur || 'un proche'}
           {souvenir.voyage_id ? ' · depuis VoyageCommun' : ''}
-        </Text>
+        </NomAvecAvatar>
 
         {erreur && <Text style={styles.erreur}>{erreur}</Text>}
 
@@ -445,6 +447,9 @@ const styles = creerStylesThemes(() => ({
   personnes: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   personne: {
     minHeight: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderRadius: 999,
@@ -452,6 +457,7 @@ const styles = creerStylesThemes(() => ({
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
   },
+  personneAvecPhoto: { paddingLeft: 5 },
   personnePrincipale: { borderColor: theme.colors.accent, backgroundColor: theme.colors.accentTransparent },
   personneTexte: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.text },
   personneTextePrincipal: { fontFamily: theme.fontBodyBold },

@@ -9,7 +9,6 @@ import {
   listerFoyersARejoindre,
   type FoyerARejoindre,
 } from '../../services/famille';
-import { alerte } from '../../utils/alerte';
 import ZoneClavier from '../../components/ZoneClavier';
 
 // Utilisateur membre d'une famille mais sans foyer (il vient de créer sa
@@ -24,6 +23,8 @@ export default function FoyerScreen() {
   // 'creation' ou identifiant du foyer en cours de rejoindre.
   const [enCours, setEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Foyer dont la confirmation est affichée sous sa carte.
+  const [aConfirmer, setAConfirmer] = useState<string | null>(null);
 
   const chargerFoyers = useCallback(async () => {
     setErreurListe(null);
@@ -55,6 +56,7 @@ export default function FoyerScreen() {
 
   const rejoindre = async (f: FoyerARejoindre) => {
     setErreur(null);
+    setAConfirmer(null);
     setEnCours(f.id);
     try {
       await choisirFoyer(f.id);
@@ -66,16 +68,15 @@ export default function FoyerScreen() {
     }
   };
 
-  // Un seul foyer par personne : on confirme avant de rejoindre.
-  const confirmerRejoindre = (f: FoyerARejoindre) => {
-    alerte(
-      `Rejoindre « ${f.nom} » ?`,
-      'Vous partagerez les recettes et les listes de courses de ce foyer. Choisissez-le seulement si vous vivez sous le même toit.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Rejoindre', onPress: () => rejoindre(f) },
-      ]
-    );
+  // Un seul foyer par personne : on confirme avant de rejoindre. La
+  // confirmation s'affiche DANS l'écran, sous la carte du foyer, et non dans
+  // une fenêtre du navigateur (window.confirm) : sur iPhone, ouverte depuis
+  // un lien reçu par message (navigateur intégré de WhatsApp, Messenger,
+  // Gmail…), cette fenêtre ne s'affiche pas et répond « Annuler » d'office —
+  // le bouton semblait ne pas réagir (retour d'un nouveau membre).
+  const basculerConfirmation = (f: FoyerARejoindre) => {
+    setErreur(null);
+    setAConfirmer((actuel) => (actuel === f.id ? null : f.id));
   };
 
   const detailFoyer = (f: FoyerARejoindre) => {
@@ -106,22 +107,52 @@ export default function FoyerScreen() {
             </Text>
           ) : (
             foyers.map((f) => (
-              <Pressable
-                key={f.id}
-                style={[styles.carteFoyer, enCours !== null && styles.boutonInactif]}
-                onPress={() => confirmerRejoindre(f)}
-                disabled={enCours !== null}
-              >
-                <View style={styles.carteFoyerTexte}>
-                  <Text style={styles.nomFoyer}>{f.nom}</Text>
-                  <Text style={styles.aide}>{detailFoyer(f)}</Text>
-                </View>
-                {enCours === f.id ? (
-                  <ActivityIndicator color={theme.colors.accent} />
-                ) : (
-                  <Text style={styles.boutonSecondaireTexte}>Rejoindre</Text>
+              <View key={f.id} style={styles.blocFoyer}>
+                <Pressable
+                  style={[
+                    styles.carteFoyer,
+                    aConfirmer === f.id && styles.carteFoyerChoisie,
+                    enCours !== null && styles.boutonInactif,
+                  ]}
+                  onPress={() => basculerConfirmation(f)}
+                  disabled={enCours !== null}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.carteFoyerTexte}>
+                    <Text style={styles.nomFoyer}>{f.nom}</Text>
+                    <Text style={styles.aide}>{detailFoyer(f)}</Text>
+                  </View>
+                  {enCours === f.id ? (
+                    <ActivityIndicator color={theme.colors.accent} />
+                  ) : (
+                    <Text style={styles.boutonSecondaireTexte}>Rejoindre</Text>
+                  )}
+                </Pressable>
+                {aConfirmer === f.id && enCours === null && (
+                  <View style={styles.confirmation}>
+                    <Text style={styles.confirmationTexte}>
+                      Rejoindre « {f.nom} » ? Vous partagerez les recettes et les listes de courses de ce
+                      foyer. Choisissez-le seulement si vous vivez sous le même toit.
+                    </Text>
+                    <View style={styles.confirmationBoutons}>
+                      <Pressable
+                        style={[styles.boutonConfirmation, styles.boutonAnnuler]}
+                        onPress={() => setAConfirmer(null)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.boutonSecondaireTexte}>Annuler</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.boutonConfirmation, styles.bouton]}
+                        onPress={() => rejoindre(f)}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.boutonTexte}>Rejoindre</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 )}
-              </Pressable>
+              </View>
             ))
           )}
           {erreurListe && (
@@ -257,6 +288,36 @@ const styles = creerStylesThemes(() => ({
     borderWidth: 1,
     borderRadius: theme.radii.md,
     padding: theme.spacing.md,
+  },
+  blocFoyer: {
+    gap: theme.spacing.xs,
+  },
+  carteFoyerChoisie: {
+    borderColor: theme.colors.accent,
+  },
+  confirmation: {
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  confirmationTexte: {
+    fontFamily: theme.fontBody,
+    fontSize: 14,
+    color: theme.colors.text,
+  },
+  confirmationBoutons: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  boutonConfirmation: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  boutonAnnuler: {
+    alignItems: 'center',
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   carteFoyerTexte: {
     flex: 1,

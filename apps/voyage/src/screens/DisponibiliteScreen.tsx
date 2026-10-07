@@ -104,7 +104,7 @@ export default function DisponibiliteScreen({ route, navigation }: any) {
         <>
           <Libelle>Pour qui ?</Libelle>
           <Puces
-            options={personnes.map((p) => ({ id: p.id, libelle: p.utilisateur_id === moiId ? `${p.prenom} (moi)` : p.prenom }))}
+            options={personnes.map((p) => ({ id: p.id, personneId: p.id, libelle: p.utilisateur_id === moiId ? `${p.prenom} (moi)` : p.prenom }))}
             valeur={personneId}
             onChange={setPersonneId}
           />

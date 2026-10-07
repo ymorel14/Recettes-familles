@@ -55,9 +55,13 @@ export function estEvenementPersonnel(type: TypeEvenement): boolean {
 
 export type StatutListe = 'brouillon' | 'publiee' | 'archivee';
 
+// Une liste par personne, permanente (migrations du 7 octobre 2026).
+// CadeauCommun n'a plus de notion d'événement (c'est le rôle de
+// VoyageCommun) : `evenement_id` est un reste de l'ancien fonctionnement,
+// toujours vide.
 export type Liste = {
   id: string;
-  evenement_id: string;
+  evenement_id: string | null;
   destinataire_id: string;
   statut: StatutListe;
   cree_par: string;
@@ -80,6 +84,9 @@ export type Souhait = {
   // Cadeau financé à plusieurs : on y participe au lieu de le réserver ;
   // prix = montant à réunir (facultatif).
   pot_commun: boolean;
+  // Options (modèles, variantes) : 'un_au_choix' = on n'en offre qu'une ;
+  // 'toutes' = chacune se réserve séparément ; null = pas d'options.
+  mode_options: ModeOptions | null;
   cree_par: string;
   cree_le: string;
   supprime_le: string | null;
@@ -96,6 +103,29 @@ export type EtatReservation = {
 
 // Pot commun d'un cadeau, vu par un donateur : la somme réunie et MA
 // participation (null si je n'ai pas participé). Jamais les autres montants.
+export type ModeOptions = 'un_au_choix' | 'toutes';
+
+// Une option d'un souhait : un modèle de téléphone, une figurine…
+// Un exemplaire par option.
+export type OptionSouhait = {
+  id: string;
+  souhait_id: string;
+  titre: string;
+  lien: string | null;
+  image: string | null;
+  prix: number | null;
+  ordre: number;
+};
+
+// État d'une option vu par un donateur : prise ou non (mode 'toutes'
+// seulement), et si c'est moi qui l'ai réservée. Jamais par qui d'autre.
+export type EtatOption = {
+  option_id: string;
+  souhait_id: string;
+  reservee: boolean;
+  reservee_par_moi: boolean;
+};
+
 export type EtatPot = {
   souhait_id: string;
   total: number;
@@ -244,7 +274,28 @@ export async function listerListesEvenement(evenementId: string): Promise<Liste[
   return (data ?? []) as Liste[];
 }
 
-export async function obtenirListe(id: string): Promise<Liste & { evenement: Evenement }> {
+// La liste d'une personne de la famille, créée au besoin (publiée pour un
+// proche, en brouillon pour soi). Refusée si elle n'est pas encore publiée.
+export async function listeDe(personneId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('liste_de', { id_personne: personneId });
+  if (error) throw error;
+  return data as string;
+}
+
+// Cadeaux de la liste déjà offerts (cochés "offert" par leur donateur) : ils
+// disparaissent de la liste.
+export async function cadeauxOfferts(listeId: string): Promise<{ souhaits: Set<string>; options: Set<string> }> {
+  const [s, o] = await Promise.all([
+    supabase.rpc('souhaits_offerts', { id_liste: listeId }),
+    supabase.rpc('options_offertes', { id_liste: listeId }),
+  ]);
+  if (s.error) throw s.error;
+  if (o.error) throw o.error;
+  const ids = (d: any) => new Set<string>(((d ?? []) as any[]).map((x) => (typeof x === 'string' ? x : Object.values(x)[0] as string)));
+  return { souhaits: ids(s.data), options: ids(o.data) };
+}
+
+export async function obtenirListe(id: string): Promise<Liste & { evenement: Evenement | null }> {
   const { data, error } = await supabase.from('listes').select('*, evenement:evenements(*)').eq('id', id).single();
   if (error) throw error;
   return data as any;
@@ -275,6 +326,53 @@ export async function creerListe(
     .single();
   if (error) throw error;
   return data.id as string;
+}
+
+// Une liste pour chacune de ces personnes, en une fois (Noël : toute la
+// famille). Ma propre liste démarre en brouillon ; celle d'un proche est
+// publiée tout de suite, pour que la famille puisse y proposer des idées.
+export async function creerListes(
+  evenementId: string,
+  destinataires: string[],
+  auteurId: string,
+  maPersonneId: string | null
+): Promise<void> {
+  if (destinataires.length === 0) return;
+  const { error } = await supabase.from('listes').insert(
+    destinataires.map((id) => ({
+      evenement_id: evenementId,
+      destinataire_id: id,
+      statut: id === maPersonneId ? 'brouillon' : 'publiee',
+      cree_par: auteurId,
+    }))
+  );
+  if (error) throw error;
+}
+
+// Supprime une liste avec tout son contenu (souhaits, idées, réservations,
+// participations). Autorisé par la base à son créateur, à son destinataire
+// et à ceux qui la gèrent (enfant sans compte).
+export async function supprimerListe(id: string): Promise<void> {
+  const { data, error } = await supabase.from('listes').delete().eq('id', id).select('id');
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error('Vous ne pouvez pas supprimer cette liste.');
+}
+
+// Déplace tout le contenu d'une liste (souhaits, idées, avec leurs
+// réservations et participations) dans une autre, puis supprime la liste de
+// départ. Vers une autre personne, tout devient idée cachée pour elle
+// (fonction transferer_liste, migration du 3 octobre 2026).
+export async function transfererListe(sourceId: string, cibleId: string): Promise<void> {
+  const { error } = await supabase.rpc('transferer_liste', { id_source: sourceId, id_cible: cibleId });
+  if (error) throw error;
+}
+
+// Listes de plusieurs événements à la fois (onglet Événements).
+export async function listerListesDesEvenements(evenementIds: string[]): Promise<Liste[]> {
+  if (evenementIds.length === 0) return [];
+  const { data, error } = await supabase.from('listes').select('*').in('evenement_id', evenementIds);
+  if (error) throw error;
+  return (data ?? []) as Liste[];
 }
 
 export async function changerStatutListe(id: string, statut: StatutListe): Promise<void> {
@@ -329,7 +427,12 @@ export type FormulaireSouhait = {
   priorite: 1 | 2 | 3;
   quantite: number;
   potCommun: boolean;
+  modeOptions: ModeOptions | null;
+  options: FormulaireOption[];
 };
+
+// Option en cours de saisie ; `id` présent pour une option déjà enregistrée.
+export type FormulaireOption = { id?: string; titre: string; lien: string; prix: string };
 
 // Envoie une photo choisie sur l'appareil et renvoie son adresse publique
 // (nom aléatoire, non listable : voir la migration 5).
@@ -383,8 +486,11 @@ async function lignePourBase(f: FormulaireSouhait) {
     prix: prix && !Number.isNaN(Number(prix)) ? Number(prix) : null,
     taille: f.taille.trim() || null,
     priorite: f.priorite,
-    quantite: f.potCommun ? 1 : Math.max(1, Math.round(f.quantite)),
-    pot_commun: f.potCommun,
+    quantite: f.potCommun || f.modeOptions ? 1 : Math.max(1, Math.round(f.quantite)),
+    // Pot commun possible sur un souhait "un au choix" (un seul article
+    // offert), pas sur "plusieurs à offrir".
+    pot_commun: f.modeOptions === 'toutes' ? false : f.potCommun,
+    mode_options: f.modeOptions,
   };
 }
 
@@ -392,15 +498,72 @@ async function lignePourBase(f: FormulaireSouhait) {
 // façon : un ajout par quelqu'un d'autre que le destinataire ou son
 // gestionnaire est toujours secret).
 export async function creerSouhait(listeId: string, auteurId: string, f: FormulaireSouhait, secret: boolean) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('souhaits')
-    .insert({ ...(await lignePourBase(f)), liste_id: listeId, cree_par: auteurId, secret });
+    .insert({ ...(await lignePourBase(f)), liste_id: listeId, cree_par: auteurId, secret })
+    .select('id')
+    .single();
   if (error) throw error;
+  await enregistrerOptions(data.id as string, f.modeOptions ? f.options : []);
 }
 
 export async function modifierSouhait(id: string, f: FormulaireSouhait) {
   const { error } = await supabase.from('souhaits').update(await lignePourBase(f)).eq('id', id);
   if (error) throw error;
+  await enregistrerOptions(id, f.modeOptions ? f.options : []);
+}
+
+// Options d'un ou plusieurs souhaits, dans l'ordre de saisie.
+export async function listerOptions(souhaitIds: string[]): Promise<OptionSouhait[]> {
+  if (souhaitIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('options')
+    .select('*')
+    .in('souhait_id', souhaitIds)
+    .order('ordre', { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((o) => ({ ...o, prix: o.prix == null ? null : Number(o.prix) }));
+}
+
+// Remplace les options d'un souhait par celles du formulaire : met à jour
+// celles qui restent, ajoute les nouvelles, supprime les retirées (une
+// réservation sur une option retirée est gardée, sans option).
+async function enregistrerOptions(souhaitId: string, options: FormulaireOption[]) {
+  const propres = options
+    .map((o, i) => {
+      const prix = o.prix.trim().replace(',', '.').replace(/\s|€/g, '');
+      let lien = extraireLien(o.lien).lien;
+      if (lien && !/^https?:\/\//i.test(lien)) lien = `https://${lien}`;
+      return {
+        id: o.id,
+        titre: o.titre.trim(),
+        lien: lien || null,
+        prix: prix && !Number.isNaN(Number(prix)) ? Number(prix) : null,
+        ordre: i,
+      };
+    })
+    .filter((o) => o.titre);
+  const existantes = await listerOptions([souhaitId]);
+  const gardees = new Set(propres.filter((o) => o.id).map((o) => o.id));
+  const aSupprimer = existantes.filter((o) => !gardees.has(o.id)).map((o) => o.id);
+  if (aSupprimer.length > 0) {
+    const { error } = await supabase.from('options').delete().in('id', aSupprimer);
+    if (error) throw error;
+  }
+  for (const o of propres.filter((x) => x.id)) {
+    const { error } = await supabase
+      .from('options')
+      .update({ titre: o.titre, lien: o.lien, prix: o.prix, ordre: o.ordre })
+      .eq('id', o.id!);
+    if (error) throw error;
+  }
+  const nouvelles = propres.filter((o) => !o.id);
+  if (nouvelles.length > 0) {
+    const { error } = await supabase
+      .from('options')
+      .insert(nouvelles.map(({ id: _id, ...o }) => ({ ...o, souhait_id: souhaitId })));
+    if (error) throw error;
+  }
 }
 
 // Le destinataire retire un souhait : supprimé pour de bon si personne ne
@@ -434,6 +597,28 @@ export async function reserver(souhaitId: string, auteurId: string, quantite = 1
   if (error) throw error;
 }
 
+// État anonyme des options d'une liste (refusé au destinataire).
+export async function etatOptions(listeId: string): Promise<Map<string, EtatOption>> {
+  const { data, error } = await supabase.rpc('etat_options', { id_liste: listeId });
+  if (error) throw error;
+  const resultat = new Map<string, EtatOption>();
+  ((data ?? []) as EtatOption[]).forEach((e) => resultat.set(e.option_id, e));
+  return resultat;
+}
+
+// Réserve une option : en mode 'un_au_choix', cela réserve tout le souhait.
+export async function reserverOption(souhaitId: string, optionId: string, auteurId: string) {
+  const { error } = await supabase
+    .from('reservations')
+    .insert({ souhait_id: souhaitId, option_id: optionId, reserve_par: auteurId, quantite: 1 });
+  if (error) throw error;
+}
+
+export async function annulerReservationOption(optionId: string, auteurId: string) {
+  const { error } = await supabase.from('reservations').delete().eq('option_id', optionId).eq('reserve_par', auteurId);
+  if (error) throw error;
+}
+
 export async function annulerReservation(souhaitId: string, auteurId: string) {
   const { error } = await supabase
     .from('reservations')
@@ -449,6 +634,10 @@ export type MaReservation = {
   quantite: number;
   achete: boolean;
   note_privee: string | null;
+  // Option réservée (modèle, figurine) ; null pour un souhait sans options.
+  option: { titre: string; prix: number | null; lien: string | null } | null;
+  // Coché par moi une fois le cadeau remis : il disparaît de la liste.
+  offert_le: string | null;
   souhait: {
     id: string;
     titre: string;
@@ -461,7 +650,6 @@ export type MaReservation = {
     liste: {
       id: string;
       destinataire_id: string;
-      evenement: Evenement | null;
     } | null;
   } | null;
 };
@@ -471,11 +659,29 @@ export async function mesReservations(): Promise<MaReservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, souhait_id, quantite, achete, note_privee, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, evenement:evenements(*)))'
+      'id, souhait_id, quantite, achete, note_privee, offert_le, option:options(titre, prix, lien), souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id))'
     )
     .order('cree_le', { ascending: true });
   if (error) throw error;
   return (data ?? []) as any;
+}
+
+// "Offert" : le cadeau a été remis ; il disparaît alors de la liste du
+// destinataire. Décochable en cas d'erreur.
+export async function marquerOffert(reservationId: string, offert: boolean) {
+  const { error } = await supabase
+    .from('reservations')
+    .update({ offert_le: offert ? new Date().toISOString() : null })
+    .eq('id', reservationId);
+  if (error) throw error;
+}
+
+export async function marquerPotOffert(participationId: string, offert: boolean) {
+  const { error } = await supabase
+    .from('participations')
+    .update({ offert_le: offert ? new Date().toISOString() : null })
+    .eq('id', participationId);
+  if (error) throw error;
 }
 
 export async function marquerAchete(reservationId: string, achete: boolean) {
@@ -539,6 +745,7 @@ export type MaParticipation = {
   souhait_id: string;
   montant: number;
   verse: boolean;
+  offert_le: string | null;
   souhait: MaReservation['souhait'];
 };
 
@@ -547,7 +754,7 @@ export async function mesParticipations(): Promise<MaParticipation[]> {
   const { data, error } = await supabase
     .from('participations')
     .select(
-      'id, souhait_id, montant, verse, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, evenement:evenements(*)))'
+      'id, souhait_id, montant, verse, offert_le, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id))'
     )
     .order('cree_le', { ascending: true });
   if (error) throw error;

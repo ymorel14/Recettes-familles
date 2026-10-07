@@ -28,6 +28,15 @@
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#FBF8F0"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet de choisir votre photo de profil, visible par la famille.",
+          "cameraPermission": "Permet de prendre votre photo de profil."
+        }
+      ]
+    ]
   }
 }

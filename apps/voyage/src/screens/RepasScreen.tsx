@@ -23,6 +23,7 @@ import {
 } from '../services/voyage';
 import { CaseACocher, Erreur } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
+import { GroupeNoms } from '@apps-famille/famille';
 
 // Un repas, étape par étape (apéritif → boissons) : qui s'occupe de l'étape,
 // les plats prévus (avec leur recette et qui les prépare), et de quoi
@@ -151,6 +152,7 @@ export default function RepasScreen({ route, navigation }: any) {
                   coche={responsables.includes(p.id)}
                   onChange={(c) => agir(() => (c ? confierEtape(repas.id, etape.id, p.id) : retirerEtape(repas.id, etape.id, p.id)))}
                   libelle={p.prenom}
+                  personneId={p.id}
                   aide={p.foyer_nom ?? undefined}
                 />
               ))}
@@ -170,9 +172,11 @@ export default function RepasScreen({ route, navigation }: any) {
                         <Text style={styles.recetteTexte}>Recette : {p.recette.titre}</Text>
                       </View>
                     )}
-                    {p.responsables.length > 0 && (
-                      <Text style={styles.detail}>Par {p.responsables.map((x) => nom(x.personne_id)).join(', ')}</Text>
-                    )}
+                    <GroupeNoms
+                      prefixe="Par"
+                      personnes={p.responsables.map((x) => ({ personneId: x.personne_id, prenom: nom(x.personne_id) }))}
+                      styleTexte={styles.detail}
+                    />
                     {p.notes ? <Text style={styles.detail}>{p.notes}</Text> : null}
                   </View>
                   {modifiable && <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />}

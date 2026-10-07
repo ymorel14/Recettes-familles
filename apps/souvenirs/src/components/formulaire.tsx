@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Avatar } from '@apps-famille/famille';
 import { theme, creerStylesThemes } from '../theme/theme';
 
 // Éléments de formulaire communs aux écrans de SouvenirsFamille (mêmes styles
@@ -38,7 +39,8 @@ export function Puces<T extends string>({
   valeur,
   onChange,
 }: {
-  options: { id: T; libelle: string }[];
+  // personneId : photo de la personne devant son prénom.
+  options: { id: T; libelle: string; personneId?: string | null }[];
   valeur: T | null;
   onChange: (id: T) => void;
 }) {
@@ -54,6 +56,7 @@ export function Puces<T extends string>({
             accessibilityState={{ selected: actif }}
             style={[styles.puce, actif && styles.puceActive]}
           >
+            {o.personneId ? <Avatar personneId={o.personneId} prenom={o.libelle} taille={24} /> : null}
             <Text style={[styles.puceTexte, actif && styles.puceTexteActive]}>{o.libelle}</Text>
           </Pressable>
         );
@@ -68,11 +71,14 @@ export function CaseACocher({
   onChange,
   libelle,
   aide,
+  personneId,
 }: {
   coche: boolean;
   onChange: (coche: boolean) => void;
   libelle: string;
   aide?: string;
+  // Case d'une personne : sa photo devant son prénom.
+  personneId?: string | null;
 }) {
   return (
     <Pressable
@@ -88,6 +94,7 @@ export function CaseACocher({
         size={24}
         color={coche ? theme.colors.accent : theme.colors.textMuted}
       />
+      {personneId ? <Avatar personneId={personneId} prenom={libelle} taille={28} /> : null}
       <View style={styles.caseTexte}>
         <Text style={styles.caseLibelle}>{libelle}</Text>
         {aide ? <Text style={styles.aide}>{aide}</Text> : null}
@@ -149,6 +156,9 @@ const styles = creerStylesThemes(() => ({
   puces: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   puce: {
     minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     justifyContent: 'center',
     paddingHorizontal: 14,
     borderRadius: 999,

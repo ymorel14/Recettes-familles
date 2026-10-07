@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
+import { lienVoyage, partagerSurWhatsApp, texteAvecLien } from '../services/partage';
 import { useAuth } from '../contexts/AuthContext';
 import { alerte } from '../utils/alerte';
 import { formaterDate, formaterPlage, lireDateSaisie, listerPersonnesParIds, MOIS, type Personne } from '../services/personnes';
@@ -38,6 +39,9 @@ import {
 } from '../services/voyage';
 import { Aide, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
+import { GroupeNoms, NomAvecAvatar } from '@apps-famille/famille';
+import SyntheseDates from '../components/SyntheseDates';
+import { regrouperProches } from '../services/syntheseDates';
 
 type Donnees = {
   voyage: VoyageAvecParticipants;
@@ -106,6 +110,9 @@ export default function DatesScreen({ route }: any) {
   const attendus = voyage.participants.filter((p) => p.reponse !== 'decline');
   const mesVotants = attendus.filter((p) => miennes.some((m) => m.id === p.personne_id));
   const nom = (id: string) => personnes.get(id)?.prenom ?? '?';
+  // Personnes (votes, invités) avec leur photo, pour <GroupeNoms>.
+  const qui = (liste: { personne_id: string }[]) =>
+    liste.map((x) => ({ personneId: x.personne_id, prenom: nom(x.personne_id) }));
   const dejaProposee = (s: Suggestion) =>
     propositions.some((p) => p.date_debut === s.date_debut && p.date_fin === s.date_fin);
 
@@ -166,6 +173,22 @@ export default function DatesScreen({ route }: any) {
         </Text>
       )}
 
+      <Bouton
+        titre={voyage.date_debut && voyage.date_fin ? 'Annoncer la date sur WhatsApp' : 'Inviter à voter sur WhatsApp'}
+        variante="contour"
+        onPress={() => {
+          const texte =
+            voyage.date_debut && voyage.date_fin
+              ? `C’est fixé : « ${voyage.titre} » aura lieu ${plage(voyage.date_debut, voyage.date_fin)}.`
+              : propositions.length > 0
+                ? `Quelles dates pour « ${voyage.titre} » ? Votez :\n${propositions
+                    .map((p) => `• ${plage(p.date_debut, p.date_fin)}`)
+                    .join('\n')}`
+                : `Quelles dates pour « ${voyage.titre} » ? Indiquez vos disponibilités et proposez des dates :`;
+          partagerSurWhatsApp(texteAvecLien(texte, lienVoyage(voyage.id, 'Dates')), voyage, (id) => personnes.get(id)?.prenom ?? 'quelqu’un');
+        }}
+      />
+
       <Text style={styles.section}>Suggestions d’après le calendrier</Text>
       {suggestions.length === 0 ? (
         <Aide>Aucun créneau à suggérer sur cette période.</Aide>
@@ -207,7 +230,20 @@ export default function DatesScreen({ route }: any) {
       </Aide>
 
       <Text style={styles.section}>Propositions</Text>
-      {triees.length === 0 && <Aide>Aucune proposition pour l’instant.</Aide>}
+      {triees.length === 0 ? (
+        <Aide>Aucune proposition pour l’instant.</Aide>
+      ) : (
+        <Aide>« Possible » : ces dates ne vous arrangent pas tout à fait, mais vous pouvez vous adapter.</Aide>
+      )}
+      {/* Propositions proches ou qui se chevauchent : vue d'ensemble */}
+      {regrouperProches(propositions).map((groupe) => (
+        <SyntheseDates
+          key={groupe.map((g) => g.id).join()}
+          propositions={groupe}
+          attendus={attendus.length}
+          retenue={{ date_debut: voyage.date_debut, date_fin: voyage.date_fin }}
+        />
+      ))}
       {triees.map((p) => {
         const oui = p.votes.filter((v) => v.reponse === 'oui');
         const siBesoin = p.votes.filter((v) => v.reponse === 'si_besoin');
@@ -230,25 +266,17 @@ export default function DatesScreen({ route }: any) {
               )}
             </View>
             <Text style={styles.detail}>
-              <Text style={styles.oui}>{oui.length} oui</Text> · {siBesoin.length} si besoin · {non.length} non
+              <Text style={styles.oui}>{oui.length} oui</Text> · {siBesoin.length} possible{siBesoin.length > 1 ? 's' : ''} · {non.length} non
             </Text>
-            {oui.length + siBesoin.length + non.length > 0 && (
-              <Text style={styles.detail}>
-                {[
-                  oui.length ? `Oui : ${oui.map((v) => nom(v.personne_id)).join(', ')}` : '',
-                  siBesoin.length ? `Si besoin : ${siBesoin.map((v) => nom(v.personne_id)).join(', ')}` : '',
-                  non.length ? `Non : ${non.map((v) => nom(v.personne_id)).join(', ')}` : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-            )}
-            {sansReponse.length > 0 && (
-              <Text style={styles.detail}>Pas encore voté : {sansReponse.map((a) => nom(a.personne_id)).join(', ')}</Text>
-            )}
+            <GroupeNoms prefixe="Oui :" personnes={qui(oui)} styleTexte={styles.detail} />
+            <GroupeNoms prefixe="Possible :" personnes={qui(siBesoin)} styleTexte={styles.detail} />
+            <GroupeNoms prefixe="Non :" personnes={qui(non)} styleTexte={styles.detail} />
+            <GroupeNoms prefixe="Pas encore voté :" personnes={qui(sansReponse)} styleTexte={styles.detail} />
             {mesVotants.map((m) => (
               <View key={m.personne_id} style={styles.vote}>
-                {mesVotants.length > 1 && <Text style={styles.detail}>{nom(m.personne_id)}</Text>}
+                {mesVotants.length > 1 && (
+                  <NomAvecAvatar personneId={m.personne_id} prenom={nom(m.personne_id)} styleTexte={styles.detail} />
+                )}
                 <Puces
                   options={REPONSES_VOTE}
                   valeur={p.votes.find((v) => v.personne_id === m.personne_id)?.reponse ?? null}

@@ -17,6 +17,7 @@ import {
 import { estOrganisateur, messageErreurVoyage, obtenirVoyage, type VoyageAvecParticipants } from '../services/voyage';
 import { Aide, Erreur, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
+import { GroupeNoms } from '@apps-famille/famille';
 
 const MODES_PRINCIPAUX = [
   { id: 'voiture', libelle: 'Voiture' },
@@ -66,7 +67,9 @@ export default function TransportScreen({ route, navigation }: any) {
   const organisateur = estOrganisateur(voyage, moiId, maPersonneId);
   const attendus = voyage.participants.filter((p) => p.reponse !== 'decline').map((p) => p.personne_id);
   const transportes = new Set(trajets.flatMap((t) => t.passagers.map((x) => x.personne_id)));
-  const sansTrajet = attendus.filter((id) => !transportes.has(id)).map((id) => personnes.get(id)?.prenom ?? '?');
+  const sansTrajet = attendus
+    .filter((id) => !transportes.has(id))
+    .map((id) => ({ personneId: id, prenom: personnes.get(id)?.prenom ?? '?' }));
   const total = trajets.reduce((a, t) => a + Number(t.cout_total), 0);
   const nomFoyer = (id: string | null) =>
     [...personnes.values()].find((p) => p.foyer_id === id)?.foyer_nom ?? null;
@@ -105,7 +108,7 @@ export default function TransportScreen({ route, navigation }: any) {
       {trajets.map((t) => {
         const mode = MODES_TRAJET.find((m) => m.id === t.mode) ?? MODES_TRAJET[0];
         const modifiable = t.responsable === moiId || organisateur;
-        const passagers = t.passagers.map((x) => personnes.get(x.personne_id)?.prenom ?? '?');
+        const passagers = t.passagers.map((x) => ({ personneId: x.personne_id, prenom: personnes.get(x.personne_id)?.prenom ?? '?' }));
         const contenu = (
           <>
             <View style={styles.icone}>
@@ -125,7 +128,7 @@ export default function TransportScreen({ route, navigation }: any) {
               ) : (
                 <Text style={styles.detail}>{mode.libelle}{t.aller_retour ? ' · aller-retour' : ''}</Text>
               )}
-              {passagers.length > 0 && <Text style={styles.detail}>Avec {passagers.join(', ')}</Text>}
+              <GroupeNoms prefixe="Avec" personnes={passagers} styleTexte={styles.detail} />
             </View>
             <Text style={styles.montant}>{formaterEuros(Number(t.cout_total))}</Text>
           </>
@@ -154,7 +157,7 @@ export default function TransportScreen({ route, navigation }: any) {
         </View>
       )}
       {sansTrajet.length > 0 && trajets.length > 0 && (
-        <Aide>Pas encore de trajet pour : {sansTrajet.join(', ')}.</Aide>
+        <GroupeNoms prefixe="Pas encore de trajet pour :" personnes={sansTrajet} styleTexte={styles.detail} />
       )}
     </ScrollView>
   );

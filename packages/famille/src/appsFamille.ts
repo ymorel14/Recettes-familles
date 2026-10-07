@@ -55,3 +55,35 @@ export function urlRetourEmail(): string | undefined {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
   return `${window.location.origin}${baseWeb()}/`;
 }
+
+// --- Adresses web sous le chemin de l'app (site commun) -------------------
+// À brancher dans les « linking » de React Navigation :
+//   getStateFromPath: (chemin, o) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, o)),
+//   getPathFromState: (etat, o) => `${baseWeb()}${getPathFromState(etat, o)}`,
+
+// "/voyages/voyage/12" → "/voyage/12" (adresse vue par la navigation).
+export function sansBaseWeb(chemin: string): string {
+  if (!base || !chemin.startsWith(base)) return chemin;
+  const reste = chemin.slice(base.length);
+  return reste.startsWith('/') ? reste : `/${reste}`;
+}
+
+// React Navigation garde l'adresse d'origine dans l'état (route.path) et la
+// remet telle quelle dans la barre d'adresse : on lui laisse l'adresse
+// complète, préfixe compris, sinon un rechargement de page le perdait
+// (/voyages/voyage/12 devenait /voyage/12).
+export function etatDepuisCheminWeb<T>(chemin: string, lire: (cheminSansBase: string) => T): T {
+  const etat = lire(sansBaseWeb(chemin));
+  const remettre = (e: any): any =>
+    e && Array.isArray(e.routes)
+      ? {
+          ...e,
+          routes: e.routes.map((r: any) => ({
+            ...r,
+            ...(typeof r.path === 'string' ? { path: chemin } : {}),
+            ...(r.state ? { state: remettre(r.state) } : {}),
+          })),
+        }
+      : e;
+  return remettre(etat);
+}

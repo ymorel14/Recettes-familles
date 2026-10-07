@@ -26,6 +26,8 @@ export default function BienvenueScreen() {
   const [enCours, setEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [foyers, setFoyers] = useState<FoyerARejoindre[]>([]);
+  // Foyer dont la confirmation est affichée sous sa ligne.
+  const [aConfirmer, setAConfirmer] = useState<string | null>(null);
 
   useEffect(() => {
     if (!famille) return;
@@ -50,6 +52,18 @@ export default function BienvenueScreen() {
     },
     [rafraichirFoyer]
   );
+
+  // Un seul foyer par personne, et rejoindre un foyer revient à partager
+  // sa maison : on confirme avant (même règle que l'app Cuisine). La
+  // confirmation s'affiche DANS l'écran, sous la ligne du foyer, et non dans
+  // une fenêtre du navigateur (window.confirm) : sur iPhone, ouverte depuis
+  // un lien reçu par message (navigateur intégré de WhatsApp, Messenger,
+  // Gmail…), cette fenêtre ne s'affiche pas et répond « Annuler » d'office —
+  // le bouton semblait ne pas réagir (retour d'un nouveau membre).
+  const rejoindreFoyer = (f: FoyerARejoindre) => {
+    setAConfirmer(null);
+    executer(f.id, () => choisirFoyer(f.id), 'Impossible de rejoindre ce foyer.');
+  };
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
@@ -101,25 +115,56 @@ export default function BienvenueScreen() {
       ) : (
         <>
           <Text style={styles.texte}>
-            Vous faites partie de la famille {famille.nom}. Choisissez le foyer où vous vivez, ou créez le vôtre.
+            Vous faites partie de la famille {famille.nom}. Dernière étape : votre foyer, c'est-à-dire la
+            maison où vous vivez. Si vous vivez avec une personne déjà inscrite, rejoignez son foyer ; sinon,
+            créez le vôtre.
           </Text>
           {foyers.length > 0 && (
             <View style={styles.carte}>
-              <Text style={styles.carteTitre}>Foyers de la famille</Text>
+              <Text style={styles.carteTitre}>Rejoindre le foyer d'une personne avec qui je vis</Text>
               {foyers.map((f) => (
-                <Pressable
-                  key={f.id}
-                  style={styles.ligne}
-                  onPress={() => executer(f.id, () => choisirFoyer(f.id), 'Impossible de rejoindre ce foyer.')}
-                  disabled={enCours !== null}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.ligneTitre}>{f.nom}</Text>
-                  <Text style={styles.ligneDetail}>
-                    {f.nb_membres} membre{f.nb_membres > 1 ? 's' : ''}
-                    {f.createur ? ` · créé par ${f.createur}` : ''}
-                  </Text>
-                </Pressable>
+                <View key={f.id} style={styles.blocFoyer}>
+                  <Pressable
+                    style={[styles.ligne, aConfirmer === f.id && styles.ligneChoisie]}
+                    onPress={() => {
+                      setErreur(null);
+                      setAConfirmer((actuel) => (actuel === f.id ? null : f.id));
+                    }}
+                    disabled={enCours !== null}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.ligneTitre}>{f.nom}</Text>
+                    <Text style={styles.ligneDetail}>
+                      {f.nb_membres} membre{f.nb_membres > 1 ? 's' : ''}
+                      {f.createur ? ` · créé par ${f.createur}` : ''}
+                    </Text>
+                  </Pressable>
+                  {(aConfirmer === f.id || enCours === f.id) && (
+                    <View style={styles.confirmation}>
+                      <Text style={styles.ligneDetail}>
+                        Choisissez ce foyer seulement si vous vivez sous le même toit que ses membres. Sinon,
+                        créez votre propre foyer : vous ferez quand même partie de la famille.
+                      </Text>
+                      <View style={styles.confirmationBoutons}>
+                        <View style={styles.confirmationBouton}>
+                          <Bouton
+                            variante="contour"
+                            titre="Annuler"
+                            onPress={() => setAConfirmer(null)}
+                            desactive={enCours !== null}
+                          />
+                        </View>
+                        <View style={styles.confirmationBouton}>
+                          <Bouton
+                            titre="Rejoindre"
+                            onPress={() => rejoindreFoyer(f)}
+                            enCours={enCours === f.id}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
               ))}
             </View>
           )}
@@ -183,6 +228,11 @@ const styles = creerStylesThemes(() => ({
     borderColor: theme.colors.border,
     gap: 2,
   },
+  ligneChoisie: { borderColor: theme.colors.accent },
+  blocFoyer: { gap: theme.spacing.xs },
+  confirmation: { gap: theme.spacing.sm, paddingHorizontal: theme.spacing.xs },
+  confirmationBoutons: { flexDirection: 'row', gap: theme.spacing.sm },
+  confirmationBouton: { flex: 1 },
   ligneTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
   ligneDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },

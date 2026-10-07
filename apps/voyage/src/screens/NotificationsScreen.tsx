@@ -11,7 +11,9 @@ import {
   toutMarquerLu,
   type Notification,
 } from '../services/notifications';
-import { messageErreurVoyage } from '../services/voyage';
+import { messageErreurVoyage, obtenirVoyage } from '../services/voyage';
+import { listerPersonnesParIds } from '../services/personnes';
+import { lienVoyage, partagerSurWhatsApp, texteAvecLien } from '../services/partage';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 
 const ICONES: Record<string, string> = {
@@ -56,6 +58,19 @@ export default function NotificationsScreen({ navigation }: any) {
     navigation.navigate(n.ecran, { voyageId: n.voyage_id });
   };
 
+  // Partager une nouveauté sur WhatsApp, avec le lien vers l'écran concerné
+  // (et une mise en garde si l'événement est une surprise).
+  const partager = async (n: Notification) => {
+    const texte = texteAvecLien(n.message, lienVoyage(n.voyage_id, n.ecran));
+    try {
+      const voyage = await obtenirVoyage(n.voyage_id);
+      const personnes = await listerPersonnesParIds(voyage.secrets.map((s) => s.personne_id));
+      partagerSurWhatsApp(texte, voyage, (id) => personnes.find((p) => p.id === id)?.prenom ?? 'quelqu’un');
+    } catch {
+      partagerSurWhatsApp(texte);
+    }
+  };
+
   return (
     <FlatList
       style={styles.flex}
@@ -94,6 +109,15 @@ export default function NotificationsScreen({ navigation }: any) {
             <Text style={styles.date}>{ilYA(item.cree_le)}</Text>
           </View>
           {!item.lue_le && <View style={styles.point} />}
+          <Pressable
+            onPress={() => partager(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`Partager sur WhatsApp : ${item.message}`}
+            hitSlop={10}
+            style={styles.partage}
+          >
+            <Ionicons name="logo-whatsapp" size={22} color={theme.colors.accent} />
+          </Pressable>
         </Pressable>
       )}
     />
@@ -118,6 +142,7 @@ const styles = creerStylesThemes(() => ({
   message: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
   messageNonLu: { fontFamily: theme.fontBodyBold },
   date: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
+  partage: { padding: 4 },
   point: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.colors.accent },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

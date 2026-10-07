@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Linking, Pressable, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { prenomsDe } from '@apps-famille/famille';
+import { Avatar, NomAvecAvatar, prenomsDe } from '@apps-famille/famille';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { alerte } from '../utils/alerte';
@@ -140,7 +140,9 @@ export default function HebergementsScreen({ route, navigation }: any) {
           </Text>
         )}
         {h.description ? <Text style={styles.description}>{h.description}</Text> : null}
-        <Text style={styles.auteur}>Proposé par {prenom(h.propose_par)}</Text>
+        <NomAvecAvatar utilisateurId={h.propose_par} prenom={prenoms.get(h.propose_par)} taille={22} styleTexte={styles.auteur}>
+          Proposé par {prenom(h.propose_par)}
+        </NomAvecAvatar>
         {h.lien ? (
           <Pressable onPress={() => Linking.openURL(h.lien!)} accessibilityRole="link" style={styles.lien} hitSlop={6}>
             <Ionicons name="open-outline" size={16} color={theme.colors.accent} />
@@ -158,9 +160,12 @@ export default function HebergementsScreen({ route, navigation }: any) {
           {h.avis
             .filter((a) => a.commentaire)
             .map((a) => (
-              <Text key={a.utilisateur_id} style={styles.commentaire}>
-                <Text style={styles.commentaireAuteur}>{prenom(a.utilisateur_id)} : </Text>« {a.commentaire} »
-              </Text>
+              <View key={a.utilisateur_id} style={styles.commentaireLigne}>
+                <Avatar utilisateurId={a.utilisateur_id} prenom={prenoms.get(a.utilisateur_id)} taille={22} />
+                <Text style={[styles.commentaire, styles.commentaireTexte]}>
+                  <Text style={styles.commentaireAuteur}>{prenom(a.utilisateur_id)} : </Text>« {a.commentaire} »
+                </Text>
+              </View>
             ))}
           {h.statut !== 'ecarte' && (
             <>
@@ -292,6 +297,8 @@ const styles = creerStylesThemes(() => ({
     borderTopColor: theme.colors.border,
   },
   commentaire: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.text },
+  commentaireLigne: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  commentaireTexte: { flex: 1 },
   commentaireAuteur: { fontFamily: theme.fontBodyBold },
   actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: theme.spacing.sm, marginTop: theme.spacing.xs },
 }));

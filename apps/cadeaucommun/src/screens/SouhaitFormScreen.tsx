@@ -9,11 +9,14 @@ import { extraireMessageErreur } from '@apps-famille/famille';
 import {
   creerSouhait,
   extraireLien,
+  listerOptions,
   modifierSouhait,
   obtenirSouhait,
   PRIORITES_IDEE,
   PRIORITES_SOUHAIT,
+  type FormulaireOption,
   type FormulaireSouhait,
+  type ModeOptions,
 } from '../services/wishlist';
 import { Bouton, Chargement } from '../components/ui';
 import PhotoAgrandie from '../components/PhotoAgrandie';
@@ -30,7 +33,11 @@ const VIDE: FormulaireSouhait = {
   priorite: 2,
   quantite: 1,
   potCommun: false,
+  modeOptions: null,
+  options: [],
 };
+
+const OPTION_VIDE: FormulaireOption = { titre: '', lien: '', prix: '' };
 
 // Ajout ou modification d'un souhait (par le destinataire ou son
 // gestionnaire) ou d'une idée cachée (par un proche : `idee` vrai).
@@ -51,8 +58,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       title: souhaitId ? (idee ? "Modifier l'idée" : 'Modifier le souhait') : idee ? 'Nouvelle idée cachée' : 'Nouveau souhait',
     });
     if (!souhaitId) return;
-    obtenirSouhait(souhaitId)
-      .then((s) =>
+    Promise.all([obtenirSouhait(souhaitId), listerOptions([souhaitId])])
+      .then(([s, options]) =>
         setForm({
           titre: s.titre,
           description: s.description ?? '',
@@ -65,6 +72,13 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           priorite: s.priorite,
           quantite: s.quantite,
           potCommun: !!s.pot_commun,
+          modeOptions: s.mode_options ?? null,
+          options: options.map((o) => ({
+            id: o.id,
+            titre: o.titre,
+            lien: o.lien ?? '',
+            prix: o.prix != null ? String(o.prix).replace('.', ',') : '',
+          })),
         })
       )
       .catch((e) => setErreur(extraireMessageErreur(e, 'Chargement impossible.')));
@@ -73,6 +87,18 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
   if (!form) return erreur ? <Text style={styles.erreur}>{erreur}</Text> : <Chargement />;
 
   const changer = (champ: Partial<FormulaireSouhait>) => setForm({ ...form, ...champ });
+
+  // Options : choisir le mode ; à l'activation, deux lignes vides pour commencer.
+  const choisirMode = (mode: ModeOptions | null) =>
+    changer({
+      modeOptions: mode,
+      potCommun: mode === 'toutes' ? false : form.potCommun,
+      options: mode && form.options.length === 0 ? [{ ...OPTION_VIDE }, { ...OPTION_VIDE }] : form.options,
+    });
+  const changerOption = (i: number, champ: Partial<FormulaireOption>) =>
+    changer({ options: form.options.map((o, j) => (j === i ? { ...o, ...champ } : o)) });
+  const ajouterOption = () => changer({ options: [...form.options, { ...OPTION_VIDE }] });
+  const retirerOption = (i: number) => changer({ options: form.options.filter((_, j) => j !== i) });
 
   // Idée cachée : on ne connaît pas l'envie du destinataire, on note son
   // propre avis sur l'idée.
@@ -103,6 +129,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
   const enregistrer = async () => {
     setErreur(null);
     if (!form.titre.trim()) return setErreur('Indiquez au moins un nom.');
+    if (form.modeOptions && form.options.filter((o) => o.titre.trim()).length < 2)
+      return setErreur('Indiquez au moins deux options, ou choisissez « Un seul article ».');
     if (!session) return;
     setEnCours(true);
     try {
@@ -212,6 +240,79 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         </Text>
       </View>
 
+      <Text style={styles.libelle}>Plusieurs modèles ou articles ?</Text>
+      <View style={styles.puces}>
+        {([
+          [null, 'Un seul article'],
+          ['un_au_choix', 'Un au choix'],
+          ['toutes', 'Plusieurs à offrir'],
+        ] as const).map(([valeur, libelle]) => (
+          <Pressable
+            key={libelle}
+            onPress={() => choisirMode(valeur)}
+            style={[styles.puce, form.modeOptions === valeur && styles.puceActive]}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: form.modeOptions === valeur }}
+          >
+            <Text style={[styles.puceTexte, form.modeOptions === valeur && styles.puceTexteActive]}>{libelle}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {form.modeOptions && (
+        <View style={styles.options}>
+          <Text style={styles.potAide}>
+            {form.modeOptions === 'un_au_choix'
+              ? 'Plusieurs modèles possibles (téléphone…), un seul sera offert : le premier proche qui en réserve un réserve le cadeau.'
+              : 'Plusieurs articles (figurines, livres d’une série…) : chacun se réserve séparément, un exemplaire de chaque.'}
+          </Text>
+          {form.options.map((o, i) => (
+            <View key={o.id ?? `nouvelle-${i}`} style={styles.option}>
+              <View style={styles.ligne}>
+                <TextInput
+                  style={[styles.champ, styles.optionTitre]}
+                  value={o.titre}
+                  onChangeText={(t) => changerOption(i, { titre: t })}
+                  placeholder={form.modeOptions === 'un_au_choix' ? `Modèle ${i + 1}` : `Article ${i + 1}`}
+                  placeholderTextColor={theme.colors.textMuted}
+                  accessibilityLabel={`Nom de l’option ${i + 1}`}
+                />
+                <TextInput
+                  style={[styles.champ, styles.optionPrix]}
+                  value={o.prix}
+                  onChangeText={(t) => changerOption(i, { prix: t })}
+                  placeholder="€"
+                  placeholderTextColor={theme.colors.textMuted}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel={`Prix de l’option ${i + 1}`}
+                />
+                <Pressable
+                  onPress={() => retirerOption(i)}
+                  style={styles.optionRetirer}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retirer l’option ${i + 1}`}
+                  hitSlop={6}
+                >
+                  <Ionicons name="close-circle-outline" size={24} color={theme.colors.textMuted} />
+                </Pressable>
+              </View>
+              <TextInput
+                style={styles.champ}
+                value={o.lien}
+                onChangeText={(t) => changerOption(i, { lien: t })}
+                placeholder="Lien (facultatif)"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel={`Lien de l’option ${i + 1}`}
+              />
+            </View>
+          ))}
+          <Bouton variante="pointille" titre="+ Ajouter une option" onPress={ajouterOption} />
+        </View>
+      )}
+
+      {form.modeOptions !== 'toutes' && (
       <Pressable
         onPress={() => changer({ potCommun: !form.potCommun })}
         style={[styles.pot, form.potCommun && styles.potActif]}
@@ -227,12 +328,15 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         <View style={styles.potTextes}>
           <Text style={styles.potTitre}>Pot commun</Text>
           <Text style={styles.potAide}>
-            {idee
+            {form.modeOptions === 'un_au_choix'
+              ? 'La famille finance ensemble un des modèles : on participe au pot, les modèles servent d’indication pour l’achat.'
+              : idee
               ? `Cadeau cher ou voyage : chacun participe de la somme qu’il veut. ${prenom ?? 'La personne'} ne verra rien.`
               : 'Cadeau cher ou voyage : la famille participe à plusieurs. Chacun ne voit que son propre montant ; la somme réunie reste une surprise pour vous.'}
           </Text>
         </View>
       </Pressable>
+      )}
 
       {!form.potCommun && <Text style={styles.libelle}>Prix</Text>}
       {!form.potCommun && (
@@ -279,8 +383,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         ))}
       </View>
 
-      {!form.potCommun && <Text style={styles.libelle}>Quantité souhaitée</Text>}
-      {!form.potCommun && (
+      {!form.potCommun && !form.modeOptions && <Text style={styles.libelle}>Quantité souhaitée</Text>}
+      {!form.potCommun && !form.modeOptions && (
       <View style={styles.quantite}>
         <Pressable
           style={styles.boutonRond}
@@ -375,6 +479,18 @@ const styles = creerStylesThemes(() => ({
     justifyContent: 'center',
   },
   photoActions: { flex: 1, gap: theme.spacing.xs },
+  options: { gap: theme.spacing.sm },
+  option: {
+    gap: theme.spacing.xs,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  optionTitre: { flex: 1 },
+  optionPrix: { width: 76 },
+  optionRetirer: { width: 32, alignItems: 'center', justifyContent: 'center' },
   pot: {
     flexDirection: 'row',
     gap: theme.spacing.sm,

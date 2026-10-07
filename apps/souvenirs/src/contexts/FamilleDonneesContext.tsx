@@ -17,6 +17,8 @@ type Valeur = {
   completer: (ids: string[]) => Promise<void>;
   // Ligne des prénoms d'une carte : « Sybille · avec Yann, Léo ».
   lignePrenoms: (personnes: PersonneDuSouvenir[], autres?: string[]) => string | null;
+  // Fiches des personnes d'une carte, concernées d'abord (pour leurs photos).
+  visagesDe: (personnes: PersonneDuSouvenir[]) => string[];
   recharger: () => Promise<void>;
 };
 
@@ -72,8 +74,13 @@ export function FamilleDonneesProvider({ children }: { children: React.ReactNode
       if (!presentsFamille.length && autres.length) return autres.join(', ');
       return presents.length ? `Avec ${presents.join(', ')}` : null;
     };
+    const visagesDe = (liste: PersonneDuSouvenir[]) => [
+      ...liste.filter((p) => p.role === 'principal').map((p) => p.personne_id),
+      ...liste.filter((p) => p.role === 'present').map((p) => p.personne_id),
+    ];
     return {
       lignePrenoms,
+      visagesDe,
       categories,
       categorie: (code) => categorieDe(categories, code),
       personnes,

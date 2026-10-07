@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { extraireMessageErreur, prenomsDe } from '@apps-famille/famille';
+import { Avatar, extraireMessageErreur, prenomsDe } from '@apps-famille/famille';
 import {
   ajouterCommentaire,
   modifierCommentaire,
@@ -96,10 +96,13 @@ export default function Commentaires({
         const mien = c.auteur === moi;
         return (
           <View key={c.id} style={styles.commentaire}>
-            <Text style={styles.auteur}>
-              {mien ? 'Moi' : prenoms.get(c.auteur) || 'Un proche'}
-              <Text style={styles.date}> · {quand(c.cree_le)}</Text>
-            </Text>
+            <View style={styles.auteurLigne}>
+              <Avatar utilisateurId={c.auteur} prenom={prenoms.get(c.auteur)} taille={24} />
+              <Text style={[styles.auteur, styles.auteurTexte]}>
+                {mien ? 'Moi' : prenoms.get(c.auteur) || 'Un proche'}
+                <Text style={styles.date}> · {quand(c.cree_le)}</Text>
+              </Text>
+            </View>
             <Text style={styles.texte}>{c.texte}</Text>
             {(mien || peutModerer) && (
               <View style={styles.actions}>
@@ -167,6 +170,8 @@ const styles = creerStylesThemes(() => ({
     borderWidth: 1,
   },
   auteur: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  auteurLigne: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  auteurTexte: { flexShrink: 1 },
   date: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
   texte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: theme.spacing.md, marginTop: 2 },

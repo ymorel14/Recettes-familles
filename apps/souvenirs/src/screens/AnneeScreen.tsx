@@ -25,7 +25,7 @@ function majuscule(t: string): string {
 // l'année précédente ou suivante.
 export default function AnneeScreen({ route, navigation }: any) {
   const { famille } = useAuth();
-  const { categorie, lignePrenoms, completer } = useFamilleDonnees();
+  const { categorie, lignePrenoms, visagesDe, completer } = useFamilleDonnees();
   const [annee, setAnnee] = useState<string>(route.params.annee);
   const [filtres, setFiltres] = useState<FiltresActifs>(route.params.filtres ?? AUCUN_FILTRE);
   const [tous, setTous] = useState<Carte[] | null>(null);
@@ -143,6 +143,7 @@ export default function AnneeScreen({ route, navigation }: any) {
           precision={item.precision_date}
           lieu={item.lieu}
           prenoms={lignePrenoms(item.personnes, item.autres_personnes)}
+          visages={visagesDe(item.personnes)}
           adresseCouverture={item.couverture ? adresses[item.couverture] : null}
           nbMedias={item.nb_medias}
           onPress={() => navigation.navigate('Souvenir', { id: item.id })}

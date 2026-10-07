@@ -12,6 +12,7 @@ import {
   obtenirCodeInvitation,
   obtenirMonPrenom,
 } from '@apps-famille/famille';
+import { Avatar, PhotosProfil } from '@apps-famille/famille';
 import { alerte } from '../utils/alerte';
 import {
   ajouterPersonneSansCompte,
@@ -179,6 +180,12 @@ export default function ProfilScreen() {
         )}
       </View>
 
+      {foyer && (
+        <View style={styles.section}>
+          <PhotosProfil polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitre}>Mon foyer</Text>
         <Text style={styles.aide}>
@@ -188,14 +195,14 @@ export default function ProfilScreen() {
         </Text>
         {avecCompte.map((p) => (
           <View key={p.id} style={styles.lignePersonne}>
-            <Ionicons name="person-outline" size={18} color={theme.colors.textMuted} />
+            <Avatar personneId={p.id} prenom={p.prenom} taille={28} />
             <Text style={styles.personne}>{p.prenom || 'Sans prénom'}</Text>
             <Text style={styles.aide}>a son compte</Text>
           </View>
         ))}
         {sansCompte.map((p) => (
           <View key={p.id} style={styles.lignePersonne}>
-            <Ionicons name="happy-outline" size={18} color={theme.colors.textMuted} />
+            <Avatar personneId={p.id} prenom={p.prenom} taille={28} />
             <Text style={styles.personne}>
               {p.prenom}
               {p.date_naissance ? ` · ${formaterDate(p.date_naissance)}` : ''}

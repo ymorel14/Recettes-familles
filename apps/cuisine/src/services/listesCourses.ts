@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { normaliserTexte } from '../utils/texte';
-import { etatSurprise } from './recettes';
+import { appliquerVariantes, etatSurprise } from './recettes';
 import type { ListeCourses, ArticleListeCourses, ContributionListeCourses, RecetteComplete } from '../types/models';
 
 function normaliser(texte: string): string {
@@ -279,8 +279,12 @@ export async function supprimerArticle(articleId: string): Promise<void> {
 // contribution d'une seule recette de la liste globale.
 export async function ajouterRecettesALaListe(
   listeId: string,
-  selections: { recette: RecetteComplete; partsSouhaitees: number }[]
+  selectionsBrutes: { recette: RecetteComplete; partsSouhaitees: number }[]
 ): Promise<void> {
+  // Recette à variantes (ex. curd au citron OU appareil à l'orange) : seuls
+  // les ingrédients de la version choisie vont dans la liste — la fiche
+  // transmet la recette déjà appliquée ; ailleurs, version principale.
+  const selections = selectionsBrutes.map((s) => ({ ...s, recette: appliquerVariantes(s.recette) }));
   const articlesExistants = await listerArticles(listeId);
 
   type Agrege = { libelle: string; unite: string | null; quantite: number | null };

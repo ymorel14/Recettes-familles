@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { AppState } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { clientSupabase, schemaFamille } from './client';
+import { chargerPhotosFamille, oublierPhotosFamille } from './photos';
 import {
   choisirFamilleActive,
   listerFoyersFamilleActive,
@@ -57,7 +58,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [familles, setFamilles] = useState<FamilleResume[]>([]);
   const [foyer, setFoyer] = useState<Foyer | null>(null);
   const [foyersFamille, setFoyersFamille] = useState<string[]>([]);
-  const [chargementFoyer, setChargementFoyer] = useState(true);
+  const [chargementEnCours, setChargementEnCours] = useState(true);
+  // Utilisateur dont la famille et le foyer ont été chargés. Tant qu'il
+  // diffère de l'utilisateur connecté (juste après la connexion ou au
+  // démarrage), on est « en chargement » : sans ça, pendant un instant,
+  // l'app croyait l'utilisateur sans famille et affichait l'écran de
+  // bienvenue (ce qui, sur le web, effaçait l'adresse de la page ouverte).
+  const [utilisateurCharge, setUtilisateurCharge] = useState<string | null>(null);
   const [erreurFoyer, setErreurFoyer] = useState<string | null>(null);
   // Numéro du dernier chargement lancé : le résultat d'un chargement plus
   // ancien (parti par exemple avec un jeton expiré) est ignoré s'il arrive
@@ -154,6 +161,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Rechargé uniquement quand l'utilisateur change (et non à chaque
   // rafraîchissement du jeton, qui produit un nouvel objet session).
+  // Photos de profil de la famille : relues pour chaque utilisateur connecté
+  // (et oubliées à la déconnexion), puis au retour au premier plan.
+  useEffect(() => {
+    oublierPhotosFamille();
+    if (utilisateurId) chargerPhotosFamille(true);
+  }, [utilisateurId]);
+
   useEffect(() => {
     if (!utilisateurId) {
       numeroChargement.current += 1;
@@ -162,11 +176,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setFoyer(null);
       setFoyersFamille([]);
       setErreurFoyer(null);
-      setChargementFoyer(false);
+      setUtilisateurCharge(null);
+      setChargementEnCours(false);
       return;
     }
-    setChargementFoyer(true);
-    rafraichirFoyer().finally(() => setChargementFoyer(false));
+    setChargementEnCours(true);
+    rafraichirFoyer().finally(() => {
+      setUtilisateurCharge(utilisateurId);
+      setChargementEnCours(false);
+    });
   }, [utilisateurId, rafraichirFoyer]);
 
   // La famille active a pu être changée dans une autre app de la famille
@@ -174,7 +192,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!utilisateurId) return;
     const abonnement = AppState.addEventListener('change', (etat) => {
-      if (etat === 'active') rafraichirFoyer();
+      if (etat === 'active') {
+        rafraichirFoyer();
+        chargerPhotosFamille();
+      }
     });
     return () => abonnement.remove();
   }, [utilisateurId, rafraichirFoyer]);
@@ -190,6 +211,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const deconnexion = useCallback(async () => {
     await clientSupabase().auth.signOut();
   }, []);
+
+  const chargementFoyer = chargementEnCours || (utilisateurId !== null && utilisateurCharge !== utilisateurId);
 
   const estCreateurFamille = !!famille && !!utilisateurId && famille.cree_par === utilisateurId;
   const estCreateurFoyer = !!foyer && !!utilisateurId && foyer.cree_par === utilisateurId;

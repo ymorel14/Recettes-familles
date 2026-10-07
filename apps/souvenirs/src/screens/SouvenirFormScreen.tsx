@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { useFamilleDonnees } from '../contexts/FamilleDonneesContext';
-import { extraireMessageErreur } from '@apps-famille/famille';
+import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
 import {
   ajouterAuxAlbums,
   creerSouvenir,
@@ -214,6 +214,7 @@ export default function SouvenirFormScreen({ route, navigation }: any) {
       >
         {role === 'principal' && <Ionicons name="star" size={13} color={theme.colors.background} />}
         {role === 'present' && <Ionicons name="checkmark" size={14} color={theme.colors.accent} />}
+        <Avatar personneId={p.id} prenom={p.prenom} taille={24} />
         <Text style={[styles.puceTexte, role === 'principal' && styles.puceTextePrincipal]}>{p.prenom}</Text>
       </Pressable>
     );

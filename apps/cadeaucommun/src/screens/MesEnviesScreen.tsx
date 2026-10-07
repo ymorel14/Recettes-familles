@@ -1,109 +1,48 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
-import {
-  formaterDate,
-  joursAvant,
-  libelleCompteARebours,
-  mesListes,
-  obtenirMaPersonne,
-  type Evenement,
-  type Liste,
-  dateCle,
-  libelleDates,
-} from '../services/wishlist';
-import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { listeDe, obtenirMaPersonne } from '../services/wishlist';
+import { Chargement } from '../components/ui';
+import ListeScreen from './ListeScreen';
 
-// Onglet "Mes envies" : mes listes de souhaits, événement par événement.
+// Onglet "Mes envies" : MA liste, unique et permanente (créée au premier
+// passage, en brouillon). La famille y réserve des cadeaux sans que je voie
+// ce qui est réservé.
 export default function MesEnviesScreen({ navigation }: any) {
   const { session } = useAuth();
-  const [listes, setListes] = useState<(Liste & { evenement: Evenement })[] | null>(null);
+  const [listeId, setListeId] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-
-  const charger = useCallback(async () => {
-    if (!session) return;
-    try {
-      setErreur(null);
-      const moi = await obtenirMaPersonne(session.user.id);
-      setListes(moi ? await mesListes(moi.id) : []);
-    } catch (e) {
-      setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
-      setListes([]);
-    }
-  }, [session]);
 
   useFocusEffect(
     useCallback(() => {
-      charger();
-    }, [charger])
+      if (!session || listeId) return;
+      (async () => {
+        try {
+          setErreur(null);
+          const moi = await obtenirMaPersonne(session.user.id);
+          if (!moi) return setErreur('Rejoignez d’abord votre famille pour créer votre liste.');
+          setListeId(await listeDe(moi.id));
+        } catch (e) {
+          setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
+        }
+      })();
+    }, [session, listeId])
   );
 
-  if (listes === null) return <Chargement />;
-
-  const aVenir = listes.filter((l) => l.evenement && joursAvant(dateCle(l.evenement)) >= 0);
-  const passees = listes.filter((l) => l.evenement && joursAvant(dateCle(l.evenement)) < 0);
-
-  const carte = (l: Liste & { evenement: Evenement }) => (
-    <Pressable
-      key={l.id}
-      style={styles.carte}
-      onPress={() => navigation.navigate('Liste', { listeId: l.id })}
-      accessibilityRole="button"
-    >
-      <View style={styles.carteHaut}>
-        <Text style={styles.carteTitre}>{l.evenement.titre}</Text>
-        <Pastille texte={libelleCompteARebours(dateCle(l.evenement))} ton={joursAvant(dateCle(l.evenement)) < 0 ? 'neutre' : 'accent'} />
-      </View>
-      <Text style={styles.detail}>
-        {libelleDates(l.evenement)} ·{' '}
-        {l.statut === 'brouillon' ? 'brouillon, pas encore publiée' : 'visible par la famille'}
-      </Text>
-    </Pressable>
-  );
-
-  return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
-      <Text style={styles.intro}>
-        Vos listes de souhaits. Vous ne voyez jamais ce que la famille réserve ou suggère : la surprise reste entière.
-      </Text>
-      {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-      {listes.length === 0 ? (
-        <>
-          <MessageVide
-            titre="Pas encore de liste"
-            texte="Ouvrez un événement (Noël, votre anniversaire…) et touchez « Créer ma liste »."
-          />
-          <Bouton variante="contour" titre="Voir les événements" onPress={() => navigation.navigate('Evenements')} />
-        </>
-      ) : (
-        <>
-          {aVenir.map(carte)}
-          {passees.length > 0 && <Text style={styles.section}>Passées</Text>}
-          {passees.map(carte)}
-        </>
-      )}
-    </ScrollView>
-  );
+  if (!listeId) return erreur ? <Text style={styles.erreur}>{erreur}</Text> : <Chargement />;
+  return <ListeScreen route={{ params: { listeId } }} navigation={navigation} />;
 }
 
 const styles = creerStylesThemes(() => ({
-  flex: { flex: 1, backgroundColor: theme.colors.background },
-  contenu: { padding: theme.spacing.md, gap: theme.spacing.sm, paddingBottom: theme.spacing.xl },
-  intro: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted, marginBottom: theme.spacing.xs },
-  section: { fontFamily: theme.fontTitle, fontSize: 18, color: theme.colors.textMuted, marginTop: theme.spacing.md },
-  carte: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderWidth: 1,
-    borderRadius: theme.radii.lg,
+  erreur: {
+    fontFamily: theme.fontBody,
+    fontSize: 14,
+    color: theme.colors.warning,
     padding: theme.spacing.md,
-    gap: 4,
+    backgroundColor: theme.colors.background,
+    flex: 1,
   },
-  carteHaut: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: theme.spacing.sm },
-  carteTitre: { flex: 1, fontFamily: theme.fontTitle, fontSize: 20, color: theme.colors.text },
-  detail: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
-  erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

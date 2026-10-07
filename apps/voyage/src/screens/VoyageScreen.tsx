@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { alerte } from '../utils/alerte';
+import { lienVoyage, partagerSurWhatsApp, texteAvecLien } from '../services/partage';
 import { listerPersonnes, listerPersonnesParIds, type Personne } from '../services/personnes';
 import {
   changerRole,
@@ -40,6 +41,7 @@ import { Champ } from '../components/formulaire';
 import { listerTrajets, type Trajet } from '../services/transport';
 import { listerActivites, type Activite } from '../services/activites';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { Avatar, NomAvecAvatar } from '@apps-famille/famille';
 
 const LIBELLES_REPONSE: Record<ReponseInvite, string> = {
   invite: 'Pas encore répondu',
@@ -134,6 +136,11 @@ export default function VoyageScreen({ route, navigation }: any) {
       ordre.indexOf(a.reponse) - ordre.indexOf(b.reponse) ||
       nom(a.personne_id).localeCompare(nom(b.personne_id))
   );
+  const secretDe = (id: string) => voyage.secrets.find((s) => s.personne_id === id)?.niveau ?? null;
+  const fetes = voyage.secrets.filter((s) => s.niveau === 'fete').map((s) => nom(s.personne_id));
+  const caches = voyage.secrets.filter((s) => s.niveau === 'cache').map((s) => nom(s.personne_id));
+  const listeNoms = (noms: string[]) =>
+    noms.length <= 1 ? noms.join('') : `${noms.slice(0, -1).join(', ')} et ${noms[noms.length - 1]}`;
   const partants = voyage.participants.filter((p) => p.reponse === 'partant').length;
   const attendus = voyage.participants.filter((p) => p.reponse !== 'decline').length;
 
@@ -312,7 +319,68 @@ export default function VoyageScreen({ route, navigation }: any) {
         </Text>
         <Text style={styles.detail}>{libelle(PARTICIPATIONS, voyage.participation)}</Text>
         {voyage.description ? <Text style={styles.description}>{voyage.description}</Text> : null}
+        <Pressable
+          onPress={() => {
+            const lieu =
+              voyage.nature === 'repas'
+                ? voyage.foyer_hote
+                  ? ` chez ${nomFoyer(voyage.foyer_hote) ?? 'nous'}`
+                  : voyage.destination
+                    ? ` (${voyage.destination})`
+                    : ''
+                : voyage.destination
+                  ? ` à ${voyage.destination}`
+                  : '';
+            const quoi = voyage.nature === 'repas' ? 'Repas de famille' : 'Voyage';
+            partagerSurWhatsApp(
+              texteAvecLien(
+                `${quoi} « ${voyage.titre} »${lieu}, ${libelleQuand(voyage).toLowerCase()}. Dites si vous venez et suivez l’organisation ici :`,
+                lienVoyage(voyage.id)
+              ),
+              voyage,
+              nom
+            );
+          }}
+          accessibilityRole="button"
+          style={styles.partage}
+          hitSlop={6}
+        >
+          <Ionicons name="logo-whatsapp" size={18} color={theme.colors.accent} />
+          <Text style={styles.lienDiscret}>Partager sur WhatsApp</Text>
+        </Pressable>
       </View>
+
+      {/* Surprise : pour qui, et ce qu'il ne faut pas dire */}
+      {voyage.secrets.length > 0 ? (
+        <View style={[styles.bloc, styles.surprise]}>
+          <View style={styles.surpriseHaut}>
+            <Ionicons name="gift-outline" size={20} color={theme.colors.accent} />
+            <Text style={styles.blocTitre}>C’est une surprise</Text>
+          </View>
+          {fetes.length > 0 && (
+            <Text style={styles.detail}>
+              Pour {listeNoms(fetes)} : {fetes.length > 1 ? 'ils savent' : 'sait'} seulement que l’événement existe.
+            </Text>
+          )}
+          {caches.length > 0 && (
+            <Text style={styles.detail}>
+              Caché à {listeNoms(caches)} : {caches.length > 1 ? 'ils ne voient' : 'ne voit'} rien.
+            </Text>
+          )}
+          <Text style={styles.aide}>Ne dites rien d’ici-là !</Text>
+          {organisateur && (
+            <Pressable onPress={() => navigation.navigate('Surprise', { voyageId: voyage.id })} accessibilityRole="button" hitSlop={6}>
+              <Text style={styles.lienDiscret}>Gérer la surprise</Text>
+            </Pressable>
+          )}
+        </View>
+      ) : (
+        organisateur && (
+          <Pressable onPress={() => navigation.navigate('Surprise', { voyageId: voyage.id })} accessibilityRole="button" hitSlop={6}>
+            <Text style={styles.lienDiscret}>C’est une surprise ? Choisir à qui la garder</Text>
+          </Pressable>
+        )
+      )}
 
       {/* Ma réponse (et celle de mes enfants sans compte) */}
       {mesInvitations.length > 0 && (
@@ -320,7 +388,9 @@ export default function VoyageScreen({ route, navigation }: any) {
           <Text style={styles.blocTitre}>{mesInvitations.length > 1 ? 'Vos réponses' : 'Votre réponse'}</Text>
           {mesInvitations.map((p) => (
             <View key={p.personne_id} style={styles.reponse}>
-              {mesInvitations.length > 1 && <Text style={styles.reponseNom}>{nom(p.personne_id)}</Text>}
+              {mesInvitations.length > 1 && (
+                <NomAvecAvatar personneId={p.personne_id} prenom={nom(p.personne_id)} styleTexte={styles.reponseNom} />
+              )}
               <Puces
                 options={REPONSES}
                 valeur={p.reponse === 'invite' ? null : p.reponse}
@@ -352,16 +422,26 @@ export default function VoyageScreen({ route, navigation }: any) {
           const estCreateurDuVoyage = personne?.utilisateur_id === voyage.cree_par;
           return (
             <View key={p.personne_id} style={styles.invite}>
+              <Avatar personneId={p.personne_id} prenom={nom(p.personne_id)} taille={32} />
               <View style={styles.inviteTexte}>
                 <Text style={styles.inviteNom}>
                   {nom(p.personne_id)}
                   {p.role === 'organisateur' ? ' · organise' : ''}
+                  {secretDe(p.personne_id) === 'fete' ? ' · fêté(e)' : secretDe(p.personne_id) === 'cache' ? ' · ne sait rien' : ''}
                 </Text>
                 <Text style={[styles.inviteReponse, p.reponse === 'partant' && styles.partant]}>
                   {LIBELLES_REPONSE[p.reponse]}
                 </Text>
+                {/* Tenu au secret, il ne peut pas répondre : l'organisateur répond pour lui. */}
+                {organisateur && secretDe(p.personne_id) && (
+                  <Puces
+                    options={REPONSES.filter((r) => r.id !== 'peut_etre')}
+                    valeur={p.reponse === 'invite' ? null : p.reponse}
+                    onChange={(r) => agir(() => repondre(voyage.id, p.personne_id, r))}
+                  />
+                )}
               </View>
-              {organisateur && !estCreateurDuVoyage && personne?.utilisateur_id && (
+              {organisateur && !estCreateurDuVoyage && personne?.utilisateur_id && !secretDe(p.personne_id) && (
                 <Pressable
                   onPress={() =>
                     agir(() =>
@@ -420,6 +500,7 @@ export default function VoyageScreen({ route, navigation }: any) {
                 })
               }
               libelle={p.prenom}
+              personneId={p.id}
               aide={p.foyer_nom ?? undefined}
             />
           ))}
@@ -517,6 +598,9 @@ const styles = creerStylesThemes(() => ({
     padding: theme.spacing.md,
   },
   blocTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
+  surprise: { borderColor: theme.colors.accent, borderStyle: 'dashed' },
+  partage: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 32 },
+  surpriseHaut: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   reponse: { gap: theme.spacing.xs },
   reponseNom: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
   invite: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 40 },

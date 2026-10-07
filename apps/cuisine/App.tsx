@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Cinzel_600SemiBold, Cinzel_700Bold } from '@expo-google-fonts/cinzel';
@@ -12,6 +12,16 @@ import { PassageConnexion } from '@apps-famille/famille';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { PreferencesProvider, usePreferences } from './src/contexts/PreferencesContext';
 import { theme, themeActuel, EST_WEB, LARGEUR_MAX_WEB } from './src/theme/theme';
+
+// Police des icônes. Sur le site web commun (EXPO_PUBLIC_BASE_WEB défini),
+// elle est servie depuis <app>/polices/Ionicons.ttf, copiée là par
+// scripts/construire-site.mjs : la copie automatique d'Expo (rangée sous
+// assets/__node_modules/@expo/vector-icons/build/vendor/…) n'arrivait pas
+// jusqu'au site Netlify, d'où des carrés vides à la place des icônes.
+// Ailleurs (téléphones, développement), police fournie par le paquet.
+const BASE_WEB = process.env.EXPO_PUBLIC_BASE_WEB;
+const POLICE_ICONES: Record<string, any> =
+  Platform.OS === 'web' && BASE_WEB ? { ionicons: `${BASE_WEB}/polices/Ionicons.ttf` } : Ionicons.font;
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Ignoré : l'écran de démarrage a pu déjà être masqué (ex. rechargement web).
@@ -43,7 +53,7 @@ export default function App() {
     Caveat_600SemiBold,
     // Police des icônes de la barre d'onglets, chargée d'avance pour éviter
     // un affichage vide au premier rendu.
-    ...Ionicons.font,
+    ...POLICE_ICONES,
   });
 
   const [ready, setReady] = useState(false);

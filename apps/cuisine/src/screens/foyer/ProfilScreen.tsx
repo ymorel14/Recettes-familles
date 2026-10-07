@@ -8,14 +8,19 @@ import {
   creerFamille,
   extraireMessageErreur,
   formaterExpiration,
+  listerMembresFoyer,
   obtenirCodeInvitation,
   quitterFamille,
+  quitterFoyer,
   rejoindreAvecCode,
+  retirerDuFoyer,
 } from '../../services/famille';
 import { alerte } from '../../utils/alerte';
 import type { CodeInvitation, TypeCodeInvitation } from '../../types/models';
+import type { MembreFoyer } from '../../services/famille';
 import { definirMonPrenom, obtenirMonPrenom } from '../../services/profils';
 import ZoneClavier from '../../components/ZoneClavier';
+import { Avatar, PhotosProfil } from '@apps-famille/famille';
 
 // Carte affichant un code d'invitation (famille ou foyer) et permettant de le
 // partager. Le code est valable 24 h : il est rechargé à chaque affichage de
@@ -139,6 +144,162 @@ function CartePrenom({ utilisateurId }: { utilisateurId: string }) {
         </Pressable>
       )}
       {message && <Text style={styles.aide}>{message}</Text>}
+    </View>
+  );
+}
+
+// "Mon foyer" : la maison où l'on vit (un seul foyer par personne), avec les
+// personnes inscrites qui la partagent, et les familles dont il fait partie.
+function CarteFoyer({ utilisateurId }: { utilisateurId: string }) {
+  const { foyer, familles, rafraichirFoyer } = useAuth();
+  const [membres, setMembres] = useState<MembreFoyer[] | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [enCours, setEnCours] = useState<string | null>(null);
+  const idFoyer = foyer?.id ?? null;
+
+  const charger = useCallback(async () => {
+    if (!idFoyer) return;
+    setErreur(null);
+    try {
+      setMembres(await listerMembresFoyer(idFoyer));
+    } catch (e) {
+      setErreur(extraireMessageErreur(e, 'Membres indisponibles.'));
+    }
+  }, [idFoyer]);
+
+  useFocusEffect(
+    useCallback(() => {
+      charger();
+    }, [charger])
+  );
+
+  if (!foyer) return null;
+
+  const moi = membres?.find((m) => m.utilisateur_id === utilisateurId);
+  // Mêmes règles que la base (famille.retirer_du_foyer) : un administrateur
+  // ou le créateur retire un autre membre, jamais le créateur.
+  const peutRetirer = foyer.cree_par === utilisateurId || moi?.role === 'administrateur';
+  const dernierMembre = (membres?.length ?? 0) <= 1;
+
+  const nomMembre = (m: MembreFoyer) => {
+    const nom = m.prenom?.trim() || 'Prénom non renseigné';
+    return m.utilisateur_id === utilisateurId ? `${nom} (vous)` : nom;
+  };
+
+  const executer = async (cle: string, action: () => Promise<void>, messageErreur: string) => {
+    setErreur(null);
+    setEnCours(cle);
+    try {
+      await action();
+    } catch (e) {
+      setErreur(extraireMessageErreur(e, messageErreur));
+    } finally {
+      setEnCours(null);
+    }
+  };
+
+  const confirmerRetrait = (m: MembreFoyer) => {
+    const nom = m.prenom?.trim() || 'cette personne';
+    alerte(
+      `Retirer ${nom} du foyer « ${foyer.nom} » ?`,
+      `${nom} restera dans la famille et choisira un autre foyer (ou créera le sien) à sa prochaine ouverture de l'app. Les recettes et listes de courses restent dans votre foyer.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Retirer',
+          style: 'destructive',
+          onPress: () =>
+            executer(
+              m.utilisateur_id,
+              async () => {
+                await retirerDuFoyer(m.utilisateur_id);
+                await charger();
+              },
+              'Impossible de retirer cette personne.'
+            ),
+        },
+      ]
+    );
+  };
+
+  const confirmerDepart = () => {
+    alerte(
+      `Quitter le foyer « ${foyer.nom} » ?`,
+      dernierMembre
+        ? "Vous êtes le dernier membre : le foyer restera vide, avec ses recettes, et pourra être rejoint de nouveau. Vous restez dans la famille et choisirez ensuite un autre foyer ou créerez le vôtre."
+        : "Vous restez dans la famille et choisirez ensuite un autre foyer ou créerez le vôtre. Les recettes et listes de courses restent dans ce foyer.",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Quitter',
+          style: 'destructive',
+          onPress: () =>
+            executer(
+              'quitter',
+              async () => {
+                await quitterFoyer();
+                // Sans foyer, l'app passe à l'écran « Choisissez votre foyer ».
+                await rafraichirFoyer();
+              },
+              'Impossible de quitter le foyer.'
+            ),
+        },
+      ]
+    );
+  };
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitre}>Mon foyer : {foyer.nom}</Text>
+      <Text style={styles.aide}>
+        La maison où vous vivez : ses membres partagent les recettes et les listes de courses.
+      </Text>
+      {membres === null && !erreur ? (
+        <ActivityIndicator color={theme.colors.accent} />
+      ) : (
+        <View style={styles.listeMembres}>
+          {(membres ?? []).map((m) => {
+            const retirable = peutRetirer && m.utilisateur_id !== utilisateurId && m.utilisateur_id !== foyer.cree_par;
+            return (
+              <View key={m.utilisateur_id} style={styles.ligneMembre}>
+                <Avatar utilisateurId={m.utilisateur_id} prenom={m.prenom} taille={28} />
+                <Text style={[styles.reglageLibelle, styles.flex1]}>
+                  {nomMembre(m)}
+                  {m.role === 'administrateur' ? <Text style={styles.aide}>  administrateur</Text> : null}
+                </Text>
+                {retirable &&
+                  (enCours === m.utilisateur_id ? (
+                    <ActivityIndicator color={theme.colors.accent} />
+                  ) : (
+                    <Pressable
+                      onPress={() => confirmerRetrait(m)}
+                      disabled={enCours !== null}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Retirer ${m.prenom ?? 'ce membre'} du foyer`}
+                    >
+                      <Text style={styles.lienDiscret}>Retirer</Text>
+                    </Pressable>
+                  ))}
+              </View>
+            );
+          })}
+        </View>
+      )}
+      {familles.length > 0 && (
+        <Text style={styles.aide}>
+          {familles.length > 1 ? 'Fait partie des familles ' : 'Fait partie de la famille '}
+          {familles.map((f) => f.nom).join(' et ')}.
+        </Text>
+      )}
+      {erreur && <Text style={styles.erreur}>{erreur}</Text>}
+      <Pressable onPress={confirmerDepart} disabled={enCours !== null} accessibilityRole="button">
+        {enCours === 'quitter' ? (
+          <ActivityIndicator color={theme.colors.accent} />
+        ) : (
+          <Text style={styles.lienDiscret}>Quitter ce foyer</Text>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -295,12 +456,26 @@ export default function ProfilScreen() {
     <ZoneClavier>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View>
-        <Text style={styles.titre}>{foyer?.nom ?? 'Mon foyer'}</Text>
-        {famille && <Text style={styles.famille}>Famille {famille.nom}</Text>}
+        {foyer && <Text style={styles.surTitre}>Foyer</Text>}
+        <Text style={styles.titre}>{foyer?.nom ?? 'Mon profil'}</Text>
+        {famille && (
+          <Text style={styles.famille}>
+            <Text style={styles.libelle}>Famille active : </Text>
+            {famille.nom}
+          </Text>
+        )}
         <Text style={styles.email}>{session?.user.email}</Text>
       </View>
 
       {session && <CartePrenom utilisateurId={session.user.id} />}
+
+      {session && foyer && (
+        <View style={styles.section}>
+          <PhotosProfil polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
+        </View>
+      )}
+
+      {session && foyer && <CarteFoyer utilisateurId={session.user.id} />}
 
       {famille && <CarteFamilles />}
 
@@ -392,6 +567,28 @@ const styles = creerStylesThemes(() => ({
     fontFamily: theme.fontTitle,
     fontSize: 26,
     color: theme.colors.accent,
+  },
+  surTitre: {
+    fontFamily: theme.fontBody,
+    fontSize: 13,
+    color: theme.colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  libelle: {
+    fontFamily: theme.fontBody,
+    color: theme.colors.textMuted,
+  },
+  listeMembres: {
+    gap: 4,
+  },
+  ligneMembre: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  flex1: {
+    flex: 1,
   },
   famille: {
     fontFamily: theme.fontBodyBold,

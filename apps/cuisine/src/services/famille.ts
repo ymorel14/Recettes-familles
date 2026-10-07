@@ -13,5 +13,8 @@ export {
   choisirFamilleActive,
   quitterFamille,
   listerFoyersFamilleActive,
+  listerMembresFoyer,
+  quitterFoyer,
+  retirerDuFoyer,
 } from '@apps-famille/famille';
-export type { ResultatCode, FoyerARejoindre, FamilleResume } from '@apps-famille/famille';
+export type { ResultatCode, FoyerARejoindre, FamilleResume, MembreFoyer } from '@apps-famille/famille';

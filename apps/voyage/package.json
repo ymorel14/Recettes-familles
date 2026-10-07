@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "export:web": "expo export --platform web",
     "test:budget": "node --experimental-strip-types --no-warnings --test scripts/tester-budget.mjs",
-    "test:annonce": "node --experimental-strip-types --no-warnings --test scripts/tester-annonce.mjs"
+    "test:annonce": "node --experimental-strip-types --no-warnings --test scripts/tester-annonce.mjs",
+    "test:synthese": "node --experimental-strip-types --no-warnings --test scripts/tester-synthese.mjs"
   },
   "dependencies": {
     "@apps-famille/famille": "*",
@@ -26,10 +27,12 @@
     "@supabase/supabase-js": "^2.116.0",
     "expo": "~57.0.25",
     "expo-font": "^57.0.4",
+    "expo-image-manipulator": "~57.0.20",
+    "expo-image-picker": "~57.0.20",
     "expo-splash-screen": "^57.0.9",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-dom": "^19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",

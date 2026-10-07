@@ -8,6 +8,7 @@ import { formaterDate, formaterPlage, MOIS } from '../services/personnes';
 import { etatDuJour, lireCalendrier, versIso, type EtatDispo, type PeriodeDispo } from '../services/calendrier';
 import { messageErreurVoyage } from '../services/voyage';
 import { Bouton } from '../components/ui';
+import { Avatar } from '@apps-famille/famille';
 
 const JOURS_COURTS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const MAX_POINTS = 4;
@@ -182,6 +183,7 @@ export default function CalendrierScreen({ navigation }: any) {
           accessibilityRole={p.modifiable ? 'button' : undefined}
         >
           <Point etat={p.etat} taille={10} />
+          <Avatar personneId={p.personne_id} prenom={p.prenom} taille={28} />
           <View style={styles.ligneTexte}>
             <Text style={styles.ligneNom}>
               {p.prenom} · {LIBELLE_ETAT[p.etat].toLowerCase()}

@@ -16,3 +16,10 @@ export * from './appsFamille';
 export * from './connexionPartagee';
 export { PassageConnexion, type PolicesFamille } from './PassageConnexion';
 export { ConnexionAutresApps } from './ConnexionAutresApps';
+// Retour à l'accueil du site commun (choix de l'app), sans se reconnecter.
+export { BoutonAppsFamille } from './BoutonAppsFamille';
+// Photos de profil, communes à toutes les apps : petite photo ronde à côté
+// des prénoms (<Avatar>, <NomAvecAvatar>) et section « Ma photo » du Profil.
+export * from './photos';
+export { Avatar, NomAvecAvatar, GroupeNoms, type ProprietesAvatar } from './Avatar';
+export { PhotosProfil } from './PhotosProfil';

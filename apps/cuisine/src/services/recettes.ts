@@ -12,6 +12,7 @@ import type {
   PhotoRecette,
   RecetteLiee,
   ElementRecette,
+  ChoixVariantes,
 } from '../types/models';
 
 // clefId : identifiant local (côté formulaire, avant enregistrement) utilisé
@@ -31,7 +32,11 @@ export type IngredientBrouillon = {
 // aussi son identifiant en base, comme pour les étapes. Un formulaire a
 // toujours au moins un élément ; s'il n'y en a qu'un, sans nom, la recette
 // est enregistrée sans élément (recette d'un seul tenant).
-export type ElementBrouillon = { clefId: string; nom: string };
+// varianteDe : clefId de l'élément principal que celui-ci peut remplacer
+// (variante au choix, ex. pâte sablée à la place de la pâte brisée) ; absent
+// ou null pour un élément principal. Dans la liste, chaque élément principal
+// est suivi de ses variantes (voir normaliserElements).
+export type ElementBrouillon = { clefId: string; nom: string; varianteDe?: string | null };
 // recetteLieeId : id d'une autre recette du foyer que cette étape référence
 // (ex. "faire une pâte brisée" pointe vers la recette de la pâte brisée —
 // §8/§4) ; recetteLieeTitre n'est là que pour l'affichage immédiat dans le
@@ -108,15 +113,30 @@ export function nouvellePhotoBrouillonLocale(uriLocale: string): PhotoBrouillon 
   return { clefId: nouvelleClefLocale(), uriLocale, urlExistante: null };
 }
 
-export function nouvelElementBrouillon(nom = ''): ElementBrouillon {
-  return { clefId: nouvelIdentifiantEtape(), nom };
+export function nouvelElementBrouillon(nom = '', varianteDe: string | null = null): ElementBrouillon {
+  return { clefId: nouvelIdentifiantEtape(), nom, varianteDe };
+}
+
+// Range les éléments : chaque élément principal suivi de ses variantes.
+// Une variante dont le principal n'existe plus (ou est lui-même une
+// variante) redevient un élément principal.
+export function ordonnerElements(elements: ElementBrouillon[]): ElementBrouillon[] {
+  const principaux = new Set(elements.filter((e) => !e.varianteDe).map((e) => e.clefId));
+  const propres = elements.map((e) =>
+    e.varianteDe && principaux.has(e.varianteDe) && e.varianteDe !== e.clefId ? e : { ...e, varianteDe: null }
+  );
+  return propres
+    .filter((e) => !e.varianteDe)
+    .flatMap((p) => [p, ...propres.filter((v) => v.varianteDe === p.clefId)]);
 }
 
 // Garantit au moins un élément, et que chaque ingrédient/étape pointe vers
 // un élément existant (sinon : le premier). Utile pour les formulaires
 // venant du scan ou de l'import web, construits sans élément.
 export function normaliserElements(form: RecetteFormulaire): RecetteFormulaire {
-  const elements = form.elements && form.elements.length > 0 ? form.elements : [nouvelElementBrouillon()];
+  const elements = ordonnerElements(
+    form.elements && form.elements.length > 0 ? form.elements : [nouvelElementBrouillon()]
+  );
   const clefs = new Set(elements.map((e) => e.clefId));
   const premier = elements[0].clefId;
   const rattacher = <T extends { elementClef?: string | null }>(item: T): T =>
@@ -257,6 +277,71 @@ export function groupesParElement(recette: RecetteComplete): GroupeElement[] {
     })
   );
   return groupes;
+}
+
+// ---------------------------------------------------------------------------
+// Variantes d'éléments (ex. tarte au citron : « Curd au citron » OU
+// « Appareil à l'orange »). Une recette ne se cuisine qu'avec UNE version
+// de chaque élément : la fiche, le mode assistant et la liste de courses
+// travaillent sur la recette « appliquée » (appliquerVariantes).
+// ---------------------------------------------------------------------------
+
+// Élément principal et ses variantes, dans l'ordre (principal d'abord).
+export type ElementAVariantes = { principal: ElementRecette; versions: ElementRecette[] };
+
+// Éléments de la recette qui ont au moins une variante. Seuls les éléments
+// présents comptent : sur une recette déjà appliquée, il n'en reste aucun.
+export function elementsAVariantes(recette: Pick<RecetteComplete, 'elements'>): ElementAVariantes[] {
+  const elements = recette.elements ?? [];
+  const ids = new Set(elements.map((e) => e.id));
+  return elements
+    .filter((e) => !e.variante_de || !ids.has(e.variante_de))
+    .map((principal) => ({
+      principal,
+      versions: [principal, ...elements.filter((v) => v.variante_de === principal.id && v.id !== principal.id)],
+    }))
+    .filter((g) => g.versions.length > 1);
+}
+
+// Recette ne gardant, pour chaque élément à variantes, que la version
+// choisie (par défaut la principale) : ses ingrédients et étapes, et
+// l'élément lui-même à la place du principal. Les autres versions
+// disparaissent, ingrédients et étapes compris. Sans variante, la recette
+// est renvoyée telle quelle (fonction sans effet si on l'applique deux fois).
+export function appliquerVariantes<R extends RecetteComplete>(recette: R, choix: ChoixVariantes = {}): R {
+  const groupes = elementsAVariantes(recette);
+  if (groupes.length === 0) return recette;
+  const ecartes = new Set<string>();
+  const remplacement = new Map<string, ElementRecette>();
+  groupes.forEach(({ principal, versions }) => {
+    const retenue = versions.find((v) => v.id === choix[principal.id]) ?? principal;
+    versions.forEach((v) => v.id !== retenue.id && ecartes.add(v.id));
+    // La version retenue prend la place (l'ordre) du principal.
+    remplacement.set(retenue.id, { ...retenue, ordre: principal.ordre });
+  });
+  const garde = (x: { element_id?: string | null }) => !x.element_id || !ecartes.has(x.element_id);
+  return {
+    ...recette,
+    elements: recette.elements
+      .filter((e) => !ecartes.has(e.id))
+      .map((e) => remplacement.get(e.id) ?? e)
+      .sort((a, b) => a.ordre - b.ordre),
+    ingredients: recette.ingredients.filter(garde),
+    etapes: recette.etapes.filter(garde),
+  };
+}
+
+// Choix de variantes nettoyé : seulement les éléments qui existent encore
+// et une version qui leur appartient, et sans les choix « principal »
+// (inutiles, c'est la valeur par défaut).
+export function choixValides(recette: Pick<RecetteComplete, 'elements'>, choix?: ChoixVariantes | null): ChoixVariantes {
+  const resultat: ChoixVariantes = {};
+  if (!choix) return resultat;
+  elementsAVariantes(recette).forEach(({ principal, versions }) => {
+    const id = choix[principal.id];
+    if (id && id !== principal.id && versions.some((v) => v.id === id)) resultat[principal.id] = id;
+  });
+  return resultat;
 }
 
 // Note affichée d'une recette : moyenne des verdicts de ses essais (1 à 4),
@@ -489,7 +574,13 @@ async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut:
 
   if (avecElements) {
     const { error } = await supabase.from('elements').upsert(
-      elements.map((e, ordre) => ({ id: e.clefId, recette_id: recetteId, nom: e.nom.trim(), ordre }))
+      elements.map((e, ordre) => ({
+        id: e.clefId,
+        recette_id: recetteId,
+        nom: e.nom.trim(),
+        ordre,
+        variante_de: e.varianteDe ?? null,
+      }))
     );
     if (error) throw error;
   }
@@ -570,7 +661,7 @@ async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut:
 // ingrédients réinsérés avec de nouveaux identifiants (`mettreAJourRecette`).
 export function recetteVersFormulaire(recette: RecetteComplete): RecetteFormulaire {
   return normaliserElements({
-    elements: (recette.elements ?? []).map((e) => ({ clefId: e.id, nom: e.nom })),
+    elements: (recette.elements ?? []).map((e) => ({ clefId: e.id, nom: e.nom, varianteDe: e.variante_de ?? null })),
     titre: recette.titre,
     photos: recette.photos.map((p) => ({ clefId: p.id, uriLocale: null, urlExistante: p.url })),
     partsDefaut: recette.parts_defaut,

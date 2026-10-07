@@ -9,9 +9,14 @@ import {
   definirMonPrenom,
   extraireMessageErreur,
   formaterExpiration,
+  listerMembresFoyer,
   obtenirCodeInvitation,
   obtenirMonPrenom,
+  quitterFoyer,
+  retirerDuFoyer,
+  type MembreFoyer,
 } from '@apps-famille/famille';
+import { Avatar, PhotosProfil } from '@apps-famille/famille';
 import { alerte } from '../utils/alerte';
 import {
   ajouterPersonneSansCompte,
@@ -26,7 +31,7 @@ import { Bouton } from '../components/ui';
 // Profil : famille affichée (commune à toutes les apps), code d'invitation,
 // personnes sans compte du foyer, thème de couleurs, déconnexion.
 export default function ProfilScreen() {
-  const { session, famille, familles, foyer, changerFamille, deconnexion } = useAuth();
+  const { session, famille, familles, foyer, changerFamille, deconnexion, rafraichirFoyer } = useAuth();
   const { themeId, definirTheme } = usePreferences();
   const [personnes, setPersonnes] = useState<Personne[]>([]);
   const [prenom, setPrenom] = useState('');
@@ -35,12 +40,18 @@ export default function ProfilScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [monPrenom, setMonPrenom] = useState('');
   const [prenomEnregistre, setPrenomEnregistre] = useState<string | null>(null);
+  const [membres, setMembres] = useState<MembreFoyer[]>([]);
 
   const charger = useCallback(async () => {
     if (!foyer || !session) return;
     try {
-      const [p, moi] = await Promise.all([listerPersonnes([foyer.id]), obtenirMonPrenom(session.user.id)]);
+      const [p, moi, m] = await Promise.all([
+        listerPersonnes([foyer.id]),
+        obtenirMonPrenom(session.user.id),
+        listerMembresFoyer(foyer.id),
+      ]);
       setPersonnes(p);
+      setMembres(m);
       setPrenomEnregistre(moi);
       setMonPrenom(moi ?? '');
     } catch {
@@ -100,6 +111,58 @@ export default function ProfilScreen() {
   const sansCompte = personnes.filter((p) => !p.utilisateur_id);
   const avecCompte = personnes.filter((p) => p.utilisateur_id && p.utilisateur_id !== session?.user.id);
 
+  // Mêmes règles que la base (famille.retirer_du_foyer) : un administrateur
+  // ou le créateur retire un autre membre avec compte, jamais le créateur.
+  const moiMembre = membres.find((m) => m.utilisateur_id === session?.user.id);
+  const peutRetirerMembres = !!foyer && (foyer.cree_par === session?.user.id || moiMembre?.role === 'administrateur');
+  const dernierMembre = membres.length <= 1;
+
+  const retirerMembre = (p: Personne) =>
+    alerte(
+      `Retirer ${p.prenom} du foyer ?`,
+      `${p.prenom} restera dans la famille, avec ses listes, et choisira un autre foyer (ou créera le sien) à sa prochaine ouverture de l'app.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Retirer',
+          style: 'destructive',
+          onPress: () =>
+            executer(
+              p.id,
+              async () => {
+                await retirerDuFoyer(p.utilisateur_id!);
+                await charger();
+              },
+              'Impossible de retirer cette personne.'
+            ),
+        },
+      ]
+    );
+
+  const quitterMonFoyer = () =>
+    alerte(
+      `Quitter le foyer « ${foyer?.nom} » ?`,
+      dernierMembre
+        ? 'Vous êtes le dernier membre : le foyer restera vide et pourra être rejoint de nouveau. Vous restez dans la famille, avec vos listes, et choisirez ensuite un autre foyer ou créerez le vôtre.'
+        : 'Vous restez dans la famille, avec vos listes, et choisirez ensuite un autre foyer ou créerez le vôtre.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Quitter',
+          style: 'destructive',
+          onPress: () =>
+            executer(
+              'quitter-foyer',
+              async () => {
+                await quitterFoyer();
+                await rafraichirFoyer();
+              },
+              'Impossible de quitter le foyer.'
+            ),
+        },
+      ]
+    );
+
   const enregistrerPrenom = () =>
     executer(
       'prenom',
@@ -135,7 +198,8 @@ export default function ProfilScreen() {
         <Text style={styles.detail}>
           Connecté en tant que {prenomEnregistre || 'utilisateur sans prénom'} · {session?.user.email}
         </Text>
-        <Text style={styles.detail}>Foyer : {foyer?.nom}</Text>
+        {foyer && <Text style={styles.detail}>Foyer : {foyer.nom}</Text>}
+        {famille && <Text style={styles.detail}>Famille affichée : {famille.nom}</Text>}
       </View>
 
       <View style={styles.section}>
@@ -155,6 +219,12 @@ export default function ProfilScreen() {
           <Bouton titre="Enregistrer" onPress={enregistrerPrenom} enCours={enCours === 'prenom'} />
         )}
       </View>
+
+      {foyer && (
+        <View style={styles.section}>
+          <PhotosProfil polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitre}>{familles.length > 1 ? 'Famille affichée' : 'Ma famille'}</Text>
@@ -180,22 +250,41 @@ export default function ProfilScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitre}>Mon foyer</Text>
+        <Text style={styles.sectionTitre}>{foyer ? `Mon foyer : ${foyer.nom}` : 'Mon foyer'}</Text>
         <Text style={styles.aide}>
           Un adulte (votre conjoint…) crée son propre compte puis saisit le code famille (« Inviter un proche »
           ci-dessus) et choisit votre foyer. Un enfant ou un bébé sans compte s'ajoute ici : vous remplirez ses listes à
           sa place.
         </Text>
+        {session && (
+          <View style={styles.lignePersonne}>
+            <Avatar utilisateurId={session.user.id} prenom={prenomEnregistre} taille={28} />
+            <Text style={styles.personne}>{prenomEnregistre || 'Vous'}</Text>
+            <Text style={styles.aide}>vous</Text>
+          </View>
+        )}
         {avecCompte.map((p) => (
           <View key={p.id} style={styles.lignePersonne}>
-            <Ionicons name="person-outline" size={18} color={theme.colors.textMuted} />
+            <Avatar personneId={p.id} prenom={p.prenom} taille={28} />
             <Text style={styles.personne}>{p.prenom || 'Sans prénom'}</Text>
-            <Text style={styles.aide}>a son compte</Text>
+            {peutRetirerMembres && p.utilisateur_id !== foyer?.cree_par ? (
+              <Pressable
+                onPress={() => retirerMembre(p)}
+                disabled={enCours !== null}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Retirer ${p.prenom} du foyer`}
+              >
+                <Text style={styles.lienDiscret}>Retirer</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.aide}>a son compte</Text>
+            )}
           </View>
         ))}
         {sansCompte.map((p) => (
           <View key={p.id} style={styles.lignePersonne}>
-            <Ionicons name="happy-outline" size={18} color={theme.colors.textMuted} />
+            <Avatar personneId={p.id} prenom={p.prenom} taille={28} />
             <Text style={styles.personne}>
               {p.prenom}
               {p.date_naissance ? ` · ${formaterDate(p.date_naissance)}` : ''}
@@ -205,6 +294,12 @@ export default function ProfilScreen() {
             </Pressable>
           </View>
         ))}
+        {familles.length > 0 && (
+          <Text style={styles.aide}>
+            {familles.length > 1 ? 'Fait partie des familles ' : 'Fait partie de la famille '}
+            {familles.map((f) => f.nom).join(' et ')}.
+          </Text>
+        )}
         <Text style={styles.sousSection}>Ajouter une personne sans compte</Text>
         <TextInput
           style={styles.champ}
@@ -224,6 +319,11 @@ export default function ProfilScreen() {
           accessibilityLabel="Date de naissance"
         />
         <Bouton titre="Ajouter" onPress={ajouterPersonne} enCours={enCours === 'personne'} desactive={!prenom.trim()} />
+        {foyer && (
+          <Pressable onPress={quitterMonFoyer} disabled={enCours !== null} accessibilityRole="button" style={styles.lienQuitter}>
+            <Text style={styles.lienDiscret}>{enCours === 'quitter-foyer' ? 'Départ en cours…' : 'Quitter ce foyer'}</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -306,5 +406,6 @@ const styles = creerStylesThemes(() => ({
     fontFamily: theme.fontBody,
     fontSize: 16,
   },
+  lienQuitter: { alignSelf: 'center', marginTop: theme.spacing.sm },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

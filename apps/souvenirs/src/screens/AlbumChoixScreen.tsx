@@ -16,6 +16,7 @@ import {
 import { Champ } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { formaterDateSouvenir } from '../utils/dates';
+import { Avatar } from '@apps-famille/famille';
 
 function normaliser(t: string): string {
   return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -27,7 +28,7 @@ function normaliser(t: string): string {
 export default function AlbumChoixScreen({ route, navigation }: any) {
   const albumId: string = route.params.albumId;
   const { session, famille, foyer } = useAuth();
-  const { categorie, lignePrenoms } = useFamilleDonnees();
+  const { categorie, lignePrenoms, visagesDe } = useFamilleDonnees();
   const moi = session?.user.id;
   const [album, setAlbum] = useState<Album | null>(null);
   const [deja, setDeja] = useState<Set<string>>(new Set());
@@ -114,10 +115,17 @@ export default function AlbumChoixScreen({ route, navigation }: any) {
               <Ionicons name={coche ? 'checkbox' : 'square-outline'} size={24} color={coche ? theme.colors.accent : theme.colors.textMuted} />
               <View style={styles.textes}>
                 <Text style={styles.ligneTitre}>{item.titre}</Text>
-                <Text style={styles.ligneDetail}>
-                  {formaterDateSouvenir(item.date_debut, item.date_fin, item.precision_date)}
-                  {prenoms ? ` · ${prenoms}` : ''}
-                </Text>
+                <View style={styles.detailLigne}>
+                  {visagesDe(item.personnes)
+                    .slice(0, 4)
+                    .map((id, i) => (
+                      <Avatar key={id} personneId={id} taille={20} style={i > 0 ? { marginLeft: -5 } : undefined} />
+                    ))}
+                  <Text style={[styles.ligneDetail, styles.detailTexte]}>
+                    {formaterDateSouvenir(item.date_debut, item.date_fin, item.precision_date)}
+                    {prenoms ? ` · ${prenoms}` : ''}
+                  </Text>
+                </View>
               </View>
             </Pressable>
           );
@@ -155,6 +163,8 @@ const styles = creerStylesThemes(() => ({
   textes: { flex: 1, gap: 2, paddingVertical: 6 },
   ligneTitre: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
   ligneDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
+  detailLigne: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  detailTexte: { flexShrink: 1 },
   pied: {
     padding: theme.spacing.md,
     borderTopWidth: 1,

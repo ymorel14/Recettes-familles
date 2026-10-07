@@ -24,7 +24,7 @@ import { periodeAlbum } from './AlbumsScreen';
 export default function AlbumScreen({ route, navigation }: any) {
   const id: string = route.params.id;
   const { session, foyer } = useAuth();
-  const { categorie, lignePrenoms, completer } = useFamilleDonnees();
+  const { categorie, lignePrenoms, visagesDe, completer } = useFamilleDonnees();
   const moi = session?.user.id;
   const [album, setAlbum] = useState<Album | null | undefined>(undefined);
   const [souvenirs, setSouvenirs] = useState<Carte[]>([]);
@@ -154,6 +154,7 @@ export default function AlbumScreen({ route, navigation }: any) {
               precision={item.precision_date}
               lieu={item.lieu}
               prenoms={lignePrenoms(item.personnes, item.autres_personnes)}
+              visages={visagesDe(item.personnes)}
               adresseCouverture={item.couverture ? adresses[item.couverture] : null}
               nbMedias={item.nb_medias}
               onPress={() => navigation.navigate('Souvenir', { id: item.id })}

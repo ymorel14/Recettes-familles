@@ -13,6 +13,16 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { PreferencesProvider, usePreferences } from './src/contexts/PreferencesContext';
 import { theme, themeActuel, LARGEUR_MAX_WEB } from './src/theme/theme';
 
+// Police des icônes. Sur le site web commun (EXPO_PUBLIC_BASE_WEB défini),
+// elle est servie depuis <app>/polices/Ionicons.ttf, copiée là par
+// scripts/construire-site.mjs : la copie automatique d'Expo (rangée sous
+// assets/__node_modules/@expo/vector-icons/build/vendor/…) n'arrivait pas
+// jusqu'au site Netlify, d'où des carrés vides à la place des icônes.
+// Ailleurs (téléphones, développement), police fournie par le paquet.
+const BASE_WEB = process.env.EXPO_PUBLIC_BASE_WEB;
+const POLICE_ICONES: Record<string, any> =
+  Platform.OS === 'web' && BASE_WEB ? { ionicons: `${BASE_WEB}/polices/Ionicons.ttf` } : Ionicons.font;
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const EST_WEB = Platform.OS === 'web';
@@ -34,7 +44,7 @@ export default function App() {
     Fraunces_700Bold,
     Karla_400Regular,
     Karla_700Bold,
-    ...Ionicons.font,
+    ...POLICE_ICONES,
   });
   const [ready, setReady] = useState(false);
 

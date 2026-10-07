@@ -10,11 +10,13 @@ import type { PointEssai } from '../../types/models';
 import { theme, creerStylesThemes } from '../../theme/theme';
 import {
   obtenirRecette,
+  appliquerVariantes,
+  choixValides,
   detecterIngredientsCites,
   resoudreLibelleIngredient,
   resoudreEtapePourAffichage,
 } from '../../services/recettes';
-import type { RecetteComplete } from '../../types/models';
+import type { ChoixVariantes, RecetteComplete } from '../../types/models';
 import ReglageQuantites, { AJUSTEMENT_INITIAL, type AjustementQuantites } from '../../components/ReglageQuantites';
 import { BarreMinuteurs, FenetreMinuteur } from '../../components/Minuteurs';
 import { useEcouteVocale, ecouteDisponible } from '../../hooks/useEcouteVocale';
@@ -102,6 +104,8 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   const estSousRecette: boolean = Boolean(route.params?.sousRecette);
   const [modaleTermineeVisible, setModaleTermineeVisible] = useState(false);
   const [recette, setRecette] = useState<RecetteComplete | null>(null);
+  // Versions retenues des éléments à variantes (gardées avec la progression).
+  const variantesRef = useRef<ChoixVariantes>({});
   // Quantités adaptées (parts ou "ce que j'ai") — reprises de la fiche
   // recette si elles y avaient déjà été réglées.
   const [ajustement, setAjustement] = useState<AjustementQuantites>(
@@ -182,8 +186,14 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   // lecture automatique démarre ainsi directement sur la bonne étape.
   useEffect(() => {
     let annule = false;
-    Promise.all([obtenirRecette(recetteId), lireProgression(recetteId)]).then(([r, progression]) => {
+    Promise.all([obtenirRecette(recetteId), lireProgression(recetteId)]).then(([brute, progression]) => {
       if (annule) return;
+      // Éléments à variantes : on ne déroule que la version choisie sur la
+      // fiche (ou, à la reprise, celle de la dernière fois) ; à défaut, la
+      // version principale.
+      const choix = choixValides(brute, route.params?.variantes ?? progression?.variantes);
+      variantesRef.current = choix;
+      const r = appliquerVariantes(brute, choix);
       if (progression) {
         const idsEtapes = new Set(r.etapes.map((e) => e.id));
         const cochees = progression.etapesCochees.filter((id) => idsEtapes.has(id));
@@ -224,6 +234,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
       recetteId,
       etapesCochees: [...etapesCochees],
       ajustement,
+      variantes: variantesRef.current,
       minuteurs: enCours.map(({ id, nom, finA, dureeMs }) => ({ id, nom, finA, dureeMs })),
       majLe: Date.now(),
     });

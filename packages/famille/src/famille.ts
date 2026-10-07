@@ -1,5 +1,6 @@
 import { schemaFamille } from './client';
-import type { CodeInvitation, TypeCodeInvitation } from './types';
+import { prenomsDe } from './profils';
+import type { CodeInvitation, FoyerMembre, TypeCodeInvitation } from './types';
 
 // Compte famille (schéma "famille", commun à toutes les apps) : parcours de
 // première connexion, codes d'invitation, plusieurs familles par utilisateur.
@@ -119,6 +120,47 @@ export async function choisirFamilleActive(idFamille: string): Promise<void> {
 // Si c'était la famille active, l'autre devient active automatiquement.
 export async function quitterFamille(idFamille: string): Promise<void> {
   const { error } = await schemaFamille().rpc('quitter_famille', { id_famille: idFamille });
+  if (error) throw error;
+}
+
+// Membres (avec compte) d'un foyer, du plus ancien au plus récent, avec leur
+// prénom s'ils l'ont renseigné. Lisible pour les foyers de ses familles
+// (règle "Voir les membres des foyers de ses familles").
+export type MembreFoyer = {
+  utilisateur_id: string;
+  prenom: string | null;
+  role: FoyerMembre['role'];
+};
+
+export async function listerMembresFoyer(idFoyer: string): Promise<MembreFoyer[]> {
+  const { data, error } = await schemaFamille()
+    .from('foyer_membres')
+    .select('utilisateur_id, role, rejoint_le')
+    .eq('foyer_id', idFoyer)
+    .order('rejoint_le', { ascending: true });
+  if (error) throw error;
+  const membres = (data as Pick<FoyerMembre, 'utilisateur_id' | 'role'>[] | null) ?? [];
+  const prenoms = await prenomsDe(membres.map((m) => m.utilisateur_id));
+  return membres.map((m) => ({
+    utilisateur_id: m.utilisateur_id,
+    role: m.role,
+    prenom: prenoms.get(m.utilisateur_id) ?? null,
+  }));
+}
+
+// Quitter son foyer : on reste dans ses familles, et l'on choisit ensuite un
+// autre foyer ou l'on crée le sien. Le foyer garde ses recettes, courses…
+// (supabase/migrations/20261001140000_quitter_foyer.sql).
+export async function quitterFoyer(): Promise<void> {
+  const { error } = await schemaFamille().rpc('quitter_foyer');
+  if (error) throw error;
+}
+
+// Retirer un autre membre (avec compte) de son foyer : réservé à un
+// administrateur ou au créateur du foyer ; le créateur ne peut pas être
+// retiré. La personne reste dans la famille.
+export async function retirerDuFoyer(idUtilisateur: string): Promise<void> {
+  const { error } = await schemaFamille().rpc('retirer_du_foyer', { id_utilisateur: idUtilisateur });
   if (error) throw error;
 }
 

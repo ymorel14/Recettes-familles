@@ -20,7 +20,7 @@ export type PropositionDates = {
 
 export const REPONSES_VOTE: { id: ReponseVote; libelle: string }[] = [
   { id: 'oui', libelle: 'Oui' },
-  { id: 'si_besoin', libelle: 'Si besoin' },
+  { id: 'si_besoin', libelle: 'Possible' },
   { id: 'non', libelle: 'Non' },
 ];
 

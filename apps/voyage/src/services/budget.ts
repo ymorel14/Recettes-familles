@@ -87,6 +87,8 @@ export type PartFoyer = {
   foyer_id: string;
   foyer_nom: string;
   personnes: string[];
+  // Identifiants des mêmes personnes, dans le même ordre (photos).
+  personneIds: string[];
   payants: number; // personnes qui paient une part des frais communs
   montant: number;
 };
@@ -352,16 +354,17 @@ export function calculerBudget(entree: {
   for (const p of personnes) {
     const cle = p.foyer_id ?? `sans-foyer-${p.id}`;
     if (!foyers.has(cle)) {
-      foyers.set(cle, { foyer_id: cle, foyer_nom: p.foyer_nom ?? p.prenom, personnes: [], payants: 0, montant: 0 });
+      foyers.set(cle, { foyer_id: cle, foyer_nom: p.foyer_nom ?? p.prenom, personnes: [], personneIds: [], payants: 0, montant: 0 });
     }
     const f = foyers.get(cle)!;
     f.personnes.push(p.prenom);
+    f.personneIds.push(p.id);
     f.montant += parPersonne.get(p.id) ?? 0;
   }
 
   for (const [foyerId, montant] of chargesFoyer) {
     if (!foyers.has(foyerId)) {
-      foyers.set(foyerId, { foyer_id: foyerId, foyer_nom: 'Autre foyer', personnes: [], payants: 0, montant: 0 });
+      foyers.set(foyerId, { foyer_id: foyerId, foyer_nom: 'Autre foyer', personnes: [], personneIds: [], payants: 0, montant: 0 });
     }
     foyers.get(foyerId)!.montant += montant;
   }

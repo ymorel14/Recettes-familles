@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useFamilleDonnees } from '../contexts/FamilleDonneesContext';
 import type { CarteSouvenir } from '../services/souvenirs';
+import { Avatar } from '@apps-famille/famille';
 
 export type FiltresActifs = { categorie: string | null; personne: string | null };
 
@@ -90,6 +91,7 @@ export default function Filtres({
                 <Puce
                   key={p.id}
                   libelle={p.prenom}
+                  personneId={p.id}
                   icone="person-outline"
                   actif={valeur.personne === p.id}
                   onPress={() => onChange({ ...valeur, personne: valeur.personne === p.id ? null : p.id })}
@@ -103,7 +105,20 @@ export default function Filtres({
   );
 }
 
-function Puce({ libelle, icone, actif, onPress }: { libelle: string; icone: string; actif: boolean; onPress: () => void }) {
+function Puce({
+  libelle,
+  icone,
+  actif,
+  onPress,
+  personneId,
+}: {
+  libelle: string;
+  icone: string;
+  actif: boolean;
+  onPress: () => void;
+  // Puce d'une personne : sa photo à la place de l'icône.
+  personneId?: string;
+}) {
   return (
     <Pressable
       onPress={onPress}
@@ -111,7 +126,11 @@ function Puce({ libelle, icone, actif, onPress }: { libelle: string; icone: stri
       accessibilityRole="button"
       accessibilityState={{ selected: actif }}
     >
-      <Ionicons name={icone as any} size={14} color={actif ? theme.colors.background : theme.colors.textMuted} />
+      {personneId ? (
+        <Avatar personneId={personneId} prenom={libelle} taille={22} />
+      ) : (
+        <Ionicons name={icone as any} size={14} color={actif ? theme.colors.background : theme.colors.textMuted} />
+      )}
       <Text style={[styles.puceTexte, actif && styles.puceTexteActive]}>{libelle}</Text>
     </Pressable>
   );

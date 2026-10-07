@@ -170,6 +170,10 @@ export default function RechercheScreen({ navigation }: any) {
                 precision={item.precision_date}
                 lieu={item.lieu ?? item.pays}
                 prenoms={prenoms || null}
+                visages={[
+                  ...item.personnes.filter((p) => p.role === 'principal'),
+                  ...item.personnes.filter((p) => p.role === 'present'),
+                ].map((p) => p.id)}
                 detail={item.extrait}
                 adresseCouverture={item.couverture ? adresses[item.couverture] : null}
                 onPress={() => navigation.navigate('Souvenir', { id: item.id })}

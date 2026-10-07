@@ -1,0 +1,46 @@
+﻿node.exe : npm notice run npx
+Au caractère Ligne:1 : 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\ymore\AppData\Roaming\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm notice run npx:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+npm notice run expo export --platform web --clear
+env: load .env
+env: export EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_SUPABASE_URL
+Expo Autolinking module resolution enabled
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Web Bundling failed 2881ms apps\cuisine\index.ts (141 modules)
+
+Error: Unable to resolve module @apps-famille/famille from 
+C:\Users\ymore\Documents\Dev\apps-famille\apps\cuisine\App.tsx: @apps-famille/famille could not be found within the 
+project or in these directories:
+  ..\..\node_modules
+  ..\..\node_modules
+[0m [90m  9 |[39m [36mimport[39m { [33mSafeAreaProvider[39m } [36mfrom[39m 
+[32m'react-native-safe-area-context'[39m[33m;[39m
+ [90m 10 |[39m [36mimport[39m [33mAppNavigator[39m [36mfrom[39m 
+[32m'./src/navigation/AppNavigator'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 11 |[39m [36mimport[39m { [33mPassageConnexion[39m } [36mfrom[39m 
+[32m'@apps-famille/famille'[39m[33m;[39m
+ [90m    |[39m                                   [31m[1m^[22m[39m
+ [90m 12 |[39m [36mimport[39m { [33mAuthProvider[39m } [36mfrom[39m 
+[32m'./src/contexts/AuthContext'[39m[33m;[39m
+ [90m 13 |[39m [36mimport[39m { [33mPreferencesProvider[39m[33m,[39m usePreferences } [36mfrom[39m 
+[32m'./src/contexts/PreferencesContext'[39m[33m;[39m
+ [90m 14 |[39m [36mimport[39m { theme[33m,[39m themeActuel[33m,[39m [33mEST_WEB[39m[33m,[39m 
+[33mLARGEUR_MAX_WEB[39m } [36mfrom[39m [32m'./src/theme/theme'[39m[33m;[39m[0m
+
+Import stack:
+
+ apps\cuisine\App.tsx
+ | import "@apps-famille/famille"
+
+ apps\cuisine\index.ts
+ | import "./App"
+
+ 
+ | import "./apps/cuisine/index.ts"
+

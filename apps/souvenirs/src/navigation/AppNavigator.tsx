@@ -24,7 +24,7 @@ import AnneeScreen from '../screens/AnneeScreen';
 import AlbumScreen from '../screens/AlbumScreen';
 import AlbumFormScreen from '../screens/AlbumFormScreen';
 import AlbumChoixScreen from '../screens/AlbumChoixScreen';
-import { obtenirMonPrenom } from '@apps-famille/famille';
+import { obtenirMonPrenom, BoutonAppsFamille } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
 const Onglets = createBottomTabNavigator();
@@ -84,6 +84,9 @@ function BarreOnglets({ navigation }: any) {
           };
           return <Ionicons name={icones[route.name] ?? 'ellipse-outline'} size={size} color={color} />;
         },
+        // Site web : bouton « Apps » pour revenir au choix des apps de la
+        // famille sans se reconnecter (rien sur téléphone).
+        headerLeft: () => <BoutonAppsFamille couleur={theme.colors.accent} police={theme.fontBodyBold} />,
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.spacing.sm }}>
             <Pressable

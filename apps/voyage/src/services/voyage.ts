@@ -36,6 +36,8 @@ export type Voyage = {
   image: string | null;
   nature: NatureVoyage;
   foyer_hote: string | null;
+  // Mot montré aux personnes fêtées d'une surprise.
+  message_surprise: string | null;
   cree_par: string;
   cree_le: string;
 };
@@ -47,7 +49,13 @@ export type Participant = {
   reponse: ReponseInvite;
 };
 
-export type VoyageAvecParticipants = Voyage & { participants: Participant[] };
+// Surprise : la personne ne voit rien ('cache') ou sait seulement que
+// l'événement existe ('fete'). Garanti par la base
+// (supabase/migrations/20261002100000_voyage_surprises.sql).
+export type NiveauSecret = 'cache' | 'fete';
+export type Secret = { personne_id: string; niveau: NiveauSecret };
+
+export type VoyageAvecParticipants = Voyage & { participants: Participant[]; secrets: Secret[] };
 
 export const PERIODES: { id: Periode; libelle: string }[] = [
   { id: 'printemps', libelle: 'Printemps' },
@@ -140,26 +148,30 @@ export function libelleQuand(v: Pick<Voyage, 'date_debut' | 'date_fin' | 'period
   return v.annee ? `${p} ${v.annee}` : p;
 }
 
+const SELECTION_SANS_SURPRISES = '*, participants(voyage_id, personne_id, role, reponse)';
+const SELECTION = `${SELECTION_SANS_SURPRISES}, secrets(personne_id, niveau)`;
+// Migration des surprises (20261002100000) pas encore passée : on lit les
+// voyages sans leurs secrets plutôt que de bloquer l'app.
+const sansSurprises = (e: any) => /secrets|PGRST200/i.test(`${e?.code ?? ''} ${e?.message ?? ''}`);
+const avecSecrets = (v: any): VoyageAvecParticipants => ({ ...v, secrets: v?.secrets ?? [] });
+
 // Voyages visibles (la base ne renvoie que ceux auxquels on a droit) de la
 // famille active, avec leurs participants.
 export async function listerVoyages(familleId: string): Promise<VoyageAvecParticipants[]> {
-  const { data, error } = await supabase
-    .from('voyages')
-    .select('*, participants(voyage_id, personne_id, role, reponse)')
-    .eq('famille_id', familleId)
-    .order('cree_le', { ascending: false });
+  const lire = (selection: string) =>
+    supabase.from('voyages').select(selection).eq('famille_id', familleId).order('cree_le', { ascending: false });
+  let { data, error } = await lire(SELECTION);
+  if (error && sansSurprises(error)) ({ data, error } = await lire(SELECTION_SANS_SURPRISES));
   if (error) throw error;
-  return (data ?? []) as VoyageAvecParticipants[];
+  return ((data ?? []) as any[]).map(avecSecrets);
 }
 
 export async function obtenirVoyage(id: string): Promise<VoyageAvecParticipants> {
-  const { data, error } = await supabase
-    .from('voyages')
-    .select('*, participants(voyage_id, personne_id, role, reponse)')
-    .eq('id', id)
-    .single();
+  const lire = (selection: string) => supabase.from('voyages').select(selection).eq('id', id).single();
+  let { data, error } = await lire(SELECTION);
+  if (error && sansSurprises(error)) ({ data, error } = await lire(SELECTION_SANS_SURPRISES));
   if (error) throw error;
-  return data as VoyageAvecParticipants;
+  return avecSecrets(data);
 }
 
 // Voyages en cours d'abord (idée, organisation, confirmé), puis terminés et
@@ -258,6 +270,58 @@ export async function retirerParticipant(voyageId: string, personneId: string): 
     .eq('voyage_id', voyageId)
     .eq('personne_id', personneId);
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Surprises
+// ---------------------------------------------------------------------------
+
+export const NIVEAUX_SECRET: { id: NiveauSecret | 'aucun'; libelle: string; aide: string }[] = [
+  { id: 'aucun', libelle: 'Au courant', aide: 'Voit tout, comme d’habitude.' },
+  { id: 'fete', libelle: 'Fêté(e)', aide: 'Sait que l’événement existe (titre, date, lieu d’un repas, votre mot), rien d’autre.' },
+  { id: 'cache', libelle: 'Rien', aide: 'Ne voit pas du tout l’événement.' },
+];
+
+// Pose, change ou lève (niveau null) le secret pour une personne.
+export async function definirSecret(voyageId: string, personneId: string, niveau: NiveauSecret | null): Promise<void> {
+  const requete = niveau
+    ? supabase.from('secrets').upsert({ voyage_id: voyageId, personne_id: personneId, niveau }, { onConflict: 'voyage_id,personne_id' })
+    : supabase.from('secrets').delete().eq('voyage_id', voyageId).eq('personne_id', personneId);
+  const { error } = await requete;
+  if (error) throw error;
+}
+
+// Lève tous les secrets (la surprise est faite).
+export async function revelerSurprise(voyageId: string): Promise<void> {
+  const { error } = await supabase.from('secrets').delete().eq('voyage_id', voyageId);
+  if (error) throw error;
+}
+
+// Ce que voit une personne fêtée : les événements organisés pour elle,
+// sans leur contenu.
+export type EvenementPourMoi = {
+  id: string;
+  famille_id: string;
+  titre: string;
+  nature: NatureVoyage;
+  statut: StatutVoyage;
+  periode: Periode;
+  annee: number | null;
+  date_debut: string | null;
+  date_fin: string | null;
+  foyer_hote: string | null;
+  lieu: string | null;
+  message: string | null;
+};
+
+export async function evenementsPourMoi(familleId: string): Promise<EvenementPourMoi[]> {
+  const { data, error } = await supabase.rpc('evenements_pour_moi');
+  if (error) {
+    // Migration des surprises pas encore passée : rien à montrer.
+    if (/evenements_pour_moi|PGRST202|function/i.test(String(error.message))) return [];
+    throw error;
+  }
+  return ((data ?? []) as EvenementPourMoi[]).filter((e) => e.famille_id === familleId);
 }
 
 export const REPONSES: { id: ReponseInvite; libelle: string }[] = [

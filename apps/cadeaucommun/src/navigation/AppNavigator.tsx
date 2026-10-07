@@ -11,9 +11,7 @@ import SelecteurFamilleModal from '../components/SelecteurFamilleModal';
 import { Bouton, Chargement } from '../components/ui';
 import ConnexionScreen from '../screens/ConnexionScreen';
 import BienvenueScreen from '../screens/BienvenueScreen';
-import EvenementsScreen from '../screens/EvenementsScreen';
-import EvenementFormScreen from '../screens/EvenementFormScreen';
-import EvenementScreen from '../screens/EvenementScreen';
+import FamilleScreen from '../screens/FamilleScreen';
 import ListeScreen from '../screens/ListeScreen';
 import SouhaitFormScreen from '../screens/SouhaitFormScreen';
 import ParticipationScreen from '../screens/ParticipationScreen';
@@ -21,7 +19,7 @@ import AOffrirScreen from '../screens/AOffrirScreen';
 import MesEnviesScreen from '../screens/MesEnviesScreen';
 import ProfilScreen from '../screens/ProfilScreen';
 import PrenomScreen from '../screens/PrenomScreen';
-import { obtenirMonPrenom } from '@apps-famille/famille';
+import { obtenirMonPrenom, BoutonAppsFamille } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
 const Onglets = createBottomTabNavigator();
@@ -75,12 +73,15 @@ function BarreOnglets({ navigation }: any) {
         tabBarLabelStyle: { fontFamily: theme.fontBodyBold, fontSize: 12 },
         tabBarIcon: ({ color, size }) => {
           const icones: Record<string, keyof typeof Ionicons.glyphMap> = {
-            Evenements: 'calendar-outline',
+            Famille: 'people-outline',
             AOffrir: 'gift-outline',
             MesEnvies: 'heart-outline',
           };
           return <Ionicons name={icones[route.name] ?? 'ellipse-outline'} size={size} color={color} />;
         },
+        // Site web : bouton « Apps » pour revenir au choix des apps de la
+        // famille sans se reconnecter (rien sur téléphone).
+        headerLeft: () => <BoutonAppsFamille couleur={theme.colors.accent} police={theme.fontBodyBold} />,
         headerRight: () => (
           <Pressable
             onPress={() => navigation.navigate('Profil')}
@@ -94,9 +95,9 @@ function BarreOnglets({ navigation }: any) {
       })}
     >
       <Onglets.Screen
-        name="Evenements"
-        component={EvenementsScreen}
-        options={{ title: 'Événements', headerTitle: () => <TitreFamille titre="Événements" /> }}
+        name="Famille"
+        component={FamilleScreen}
+        options={{ title: 'Famille', headerTitle: () => <TitreFamille titre="Les listes" /> }}
       />
       <Onglets.Screen
         name="AOffrir"
@@ -189,8 +190,6 @@ export default function AppNavigator() {
         ) : (
           <>
             <Pile.Screen name="Onglets" component={BarreOnglets} options={{ headerShown: false }} />
-            <Pile.Screen name="NouvelEvenement" component={EvenementFormScreen} options={{ title: 'Nouvel événement' }} />
-            <Pile.Screen name="Evenement" component={EvenementScreen} options={{ title: 'Événement' }} />
             <Pile.Screen name="Liste" component={ListeScreen} options={{ title: 'Liste de souhaits' }} />
             <Pile.Screen name="Souhait" component={SouhaitFormScreen} options={{ title: 'Souhait' }} />
             <Pile.Screen name="Participation" component={ParticipationScreen} options={{ title: 'Pot commun' }} />

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { AjustementQuantites } from '../components/ReglageQuantites';
+import type { ChoixVariantes } from '../types/models';
 
 // Recette en cours dans le mode assistant, enregistrée sur cet appareil
 // (retour utilisateur : pouvoir interrompre une recette et la reprendre plus
@@ -22,6 +23,8 @@ export type ProgressionAssistant = {
   recetteId: string;
   etapesCochees: string[];
   ajustement: AjustementQuantites;
+  // Version choisie des éléments à variantes (absent : versions principales).
+  variantes?: ChoixVariantes;
   minuteurs: MinuteurEnregistre[];
   // Dernière modification (millisecondes depuis 1970).
   majLe: number;

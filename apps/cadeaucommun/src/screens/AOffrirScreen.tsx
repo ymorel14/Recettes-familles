@@ -4,35 +4,36 @@ import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { extraireMessageErreur } from '@apps-famille/famille';
+import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
+import { alerte } from '../utils/alerte';
 import {
-  formaterDate,
   formaterPrix,
   libellePrix,
-  joursAvant,
-  libelleCompteARebours,
   listerPersonnes,
   marquerAchete,
+  marquerOffert,
+  marquerPotOffert,
   marquerVerse,
   mesParticipations,
   mesReservations,
   type MaParticipation,
   type MaReservation,
   type Personne,
-  dateCle,
-  libelleDates,
 } from '../services/wishlist';
-import { Chargement, MessageVide, Pastille } from '../components/ui';
+import { Chargement, MessageVide } from '../components/ui';
 
 // Onglet "À offrir" : tout ce que j'ai réservé et mes participations aux
-// pots communs, regroupés par événement, avec ce qui reste à acheter ou à
-// verser et le budget. Personne d'autre ne voit cet écran.
+// pots communs, regroupés par personne, avec ce qui reste à acheter ou à
+// verser et le budget. Une fois le cadeau remis, je le coche "Offert" : il
+// disparaît alors de la liste de la personne. Personne d'autre ne voit cet
+// écran.
 export default function AOffrirScreen({ navigation }: any) {
   const { foyersFamille } = useAuth();
   const [reservations, setReservations] = useState<MaReservation[] | null>(null);
   const [participations, setParticipations] = useState<MaParticipation[]>([]);
   const [personnes, setPersonnes] = useState<Personne[]>([]);
   const [rechargement, setRechargement] = useState(false);
+  const [voirOfferts, setVoirOfferts] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
@@ -56,47 +57,180 @@ export default function AOffrirScreen({ navigation }: any) {
 
   if (reservations === null) return <Chargement />;
 
-  const basculerAchat = async (r: MaReservation) => {
+  const prenomDe = (personneId?: string) => personnes.find((p) => p.id === personneId)?.prenom || 'un proche';
+
+  const enregistrer = async (action: () => Promise<unknown>) => {
+    try {
+      await action();
+    } catch (e) {
+      setErreur(extraireMessageErreur(e, 'Enregistrement impossible.'));
+    }
+    charger();
+  };
+
+  const basculerAchat = (r: MaReservation) => {
     // Mise à jour immédiate à l'écran, puis enregistrement.
     setReservations((liste) => liste?.map((x) => (x.id === r.id ? { ...x, achete: !r.achete } : x)) ?? null);
-    try {
-      await marquerAchete(r.id, !r.achete);
-    } catch (e) {
-      setErreur(extraireMessageErreur(e, 'Enregistrement impossible.'));
-      charger();
-    }
+    enregistrer(() => marquerAchete(r.id, !r.achete));
   };
 
-  const basculerVerse = async (p: MaParticipation) => {
+  const basculerVerse = (p: MaParticipation) => {
     setParticipations((liste) => liste.map((x) => (x.id === p.id ? { ...x, verse: !p.verse } : x)));
-    try {
-      await marquerVerse(p.id, !p.verse);
-    } catch (e) {
-      setErreur(extraireMessageErreur(e, 'Enregistrement impossible.'));
-      charger();
-    }
+    enregistrer(() => marquerVerse(p.id, !p.verse));
   };
 
-  // Regroupement par événement, les plus proches d'abord (passés à la fin).
-  type Groupe = { titre: string; date: string; libelle: string; lignes: MaReservation[]; pots: MaParticipation[] };
-  const groupes = new Map<string, Groupe>();
-  const groupeDe = (souhait: MaReservation['souhait']) => {
-    const ev = souhait?.liste?.evenement;
-    const cle = ev?.id ?? 'autre';
-    if (!groupes.has(cle))
-      groupes.set(cle, { titre: ev?.titre ?? 'Autre', date: ev ? dateCle(ev) : '', libelle: ev ? libelleDates(ev) : '', lignes: [], pots: [] });
-    return groupes.get(cle)!;
-  };
-  reservations.forEach((r) => groupeDe(r.souhait).lignes.push(r));
-  participations.forEach((p) => groupeDe(p.souhait).pots.push(p));
-  const ordre = [...groupes.values()].sort((a, b) => {
-    const pa = a.date && joursAvant(a.date) < 0;
-    const pb = b.date && joursAvant(b.date) < 0;
-    if (pa !== pb) return pa ? 1 : -1;
-    return a.date.localeCompare(b.date);
-  });
+  // "Offert" retire le cadeau de la liste du destinataire : on confirme.
+  const confirmerOffert = (titre: string, pour: string, action: () => Promise<unknown>) =>
+    alerte(`${titre} a été offert à ${pour} ?`, `Le cadeau disparaîtra de la liste de ${pour}.`, [
+      { text: 'Pas encore', style: 'cancel' },
+      { text: 'Oui, offert', onPress: () => enregistrer(action) },
+    ]);
 
-  const prenomDe = (personneId?: string) => personnes.find((p) => p.id === personneId)?.prenom || 'un proche';
+  const enCours = {
+    lignes: reservations.filter((r) => !r.offert_le),
+    pots: participations.filter((p) => !p.offert_le),
+  };
+  const offerts = {
+    lignes: reservations.filter((r) => r.offert_le),
+    pots: participations.filter((p) => p.offert_le),
+  };
+
+  // Regroupement par personne (destinataire), par ordre alphabétique.
+  type Groupe = { personneId: string; prenom: string; lignes: MaReservation[]; pots: MaParticipation[] };
+  const grouper = (lignes: MaReservation[], pots: MaParticipation[]) => {
+    const groupes = new Map<string, Groupe>();
+    const groupeDe = (personneId: string) => {
+      if (!groupes.has(personneId))
+        groupes.set(personneId, { personneId, prenom: prenomDe(personneId), lignes: [], pots: [] });
+      return groupes.get(personneId)!;
+    };
+    lignes.forEach((r) => groupeDe(r.souhait?.liste?.destinataire_id ?? 'inconnu').lignes.push(r));
+    pots.forEach((p) => groupeDe(p.souhait?.liste?.destinataire_id ?? 'inconnu').pots.push(p));
+    return [...groupes.values()].sort((a, b) => a.prenom.localeCompare(b.prenom));
+  };
+
+  const ligneReservation = (r: MaReservation, offert: boolean) => {
+    const titre = `${r.souhait?.titre ?? 'Cadeau'}${r.option ? ` · ${r.option.titre}` : ''}`;
+    const pour = prenomDe(r.souhait?.liste?.destinataire_id);
+    return (
+      <View key={r.id} style={styles.ligne}>
+        {!offert && (
+          <Pressable
+            onPress={() => basculerAchat(r)}
+            style={styles.case}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: r.achete }}
+            accessibilityLabel={`${titre} acheté`}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={r.achete ? 'checkbox' : 'square-outline'}
+              size={26}
+              color={r.achete ? theme.colors.success : theme.colors.textMuted}
+            />
+          </Pressable>
+        )}
+        <Pressable
+          style={styles.ligneTextes}
+          onPress={() => r.souhait?.liste && navigation.navigate('Liste', { listeId: r.souhait.liste.id })}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.ligneTitre, (r.achete || offert) && styles.attenue]}>
+            {titre}
+            {r.quantite > 1 ? ` ×${r.quantite}` : ''}
+          </Text>
+          <Text style={styles.detail}>
+            {offert ? 'Offert' : r.achete ? 'Acheté' : 'À acheter'}
+            {r.option?.prix != null
+              ? ` · ${formaterPrix(r.option.prix)}`
+              : r.souhait?.prix != null
+                ? ` · ${libellePrix(r.souhait.prix, r.souhait.type_prix)}`
+                : ''}
+            {r.souhait?.secret ? ' · idée de la famille' : ''}
+          </Text>
+          {!offert && r.souhait?.supprime_le && (
+            <Text style={styles.alerte}>Retiré de sa liste depuis : vérifiez avant d'acheter.</Text>
+          )}
+        </Pressable>
+        {offert ? (
+          <Pressable onPress={() => enregistrer(() => marquerOffert(r.id, false))} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.lienDiscret}>Annuler</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => confirmerOffert(titre, pour, () => marquerOffert(r.id, true))}
+            style={styles.boutonOffert}
+            accessibilityRole="button"
+            accessibilityLabel={`${titre} offert`}
+          >
+            <Ionicons name="gift-outline" size={16} color={theme.colors.accent} />
+            <Text style={styles.boutonOffertTexte}>Offert</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
+  const lignePot = (p: MaParticipation, offert: boolean) => {
+    const titre = p.souhait?.titre ?? 'Pot commun';
+    const pour = prenomDe(p.souhait?.liste?.destinataire_id);
+    return (
+      <View key={p.id} style={styles.ligne}>
+        {!offert && (
+          <Pressable
+            onPress={() => basculerVerse(p)}
+            style={styles.case}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: p.verse }}
+            accessibilityLabel={`Participation à ${titre} versée`}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={p.verse ? 'checkbox' : 'square-outline'}
+              size={26}
+              color={p.verse ? theme.colors.success : theme.colors.textMuted}
+            />
+          </Pressable>
+        )}
+        <Pressable
+          style={styles.ligneTextes}
+          onPress={() =>
+            p.souhait?.liste &&
+            navigation.navigate('Participation', { listeId: p.souhait.liste.id, souhaitId: p.souhait_id, prenom: pour })
+          }
+          accessibilityRole="button"
+        >
+          <Text style={[styles.ligneTitre, (p.verse || offert) && styles.attenue]}>
+            {titre} · {formaterPrix(p.montant)}
+          </Text>
+          <Text style={styles.detail}>
+            Pot commun · {offert ? 'offert' : p.verse ? 'versé' : 'à verser'}
+          </Text>
+          {!offert && p.souhait?.supprime_le && (
+            <Text style={styles.alerte}>Retiré de sa liste depuis : voyez avec la famille.</Text>
+          )}
+        </Pressable>
+        {offert ? (
+          <Pressable onPress={() => enregistrer(() => marquerPotOffert(p.id, false))} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.lienDiscret}>Annuler</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => confirmerOffert(titre, pour, () => marquerPotOffert(p.id, true))}
+            style={styles.boutonOffert}
+            accessibilityRole="button"
+            accessibilityLabel={`${titre} offert`}
+          >
+            <Ionicons name="gift-outline" size={16} color={theme.colors.accent} />
+            <Text style={styles.boutonOffertTexte}>Offert</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  };
+
+  const groupesEnCours = grouper(enCours.lignes, enCours.pots);
+  const nbOfferts = offerts.lignes.length + offerts.pots.length;
 
   return (
     <ScrollView
@@ -115,115 +249,61 @@ export default function AOffrirScreen({ navigation }: any) {
       }
     >
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-      {reservations.length === 0 && participations.length === 0 ? (
+      {groupesEnCours.length === 0 ? (
         <MessageVide
           titre="Rien à offrir pour l'instant"
           texte="Réservez un cadeau ou participez à un pot commun dans la liste d'un proche : il apparaîtra ici. Vous seul le voyez."
         />
       ) : (
-        ordre.map((g) => {
-          const total =
-            g.lignes.reduce((s, r) => s + (r.souhait?.prix ?? 0) * r.quantite, 0) +
-            g.pots.reduce((s, p) => s + p.montant, 0);
-          const restants = g.lignes.filter((r) => !r.achete).length;
-          const aVerser = g.pots.filter((p) => !p.verse).length;
-          const resume = [
-            restants > 0 ? `${restants} à acheter` : null,
-            aVerser > 0 ? `${aVerser} participation${aVerser > 1 ? 's' : ''} à verser` : null,
-          ].filter(Boolean);
-          return (
-            <View key={g.titre + g.date} style={styles.groupe}>
-              <View style={styles.groupeEntete}>
-                <View style={styles.groupeTextes}>
-                  <Text style={styles.groupeTitre}>{g.titre}</Text>
-                  {g.libelle ? <Text style={styles.detail}>{g.libelle}</Text> : null}
+        <>
+          <Text style={styles.intro}>
+            Une fois le cadeau remis, touchez « Offert » : il disparaîtra de la liste de la personne.
+          </Text>
+          {groupesEnCours.map((g) => {
+            const total =
+              g.lignes.reduce((s, r) => s + (r.option?.prix ?? r.souhait?.prix ?? 0) * r.quantite, 0) +
+              g.pots.reduce((s, p) => s + p.montant, 0);
+            const restants = g.lignes.filter((r) => !r.achete).length;
+            const aVerser = g.pots.filter((p) => !p.verse).length;
+            const resume = [
+              restants > 0 ? `${restants} à acheter` : null,
+              aVerser > 0 ? `${aVerser} participation${aVerser > 1 ? 's' : ''} à verser` : null,
+            ].filter(Boolean);
+            return (
+              <View key={g.personneId} style={styles.groupe}>
+                <View style={styles.groupeEntete}>
+                  <Avatar personneId={g.personneId} prenom={g.prenom} taille={36} />
+                  <View style={styles.groupeTextes}>
+                    <Text style={styles.groupeTitre}>Pour {g.prenom}</Text>
+                    <Text style={styles.detail}>
+                      {resume.length === 0 ? 'Tout est prêt' : resume.join(' · ')}
+                      {total > 0 ? ` · budget ${formaterPrix(total)}` : ''}
+                    </Text>
+                  </View>
                 </View>
-                {g.date ? <Pastille texte={libelleCompteARebours(g.date)} /> : null}
+                {g.lignes.map((r) => ligneReservation(r, false))}
+                {g.pots.map((p) => lignePot(p, false))}
               </View>
-              <Text style={styles.detail}>
-                {resume.length === 0 ? 'Tout est réglé' : resume.join(' · ')}
-                {total > 0 ? ` · budget ${formaterPrix(total)}` : ''}
-              </Text>
-              {g.lignes.map((r) => (
-                <View key={r.id} style={styles.ligne}>
-                  <Pressable
-                    onPress={() => basculerAchat(r)}
-                    style={styles.case}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: r.achete }}
-                    accessibilityLabel={`${r.souhait?.titre ?? 'Cadeau'} acheté`}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={r.achete ? 'checkbox' : 'square-outline'}
-                      size={26}
-                      color={r.achete ? theme.colors.success : theme.colors.textMuted}
-                    />
-                  </Pressable>
-                  <Pressable
-                    style={styles.ligneTextes}
-                    onPress={() => r.souhait?.liste && navigation.navigate('Liste', { listeId: r.souhait.liste.id })}
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.ligneTitre, r.achete && styles.barre]}>
-                      {r.souhait?.titre ?? 'Cadeau'}
-                      {r.quantite > 1 ? ` ×${r.quantite}` : ''}
-                    </Text>
-                    <Text style={styles.detail}>
-                      Pour {prenomDe(r.souhait?.liste?.destinataire_id)}
-                      {r.souhait?.prix != null ? ` · ${libellePrix(r.souhait.prix, r.souhait.type_prix)}` : ''}
-                      {r.souhait?.secret ? ' · idée de la famille' : ''}
-                    </Text>
-                    {r.souhait?.supprime_le && (
-                      <Text style={styles.alerte}>Retiré de sa liste depuis : vérifiez avant d'acheter.</Text>
-                    )}
-                  </Pressable>
-                </View>
-              ))}
-              {g.pots.map((p) => (
-                <View key={p.id} style={styles.ligne}>
-                  <Pressable
-                    onPress={() => basculerVerse(p)}
-                    style={styles.case}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: p.verse }}
-                    accessibilityLabel={`Participation à ${p.souhait?.titre ?? 'un pot commun'} versée`}
-                    hitSlop={8}
-                  >
-                    <Ionicons
-                      name={p.verse ? 'checkbox' : 'square-outline'}
-                      size={26}
-                      color={p.verse ? theme.colors.success : theme.colors.textMuted}
-                    />
-                  </Pressable>
-                  <Pressable
-                    style={styles.ligneTextes}
-                    onPress={() =>
-                      p.souhait?.liste &&
-                      navigation.navigate('Participation', {
-                        listeId: p.souhait.liste.id,
-                        souhaitId: p.souhait_id,
-                        prenom: prenomDe(p.souhait.liste.destinataire_id),
-                      })
-                    }
-                    accessibilityRole="button"
-                  >
-                    <Text style={[styles.ligneTitre, p.verse && styles.barre]}>
-                      {p.souhait?.titre ?? 'Pot commun'} · {formaterPrix(p.montant)}
-                    </Text>
-                    <Text style={styles.detail}>
-                      Pot commun pour {prenomDe(p.souhait?.liste?.destinataire_id)}
-                      {p.verse ? ' · versé' : ' · à verser'}
-                    </Text>
-                    {p.souhait?.supprime_le && (
-                      <Text style={styles.alerte}>Retiré de sa liste depuis : voyez avec la famille.</Text>
-                    )}
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          );
-        })
+            );
+          })}
+        </>
+      )}
+
+      {nbOfferts > 0 && (
+        <View style={styles.offerts}>
+          <Pressable onPress={() => setVoirOfferts(!voirOfferts)} style={styles.offertsEntete} accessibilityRole="button">
+            <Text style={styles.section}>Déjà offerts ({nbOfferts})</Text>
+            <Ionicons name={voirOfferts ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.textMuted} />
+          </Pressable>
+          {voirOfferts &&
+            grouper(offerts.lignes, offerts.pots).map((g) => (
+              <View key={g.personneId} style={[styles.groupe, styles.groupeOffert]}>
+                <Text style={styles.groupeTitreOffert}>Pour {g.prenom}</Text>
+                {g.lignes.map((r) => ligneReservation(r, true))}
+                {g.pots.map((p) => lignePot(p, true))}
+              </View>
+            ))}
+        </View>
       )}
     </ScrollView>
   );
@@ -232,6 +312,7 @@ export default function AOffrirScreen({ navigation }: any) {
 const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   contenu: { padding: theme.spacing.md, gap: theme.spacing.md, paddingBottom: theme.spacing.xl },
+  intro: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
   groupe: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
@@ -240,9 +321,11 @@ const styles = creerStylesThemes(() => ({
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
   },
+  groupeOffert: { backgroundColor: theme.colors.background },
   groupeEntete: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
-  groupeTextes: { flex: 1 },
+  groupeTextes: { flex: 1, gap: 2 },
   groupeTitre: { fontFamily: theme.fontTitle, fontSize: 20, color: theme.colors.text },
+  groupeTitreOffert: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.textMuted },
   ligne: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -255,8 +338,23 @@ const styles = creerStylesThemes(() => ({
   case: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   ligneTextes: { flex: 1, gap: 2, minHeight: 44, justifyContent: 'center' },
   ligneTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
-  barre: { textDecorationLine: 'line-through', color: theme.colors.textMuted },
+  attenue: { color: theme.colors.textMuted },
   detail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
   alerte: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.warning },
+  boutonOffert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: theme.colors.accent,
+  },
+  boutonOffertTexte: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.accent },
+  lienDiscret: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, textDecorationLine: 'underline' },
+  offerts: { gap: theme.spacing.sm },
+  offertsEntete: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  section: { fontFamily: theme.fontTitle, fontSize: 18, color: theme.colors.textMuted },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

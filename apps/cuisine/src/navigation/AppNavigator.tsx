@@ -8,7 +8,7 @@ import {
   getStateFromPath,
   getPathFromState,
 } from '@react-navigation/native';
-import { baseWeb } from '@apps-famille/famille';
+import { baseWeb, etatDepuisCheminWeb, BoutonAppsFamille } from '@apps-famille/famille';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View, Text, Pressable } from 'react-native';
@@ -76,17 +76,10 @@ const versBooleen = (valeur: string) => valeur === 'true';
 // Sur le site web commun, l'app vit sous /cuisine (voir baseWeb) : ce
 // préfixe est retiré de l'adresse avant de chercher l'écran, et remis
 // devant l'adresse de chaque écran.
-function sansBase(chemin: string): string {
-  const base = baseWeb();
-  if (!base || !chemin.startsWith(base)) return chemin;
-  const reste = chemin.slice(base.length);
-  return reste.startsWith('/') ? reste : `/${reste}`;
-}
-
 const liens: LinkingOptions<any> = {
   enabled: EST_WEB,
   prefixes: [],
-  getStateFromPath: (chemin, options) => getStateFromPath(sansBase(chemin), options),
+  getStateFromPath: (chemin, options) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, options)),
   getPathFromState: (etat, options) => `${baseWeb()}${getPathFromState(etat, options)}`,
   config: {
     // Un lien direct vers une recette (ou un rechargement de page) place
@@ -126,7 +119,7 @@ const liens: LinkingOptions<any> = {
       AssistantRecette: {
         path: 'assistant/:recetteId',
         parse: { sousRecette: versBooleen },
-        stringify: { ajustement: sansURL },
+        stringify: { ajustement: sansURL, variantes: sansURL },
       },
       ChangerMotDePasse: 'profil/mot-de-passe',
       FormulaireNoteUtile: 'aide-memoire/fiche',
@@ -184,6 +177,9 @@ function Onglets() {
         // Cache la barre d'onglets quand le clavier est ouvert (plus de place
         // pour le champ en cours de saisie).
         tabBarHideOnKeyboard: true,
+        // Site web : bouton « Apps » pour revenir au choix des apps de la
+        // famille sans se reconnecter (rien sur téléphone).
+        headerLeft: () => <BoutonAppsFamille couleur={theme.colors.accent} police={theme.fontBodyBold} />,
       })}
     >
       <Tab.Screen name="Recettes" component={CategoriesScreen} options={{ title: 'Recettes', ...enTeteSansTitre }} />

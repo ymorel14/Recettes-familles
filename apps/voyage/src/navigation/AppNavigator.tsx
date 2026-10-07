@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  DarkTheme,
+  getPathFromState,
+  getStateFromPath,
+  type LinkingOptions,
+} from '@react-navigation/native';
+import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -16,6 +24,7 @@ import RepasScreen from '../screens/RepasScreen';
 import RepasFormScreen from '../screens/RepasFormScreen';
 import PlatFormScreen from '../screens/PlatFormScreen';
 import ListesCadeauxScreen from '../screens/ListesCadeauxScreen';
+import SurpriseScreen from '../screens/SurpriseScreen';
 import { Bouton, Chargement } from '../components/ui';
 import ConnexionScreen from '../screens/ConnexionScreen';
 import BienvenueScreen from '../screens/BienvenueScreen';
@@ -36,9 +45,57 @@ import ActiviteFormScreen from '../screens/ActiviteFormScreen';
 import VehiculeFormScreen from '../screens/VehiculeFormScreen';
 import ProfilScreen from '../screens/ProfilScreen';
 import PrenomScreen from '../screens/PrenomScreen';
-import { obtenirMonPrenom } from '@apps-famille/famille';
+import { baseWeb, etatDepuisCheminWeb, obtenirMonPrenom, BoutonAppsFamille } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
+
+// Version web : chaque voyage (et chaque étape) a sa propre adresse, pour
+// les liens partagés (WhatsApp…), le bouton « retour » du navigateur et le
+// rechargement de la page. Sur le site commun, l'app vit sous /voyages
+// (baseWeb), retiré de l'adresse avant de chercher l'écran puis remis
+// devant. Les paramètres qui ne sont pas de simples valeurs (fiches en cours
+// de modification) ne sont pas mis dans l'adresse.
+function paramsSimples(etat: any): any {
+  if (!etat?.routes) return etat;
+  return {
+    ...etat,
+    routes: etat.routes.map((r: any) => ({
+      ...r,
+      params: r.params
+        ? Object.fromEntries(Object.entries(r.params).filter(([, v]) => v === null || typeof v !== 'object'))
+        : r.params,
+      state: r.state ? paramsSimples(r.state) : r.state,
+    })),
+  };
+}
+const liens: LinkingOptions<any> = {
+  enabled: Platform.OS === 'web',
+  prefixes: [],
+  config: {
+    initialRouteName: 'Onglets',
+    screens: {
+      Connexion: 'connexion',
+      Bienvenue: 'bienvenue',
+      Onglets: { screens: { Voyages: '', Calendrier: 'calendrier' } },
+      NouveauVoyage: 'proposer',
+      Voyage: 'voyage/:voyageId',
+      Dates: 'voyage/:voyageId/dates',
+      Hebergements: 'voyage/:voyageId/hebergement',
+      Transport: 'voyage/:voyageId/transport',
+      Activites: 'voyage/:voyageId/activites',
+      Programme: 'voyage/:voyageId/programme',
+      Budget: 'voyage/:voyageId/budget',
+      Menu: 'voyage/:voyageId/menu',
+      Repas: 'voyage/:voyageId/repas/:repasId',
+      ListesCadeaux: 'voyage/:voyageId/cadeaux',
+      Surprise: 'voyage/:voyageId/surprise',
+      Notifications: 'nouveautes',
+      Profil: 'profil',
+    },
+  },
+  getStateFromPath: (chemin, options) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, options)),
+  getPathFromState: (etat, options) => `${baseWeb()}${getPathFromState(paramsSimples(etat), options)}`,
+};
 const Onglets = createBottomTabNavigator();
 
 function optionsEntete() {
@@ -95,6 +152,9 @@ function BarreOnglets({ navigation }: any) {
           };
           return <Ionicons name={icones[route.name] ?? 'ellipse-outline'} size={size} color={color} />;
         },
+        // Site web : bouton « Apps » pour revenir au choix des apps de la
+        // famille sans se reconnecter (rien sur téléphone).
+        headerLeft: () => <BoutonAppsFamille couleur={theme.colors.accent} police={theme.fontBodyBold} />,
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: theme.spacing.sm }}>
             <Cloche />
@@ -191,6 +251,7 @@ export default function AppNavigator() {
     <NavigationContainer
       key={themeId}
       theme={themeNavigation}
+      linking={liens}
       documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name ?? ''} · VoyageCommun` }}
     >
       <Pile.Navigator screenOptions={optionsEntete()}>
@@ -221,6 +282,7 @@ export default function AppNavigator() {
             <Pile.Screen name="RepasForm" component={RepasFormScreen} options={{ title: 'Repas' }} />
             <Pile.Screen name="Plat" component={PlatFormScreen} options={{ title: 'Plat' }} />
             <Pile.Screen name="ListesCadeaux" component={ListesCadeauxScreen} options={{ title: 'Listes de cadeaux' }} />
+            <Pile.Screen name="Surprise" component={SurpriseScreen} options={{ title: 'Surprise' }} />
             <Pile.Screen name="Profil" component={ProfilScreen} options={{ title: 'Profil' }} />
           </>
         )}

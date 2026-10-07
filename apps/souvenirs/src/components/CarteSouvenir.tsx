@@ -5,6 +5,7 @@ import { theme, creerStylesThemes } from '../theme/theme';
 import { Vignette } from './medias';
 import { formaterDateSouvenir, type PrecisionDate } from '../utils/dates';
 import type { Categorie } from '../services/souvenirs';
+import { Avatar } from '@apps-famille/famille';
 
 // Carte d'un souvenir dans le fil, la recherche ou « Ce jour-là » : photo de
 // couverture, titre, date, catégorie, prénoms et une ligne de détail.
@@ -16,6 +17,7 @@ export default function CarteSouvenir({
   precision,
   lieu,
   prenoms,
+  visages = [],
   detail,
   adresseCouverture,
   nbMedias,
@@ -28,6 +30,8 @@ export default function CarteSouvenir({
   precision: PrecisionDate;
   lieu?: string | null;
   prenoms?: string | null;
+  // Personnes du souvenir (fiches), dont la photo précède les prénoms.
+  visages?: string[];
   detail?: string | null;
   adresseCouverture?: string | null;
   nbMedias?: number;
@@ -60,9 +64,14 @@ export default function CarteSouvenir({
           </Text>
         </View>
         {prenoms ? (
-          <Text style={styles.prenoms} numberOfLines={1}>
-            {prenoms}
-          </Text>
+          <View style={styles.ligne}>
+            {visages.slice(0, 4).map((id, i) => (
+              <Avatar key={id} personneId={id} taille={22} style={i > 0 ? styles.visageSuivant : undefined} />
+            ))}
+            <Text style={[styles.prenoms, styles.prenomsTexte]} numberOfLines={1}>
+              {prenoms}
+            </Text>
+          </View>
         ) : null}
         {detail ? (
           <Text style={styles.detail} numberOfLines={2}>
@@ -103,6 +112,8 @@ const styles = creerStylesThemes(() => ({
   ligne: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   date: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.textMuted },
   prenoms: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.accent },
+  prenomsTexte: { flexShrink: 1, marginLeft: 2 },
+  visageSuivant: { marginLeft: -6 },
   detail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.text, lineHeight: 18 },
   compteur: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
 }));

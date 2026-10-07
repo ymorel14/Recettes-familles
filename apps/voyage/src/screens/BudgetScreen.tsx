@@ -25,6 +25,7 @@ import {
 } from '../services/voyage';
 import { Aide, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
+import { GroupeNoms } from '@apps-famille/famille';
 
 type Donnees = {
   voyage: VoyageAvecParticipants;
@@ -156,7 +157,10 @@ export default function BudgetScreen({ route, navigation }: any) {
           <View key={f.foyer_id} style={styles.ligneFoyer}>
             <View style={{ flex: 1 }}>
               <Text style={styles.foyerNom}>{f.foyer_nom}</Text>
-              <Text style={styles.detail}>{f.personnes.join(', ')}</Text>
+              <GroupeNoms
+                personnes={f.personnes.map((prenom, i) => ({ personneId: f.personneIds[i], prenom }))}
+                styleTexte={styles.detail}
+              />
             </View>
             <Text style={styles.montant}>{formaterEuros(f.montant)}</Text>
           </View>

@@ -181,6 +181,7 @@ export default function PlatFormScreen({ route, navigation }: any) {
             })
           }
           libelle={p.prenom}
+          personneId={p.id}
           aide={p.foyer_nom ?? undefined}
         />
       ))}

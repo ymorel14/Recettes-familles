@@ -25,6 +25,7 @@ import {
   recetteVersFormulaire,
   formulaireVide,
   normaliserElements,
+  ordonnerElements,
   nouvelElementBrouillon,
   nouvelIngredientBrouillon,
   nouvelleEtapeBrouillon,
@@ -444,6 +445,10 @@ export default function RecetteFormScreen({ navigation, route }: any) {
   // ---- Éléments de la recette (ex. la pâte, la garniture) ----
   const elements = form.elements ?? [];
   const recetteDecoupee = elements.length > 1;
+  // Éléments principaux (dans l'ordre) et variantes de chacun (ex. « Appareil
+  // à l'orange », qui peut remplacer le « Curd au citron »).
+  const principaux = elements.filter((e) => !e.varianteDe);
+  const variantesDe = (clefPrincipal: string) => elements.filter((e) => e.varianteDe === clefPrincipal);
 
   const ajouterElement = () =>
     setForm((f) => {
@@ -458,39 +463,61 @@ export default function RecetteFormScreen({ navigation, route }: any) {
   const renommerElement = (clefId: string, nom: string) =>
     setForm((f) => ({ ...f, elements: (f.elements ?? []).map((e) => (e.clefId === clefId ? { ...e, nom } : e)) }));
 
+  // Déplace un élément principal parmi les autres ; ses variantes le suivent.
   const deplacerElement = (clefId: string, vers: 'haut' | 'bas') =>
     setForm((f) => {
-      const liste = [...(f.elements ?? [])];
+      const tous = f.elements ?? [];
+      const liste = tous.filter((e) => !e.varianteDe);
       const index = liste.findIndex((e) => e.clefId === clefId);
       const cible = vers === 'haut' ? index - 1 : index + 1;
       if (index === -1 || cible < 0 || cible >= liste.length) return f;
       [liste[index], liste[cible]] = [liste[cible], liste[index]];
-      return { ...f, elements: liste };
+      return { ...f, elements: ordonnerElements([...liste, ...tous.filter((e) => e.varianteDe)]) };
     });
+
+  // Variante d'un élément : une autre version, au choix au moment de
+  // cuisiner (ex. pâte sablée à la place de la pâte brisée), avec ses
+  // propres ingrédients et étapes.
+  const ajouterVariante = (clefPrincipal: string) =>
+    setForm((f) => {
+      const normalise = normaliserElements(f);
+      const variante = nouvelElementBrouillon('', clefPrincipal);
+      return { ...normalise, elements: ordonnerElements([...(normalise.elements ?? []), variante]) };
+    });
+
+  // Retirer un élément principal retire aussi ses variantes.
+  const clefsRetirees = (clefId: string) =>
+    new Set([clefId, ...(form.elements ?? []).filter((e) => e.varianteDe === clefId).map((e) => e.clefId)]);
 
   const retirerElement = (clefId: string) =>
     setForm((f) => {
-      const restants = (f.elements ?? []).filter((e) => e.clefId !== clefId);
+      const retirees = new Set([clefId, ...(f.elements ?? []).filter((e) => e.varianteDe === clefId).map((e) => e.clefId)]);
+      const restants = (f.elements ?? []).filter((e) => !retirees.has(e.clefId));
       if (restants.length === 0) return f;
       return {
         ...f,
-        elements: restants,
-        ingredients: f.ingredients.filter((i) => i.elementClef !== clefId),
-        etapes: f.etapes.filter((e) => e.elementClef !== clefId),
+        elements: ordonnerElements(restants),
+        ingredients: f.ingredients.filter((i) => !retirees.has(i.elementClef ?? '')),
+        etapes: f.etapes.filter((e) => !retirees.has(e.elementClef ?? '')),
       };
     });
 
   const demanderRetraitElement = (clefId: string, nom: string) => {
+    const retirees = clefsRetirees(clefId);
+    const nbVariantes = retirees.size - 1;
+    const estVariante = Boolean(elements.find((e) => e.clefId === clefId)?.varianteDe);
     const aDuContenu =
-      form.ingredients.some((i) => i.elementClef === clefId && i.libelle.trim()) ||
-      form.etapes.some((e) => e.elementClef === clefId && e.texte.trim());
+      nbVariantes > 0 ||
+      form.ingredients.some((i) => retirees.has(i.elementClef ?? '') && i.libelle.trim()) ||
+      form.etapes.some((e) => retirees.has(e.elementClef ?? '') && e.texte.trim());
     if (!aDuContenu) {
       retirerElement(clefId);
       return;
     }
     alerte(
-      'Retirer cet élément ?',
-      `« ${nom.trim() || 'Sans nom'} » sera retiré, avec ses ingrédients et ses étapes.`,
+      estVariante ? 'Retirer cette variante ?' : 'Retirer cet élément ?',
+      `« ${nom.trim() || 'Sans nom'} » sera retiré${estVariante ? 'e' : ''}, avec ses ingrédients et ses étapes` +
+        (nbVariantes > 0 ? `, ainsi que ${nbVariantes > 1 ? `ses ${nbVariantes} variantes` : 'sa variante'}.` : '.'),
       [
         { text: 'Annuler', style: 'cancel' },
         { text: 'Retirer', style: 'destructive', onPress: () => retirerElement(clefId) },
@@ -887,35 +914,71 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           </Text>
         </>
       ) : null}
-      {elements.map((element, indexElement) => (
-        <View key={element.clefId} style={recetteDecoupee ? styles.blocElement : undefined}>
-          {recetteDecoupee && (
-            <View style={styles.enteteElement}>
-              <TextInput
-                style={[styles.champ, styles.champNomElement]}
-                placeholder="Nom de l’élément (ex. La pâte)"
-                placeholderTextColor={theme.colors.textMuted}
-                value={element.nom}
-                onChangeText={(v) => renommerElement(element.clefId, v)}
-              />
-              {indexElement > 0 && (
-                <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'haut')}>
-                  <Text style={styles.boutonDeplacerTexte}>▲</Text>
+      {principaux.map((element, indexElement) => {
+        const variantes = variantesDe(element.clefId);
+        return (
+          <View key={element.clefId} style={recetteDecoupee ? styles.blocElement : undefined}>
+            {recetteDecoupee && (
+              <View style={styles.enteteElement}>
+                <TextInput
+                  style={[styles.champ, styles.champNomElement]}
+                  placeholder="Nom de l’élément (ex. La pâte)"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={element.nom}
+                  onChangeText={(v) => renommerElement(element.clefId, v)}
+                />
+                {indexElement > 0 && (
+                  <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'haut')}>
+                    <Text style={styles.boutonDeplacerTexte}>▲</Text>
+                  </Pressable>
+                )}
+                {indexElement < principaux.length - 1 && (
+                  <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'bas')}>
+                    <Text style={styles.boutonDeplacerTexte}>▼</Text>
+                  </Pressable>
+                )}
+                <Pressable hitSlop={6} onPress={() => demanderRetraitElement(element.clefId, element.nom)}>
+                  <Text style={styles.supprimer}>✕</Text>
                 </Pressable>
-              )}
-              {indexElement < elements.length - 1 && (
-                <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'bas')}>
-                  <Text style={styles.boutonDeplacerTexte}>▼</Text>
-                </Pressable>
-              )}
-              <Pressable hitSlop={6} onPress={() => demanderRetraitElement(element.clefId, element.nom)}>
-                <Text style={styles.supprimer}>✕</Text>
+              </View>
+            )}
+            {recetteDecoupee && variantes.length > 0 && (
+              <Text style={styles.aide}>Version principale, proposée par défaut.</Text>
+            )}
+            {rendreIngredientsEtEtapes(element.clefId)}
+
+            {/* Variantes : d'autres versions de cet élément, au choix au
+                moment de cuisiner (ex. appareil à l'orange au lieu du curd). */}
+            {variantes.map((variante) => (
+              <View key={variante.clefId} style={styles.blocVariante}>
+                <Text style={styles.etiquetteVariante}>
+                  Variante — à la place de « {element.nom.trim() || 'cet élément'} »
+                </Text>
+                <View style={styles.enteteElement}>
+                  <TextInput
+                    style={[styles.champ, styles.champNomElement]}
+                    placeholder="Nom de la variante (ex. Appareil à l’orange)"
+                    placeholderTextColor={theme.colors.textMuted}
+                    value={variante.nom}
+                    onChangeText={(v) => renommerElement(variante.clefId, v)}
+                  />
+                  <Pressable hitSlop={6} onPress={() => demanderRetraitElement(variante.clefId, variante.nom)}>
+                    <Text style={styles.supprimer}>✕</Text>
+                  </Pressable>
+                </View>
+                {rendreIngredientsEtEtapes(variante.clefId)}
+              </View>
+            ))}
+            {recetteDecoupee && (
+              <Pressable style={styles.boutonAjouterVariante} onPress={() => ajouterVariante(element.clefId)}>
+                <Text style={styles.boutonAjouterElementTexte}>
+                  + Ajouter une variante{element.nom.trim() ? ` de « ${element.nom.trim()} »` : ''}
+                </Text>
               </Pressable>
-            </View>
-          )}
-          {rendreIngredientsEtEtapes(element.clefId)}
-        </View>
-      ))}
+            )}
+          </View>
+        );
+      })}
       <Pressable style={styles.boutonAjouterElement} onPress={ajouterElement}>
         <Text style={styles.boutonAjouterElementTexte}>
           {recetteDecoupee ? '+ Ajouter un élément' : '+ Découper en éléments (ex. la pâte, la garniture)'}
@@ -1037,7 +1100,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
               {aDeplacer?.type === 'etape' ? 'avec toutes les étapes suivantes' : 'avec tous les ingrédients suivants'}
             </Text>
           </Pressable>
-          {elements.map((el, i) => {
+          {elements.map((el) => {
             const liste = aDeplacer?.type === 'etape' ? form.etapes : form.ingredients;
             const actuel = liste.find((x) => x.clefId === aDeplacer?.clefId)?.elementClef === el.clefId;
             return (
@@ -1047,7 +1110,10 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                 onPress={() => deplacerVersElement(el.clefId)}
                 disabled={actuel}
               >
-                <Text style={styles.choixElementTexte}>{el.nom.trim() || `Élément ${i + 1} (sans nom)`}</Text>
+                <Text style={styles.choixElementTexte}>
+                  {el.varianteDe ? '↳ Variante : ' : ''}
+                  {el.nom.trim() || (el.varianteDe ? 'sans nom' : `Élément ${principaux.indexOf(el) + 1} (sans nom)`)}
+                </Text>
                 {actuel && <Text style={styles.changerElement}>✓</Text>}
               </Pressable>
             );
@@ -1258,6 +1324,28 @@ const styles = creerStylesThemes(() => ({
     marginTop: theme.spacing.sm,
   },
   enteteElement: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
+  blocVariante: {
+    borderLeftColor: theme.colors.accent,
+    borderLeftWidth: 3,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surface,
+    paddingVertical: theme.spacing.xs,
+    paddingLeft: theme.spacing.sm,
+    paddingRight: theme.spacing.xs,
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
+  },
+  etiquetteVariante: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.accent },
+  boutonAjouterVariante: {
+    alignSelf: 'flex-start',
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.xs,
+  },
   champNomElement: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 16 },
   sousLabel: {
     fontFamily: theme.fontBodyBold,

@@ -40,6 +40,8 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
   const [participation, setParticipation] = useState<Participation>('famille');
   const [invites, setInvites] = useState<Set<string>>(new Set());
   const [description, setDescription] = useState('');
+  // Surprise : on choisit à qui la garder juste après la création.
+  const [surprise, setSurprise] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -130,6 +132,7 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
         [...invites]
       );
       navigation.replace('Voyage', { voyageId: id });
+      if (surprise) navigation.navigate('Surprise', { voyageId: id });
     } catch (e) {
       setErreur(messageErreurVoyage(e));
       setEnCours(false);
@@ -166,6 +169,7 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
         [...invites]
       );
       navigation.replace('Voyage', { voyageId: id });
+      if (surprise) navigation.navigate('Surprise', { voyageId: id });
     } catch (e) {
       setErreur(messageErreurVoyage(e));
       setEnCours(false);
@@ -290,6 +294,7 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
                   coche={invites.has(p.id)}
                   onChange={() => basculerInvite(p.id)}
                   libelle={p.prenom}
+                  personneId={p.id}
                   aide={p.utilisateur_id ? undefined : 'Sans compte : son foyer répondra pour lui'}
                 />
               ))}
@@ -305,6 +310,17 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
         multiline
         placeholder="Ex. Et si on se retrouvait tous une semaine cet été ?"
         accessibilityLabelledBy="libelle-description"
+      />
+
+      <CaseACocher
+        coche={surprise}
+        onChange={setSurprise}
+        libelle="C’est une surprise"
+        aide={
+          repas
+            ? 'Ensuite, vous choisirez qui est fêté (il saura seulement la date et le lieu) et à qui tout cacher.'
+            : 'Ensuite, vous choisirez à qui cacher ce voyage : il ne le verra pas, même s’il fait partie du voyage.'
+        }
       />
 
       <Erreur texte={erreur} />

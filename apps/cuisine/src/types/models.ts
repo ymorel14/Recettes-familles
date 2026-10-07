@@ -67,7 +67,16 @@ export type ElementRecette = {
   recette_id: string;
   nom: string;
   ordre: number;
+  // Variante : id de l'élément principal que celui-ci peut remplacer (ex.
+  // « Appareil à l'orange » à la place du « Curd au citron »), null pour un
+  // élément principal. Voir appliquerVariantes (services/recettes.ts).
+  variante_de?: string | null;
 };
+
+// Version choisie pour chaque élément qui a des variantes : id de l'élément
+// principal → id de la version retenue (le principal lui-même ou l'une de
+// ses variantes). Un élément absent du choix garde sa version principale.
+export type ChoixVariantes = Record<string, string>;
 
 export type Ingredient = {
   id: string;

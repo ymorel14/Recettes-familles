@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Apps de la famille</title>
+  <!-- Ajoutée à l'écran d'accueil (iPad, iPhone, Android) : s'ouvre en plein
+       écran, et les apps s'ouvrent DANS cette même appli web (même session). -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Famille">
   <meta name="description" content="Recettes, cadeaux, voyages et souvenirs de la famille, avec un seul compte.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%238C2F1B'/%3E%3Cpath d='M32 47s-14-8.6-14-18.2C18 23.4 22 20 26.3 20c2.6 0 4.6 1.4 5.7 3.3 1.1-1.9 3.1-3.3 5.7-3.3C42 20 46 23.4 46 28.8 46 38.4 32 47 32 47z' fill='%23F5EEE2'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -141,7 +146,12 @@
       </a>
     </nav>
 
-    <footer>Astuce : ajoutez cette page à l’écran d’accueil de votre téléphone.</footer>
+    <footer>
+      Astuce : ajoutez <strong>cette page</strong> à l’écran d’accueil de votre téléphone ou de votre iPad
+      (Partager › Sur l’écran d’accueil), et seulement celle-ci. Dans chaque app, le bouton « Apps » en haut à
+      gauche ramène ici, sans vous reconnecter. Sur iPad et iPhone, une icône par app aurait chacune sa propre
+      connexion.
+    </footer>
   </main>
 
   <script>

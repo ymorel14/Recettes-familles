@@ -14,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes, useLargeurContenu } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import {
+  appliquerVariantes,
+  elementsAVariantes,
   etoilesDeNote,
   groupesParElement,
   noteMoyenne,
@@ -32,7 +34,8 @@ import {
   syntheseEssais,
 } from '../../services/essais';
 import { obtenirOuCreerListeActive, ajouterRecettesALaListe } from '../../services/listesCourses';
-import type { EssaiComplet, RecetteComplete } from '../../types/models';
+import type { ChoixVariantes, EssaiComplet, RecetteComplete } from '../../types/models';
+import { Avatar } from '@apps-famille/famille';
 import ReglageQuantites, { AJUSTEMENT_INITIAL, type AjustementQuantites } from '../../components/ReglageQuantites';
 
 function formaterDate(iso: string): string {
@@ -61,10 +64,13 @@ function CarteEssai({
   return (
     <View style={styles.carteEssai}>
       <View style={styles.carteEssaiEnTete}>
-        <Text style={styles.auteurEssai}>
-          {essai.auteurPrenom ?? 'Quelqu’un'}
-          {essai.foyerNom ? ` · ${essai.foyerNom}` : ''}
-        </Text>
+        <View style={styles.auteurLigne}>
+          <Avatar utilisateurId={essai.auteur_id} prenom={essai.auteurPrenom} taille={28} />
+          <Text style={styles.auteurEssai}>
+            {essai.auteurPrenom ?? 'Quelqu’un'}
+            {essai.foyerNom ? ` · ${essai.foyerNom}` : ''}
+          </Text>
+        </View>
         <Text style={styles.dateEssai}>{formaterDate(essai.realise_le)}</Text>
       </View>
 
@@ -134,6 +140,10 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   // Quantités adaptées au moment de faire la recette (parts, ou "ce que
   // j'ai" — ex. 6 œufs au lieu de 8) ; transmises au mode assistant.
   const [ajustement, setAjustement] = useState<AjustementQuantites>(AJUSTEMENT_INITIAL);
+  // Version choisie des éléments à variantes (ex. appareil à l'orange au
+  // lieu du curd au citron) : vaut pour l'affichage, le mode assistant et la
+  // liste de courses. Par défaut, les versions principales.
+  const [choixVariantes, setChoixVariantes] = useState<ChoixVariantes>({});
   const { width: largeurFenetre } = useLargeurContenu();
   const largeurPhoto = largeurFenetre - 2 * theme.spacing.md;
 
@@ -193,6 +203,10 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const synthese = syntheseEssais(essais);
   // Mon dernier essai encore sans verdict : on propose de le compléter.
   const essaiAGouter = essais.find((e) => e.auteur_id === session?.user.id && e.verdict == null);
+  // Éléments qui ont des variantes, et recette avec les versions choisies
+  // seulement (ingrédients et étapes des autres versions retirés).
+  const aVariantes = elementsAVariantes(recette);
+  const affichee = appliquerVariantes(recette, choixVariantes);
 
   const demanderSuppression = () => {
     alerte(
@@ -215,7 +229,9 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     setAjoutListe(true);
     try {
       const liste = await obtenirOuCreerListeActive(foyer.id);
-      await ajouterRecettesALaListe(liste.id, [{ recette, partsSouhaitees: recette.parts_defaut * ajustement.facteur }]);
+      await ajouterRecettesALaListe(liste.id, [
+        { recette: affichee, partsSouhaitees: recette.parts_defaut * ajustement.facteur },
+      ]);
       navigation.navigate('Onglets', { screen: 'Courses' });
     } catch (e) {
       alerte('Échec de l’ajout', e instanceof Error ? e.message : 'Veuillez réessayer.');
@@ -370,9 +386,43 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
         </Pressable>
       )}
 
+      {aVariantes.length > 0 && (
+        <View style={styles.blocVariantes}>
+          <Text style={styles.titreVariantes}>Quelle version ?</Text>
+          {aVariantes.map(({ principal, versions }) => {
+            const retenue = choixVariantes[principal.id] ?? principal.id;
+            return (
+              <View key={principal.id} style={styles.ligneVariantes}>
+                {versions.map((version) => {
+                  const choisie = version.id === retenue;
+                  return (
+                    <Pressable
+                      key={version.id}
+                      onPress={() => setChoixVariantes((c) => ({ ...c, [principal.id]: version.id }))}
+                      style={[styles.choixVariante, choisie && styles.choixVarianteActif]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: choisie }}
+                    >
+                      <Text style={[styles.choixVarianteTexte, choisie && styles.choixVarianteTexteActif]}>
+                        {version.nom.trim() || 'Sans nom'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            );
+          })}
+          <Text style={styles.aideVariantes}>
+            Ingrédients, étapes, mode assistant et liste de courses suivent la version choisie.
+          </Text>
+        </View>
+      )}
+
       <Pressable
         style={styles.boutonPrincipal}
-        onPress={() => navigation.navigate('AssistantRecette', { recetteId: recette.id, ajustement })}
+        onPress={() =>
+          navigation.navigate('AssistantRecette', { recetteId: recette.id, ajustement, variantes: choixVariantes })
+        }
       >
         <Text style={styles.boutonPrincipalTexte}>Lancer le mode assistant</Text>
       </Pressable>
@@ -393,12 +443,12 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
       <Text style={styles.section}>Ingrédients</Text>
       <ReglageQuantites
         partsDefaut={recette.parts_defaut}
-        ingredients={recette.ingredients}
+        ingredients={affichee.ingredients}
         ajustement={ajustement}
         onChange={setAjustement}
       />
       {/* Les éléments sans ingrédient (ex. "Montage") ne sont pas listés ici. */}
-      {groupesParElement(recette).filter((groupe) => groupe.ingredients.length > 0).map((groupe) => (
+      {groupesParElement(affichee).filter((groupe) => groupe.ingredients.length > 0).map((groupe) => (
         <View key={groupe.id ?? 'sans-element'} style={styles.groupeElement}>
           {groupe.nom && <Text style={styles.titreElement}>{groupe.nom}</Text>}
           {groupe.ingredients.map((ing) => (
@@ -415,7 +465,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
       <Text style={styles.diagnostic}>
         [diagnostic] {recette.etapes.length} étape(s) reçue(s)
       </Text>
-      {groupesParElement(recette).filter((groupe) => groupe.etapes.length > 0).map((groupe) => (
+      {groupesParElement(affichee).filter((groupe) => groupe.etapes.length > 0).map((groupe) => (
         <View key={groupe.id ?? 'sans-element'} style={styles.groupeElement}>
           {groupe.nom && <Text style={styles.titreElement}>{groupe.nom}</Text>}
           {groupe.etapes.map((etape, index) => (
@@ -423,7 +473,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
               <Text style={styles.numeroEtape}>{index + 1}</Text>
               <View style={styles.contenuEtape}>
                 <Text style={styles.texteEtape}>
-                  {resoudreEtapePourAffichage(etape.texte, recette.ingredients, ajustement.facteur)}
+                  {resoudreEtapePourAffichage(etape.texte, affichee.ingredients, ajustement.facteur)}
                 </Text>
                 {etape.recette_liee_id && (
                   // Sous-recette référencée par cette étape (ex. "faire une pâte
@@ -546,6 +596,7 @@ const styles = creerStylesThemes(() => ({
     gap: theme.spacing.xs,
   },
   carteEssaiEnTete: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: theme.spacing.sm },
+  auteurLigne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, flexShrink: 1 },
   auteurEssai: { fontFamily: theme.fontManuscrit, fontSize: 20, color: theme.colors.text, flexShrink: 1 },
   dateEssai: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
   verdictEssai: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.accent },
@@ -567,6 +618,29 @@ const styles = creerStylesThemes(() => ({
   boutonSecondaireTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.accent },
   section: { fontFamily: theme.fontTitle, fontSize: 18, color: theme.colors.accent, marginTop: theme.spacing.md },
   groupeElement: { gap: theme.spacing.sm },
+  blocVariantes: {
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surface,
+    padding: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  titreVariantes: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.accent },
+  ligneVariantes: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
+  choixVariante: {
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  choixVarianteActif: { backgroundColor: theme.colors.accent },
+  choixVarianteTexte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.accent },
+  choixVarianteTexteActif: { fontFamily: theme.fontBodyBold, color: theme.colors.background },
+  aideVariantes: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
   titreElement: {
     fontFamily: theme.fontManuscrit,
     fontSize: 21,

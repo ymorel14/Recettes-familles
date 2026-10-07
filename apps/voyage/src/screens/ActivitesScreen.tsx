@@ -26,6 +26,7 @@ import {
 } from '../services/voyage';
 import { Aide, Erreur, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { GroupeNoms, NomAvecAvatar } from '@apps-famille/famille';
 
 // Activités et visites : propositions de chacun, qui vient, coût pour le
 // groupe ; un organisateur retient celles qui entrent au budget loisirs.
@@ -90,8 +91,9 @@ export default function ActivitesScreen({ route, navigation }: any) {
   const carte = (a: Activite) => {
     const cat = CATEGORIES_ACTIVITE.find((c) => c.id === a.categorie) ?? CATEGORIES_ACTIVITE[0];
     const cout = coutActivite(a, personnes, dateReference);
-    const partants = a.avis.filter((x) => x.avis === 'partant').map((x) => nom(x.personne_id));
-    const absents = a.avis.filter((x) => x.avis === 'non').map((x) => nom(x.personne_id));
+    const versPersonne = (x: { personne_id: string }) => ({ personneId: x.personne_id, prenom: nom(x.personne_id) });
+    const partants = a.avis.filter((x) => x.avis === 'partant').map(versPersonne);
+    const absents = a.avis.filter((x) => x.avis === 'non').map(versPersonne);
     const tarifs = [
       a.prix_adulte != null ? `adulte ${formaterEuros(Number(a.prix_adulte), true)}` : '',
       a.prix_enfant != null ? `enfant ${formaterEuros(Number(a.prix_enfant), true)}${a.age_max_enfant != null ? ` (jusqu’à ${a.age_max_enfant} ans)` : ''}` : '',
@@ -116,8 +118,8 @@ export default function ActivitesScreen({ route, navigation }: any) {
           {formaterEuros(cout.total)} pour {cout.venants} personne{cout.venants > 1 ? 's' : ''}
           {cout.detail ? ` (${cout.detail})` : ''}
         </Text>
-        {partants.length > 0 && <Text style={styles.detail}>Partants : {partants.join(', ')}</Text>}
-        {absents.length > 0 && <Text style={styles.detail}>Ne viennent pas : {absents.join(', ')}</Text>}
+        <GroupeNoms prefixe="Partants :" personnes={partants} styleTexte={styles.detail} />
+        <GroupeNoms prefixe="Ne viennent pas :" personnes={absents} styleTexte={styles.detail} />
         {a.lien ? (
           <Pressable onPress={() => Linking.openURL(a.lien!)} accessibilityRole="link" style={styles.lien}>
             <Ionicons name="open-outline" size={16} color={theme.colors.accent} />
@@ -128,7 +130,7 @@ export default function ActivitesScreen({ route, navigation }: any) {
         {a.statut !== 'ecarte' &&
           miennes.map((m) => (
             <View key={m.id} style={styles.avis}>
-              {miennes.length > 1 && <Text style={styles.detail}>{m.prenom}</Text>}
+              {miennes.length > 1 && <NomAvecAvatar personneId={m.id} prenom={m.prenom} styleTexte={styles.detail} />}
               <Puces
                 options={AVIS_ACTIVITE}
                 valeur={a.avis.find((x) => x.personne_id === m.id)?.avis ?? null}
