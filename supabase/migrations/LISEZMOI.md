@@ -31,6 +31,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20261003130000_photos_profil.sql` | Compte famille : photo de profil de chaque personne (`famille.personnes.photo`, espace privé `famille-photos`, adresses signées), affichée à côté des prénoms dans toutes les apps ; chacun change la sienne, les membres d'un foyer celles de ses personnes sans compte, et les gestionnaires des photos (`famille.gestionnaires_photos`, au départ ymorel76@gmail.com) celles de toute leur famille, via `famille.definir_photo_personne` |
 | `20261007100000_wishlist_liste_unique.sql` | CadeauCommun : **une seule liste par personne** — fusion des listes existantes (les réservations et participations gardent l'événement de leur ancienne liste) ; l'événement est choisi en réservant (obligatoire, à venir, concernant la personne ; un pot = un événement) ; les cadeaux d'un événement passé sont considérés comme offerts (`wishlist.souhaits_offerts`, `options_offertes`) ; liste ouverte ou créée par `wishlist.liste_de` |
 | `20261007110000_wishlist_sans_evenements.sql` | CadeauCommun : **plus de notion d'événement** (les événements relèvent de VoyageCommun ; la table `wishlist.evenements` reste pour elle) — réserver et participer sans événement ; le donateur coche « offert » (`reservations.offert_le`, `participations.offert_le`) et le cadeau disparaît alors de la liste ; reprise : ce qui était réservé pour un événement passé est marqué offert |
+| `20261007120000_quotidien.sql` | Quotidien (Phase 1, covoiturage) : schéma `quotidien` — groupes rejoints par code (équipe, club, classe, foyers de familles différentes), parents invités **sans compte** par lien secret (fonctions `*_invite`, ouvertes à la clé anon), enfants (prénom seulement), activités récurrentes et séances générées hors vacances scolaires (`generer_seances`, table `vacances_scolaires`), trajets aller/retour, conducteur pris ou laissé par `prendre_trajet` / `laisser_trajet` uniquement, équité (`equite`). Un membre de groupe ne voit rien d'autre des autres foyers |
 
 ## Exécution
 
@@ -38,7 +39,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
    sur une copie du projet.
 2. Dashboard > SQL Editor : coller et exécuter les migrations dans l'ordre (1, 2, 3…).
    Chaque fichier est une transaction : en cas d'erreur, rien n'est modifié.
-3. Project Settings > API > Exposed schemas : ajouter `famille`, `wishlist`, `voyage` et `souvenirs`
+3. Project Settings > API > Exposed schemas : ajouter `famille`, `wishlist`, `voyage`, `souvenirs` et `quotidien`
    (à côté de `public` et `recettes`).
 4. Vérifier que l'app Cuisine fonctionne toujours (connexion, recettes, courses,
    profil). Elle passe par les vues de compatibilité laissées dans `recettes`.
@@ -51,6 +52,11 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 - `lire-annonce` (VoyageCommun) : lit une annonce ou le site d'une activité (titre, photo, adresse, prix…)
   pour préremplir les fiches. `supabase functions deploy lire-annonce` (aucune clé). Certains sites
   (Airbnb, Booking) bloquent souvent la lecture : on complète alors à la main.
+
+- `importer-vacances` (Quotidien) : calendrier officiel des vacances scolaires (zones A, B, C, Corse ; API
+  ouverte de l'Éducation nationale) dans `quotidien.vacances_scolaires`, année en cours et suivante.
+  `supabase functions deploy importer-vacances` (aucune clé), puis la lancer une fois par an
+  (Dashboard > Edge Functions > importer-vacances > Test). Sans elle, les séances ne sautent pas les vacances.
 
 - `transfert-session` (toutes les apps, téléphone) : « Continuer avec mon compte » — une app déjà
   connectée transmet la connexion à une autre app de la famille sur le même téléphone (code de connexion

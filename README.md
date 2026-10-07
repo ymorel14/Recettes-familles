@@ -10,6 +10,7 @@ familles, et une famille active commune à toutes les apps.
 | `apps/cadeaucommun` | App CadeauCommun : listes de souhaits, idées cachées, réservations anonymes |
 | `apps/voyage` | App VoyageCommun : calendrier commun des disponibilités, préparation des voyages en famille (dates, hébergement, transport, activités, budget) |
 | `apps/souvenirs` | App SouvenirsFamille : souvenirs de famille datés (voyages, naissances, premiers pas…), photos, vidéos, commentaires, recherche en français |
+| `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — Phase 1 : covoiturage branché sur Supabase (tâches et argent de poche encore en démonstration) |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
 | `packages/theme` | Thèmes de couleurs communs aux apps |
 | `supabase/` | Base de données : `setup.sql` (historique, ne plus lancer) et `migrations/` |
@@ -30,22 +31,24 @@ npm run voyage           # lance l'app VoyageCommun
 npm run voyage:web       # version navigateur
 npm run souvenirs        # lance l'app SouvenirsFamille
 npm run souvenirs:web    # version navigateur
+npm run quotidien        # lance l'app Quotidien
+npm run quotidien:web    # version navigateur
 ```
 
 Ou depuis le dossier de l'app : `cd apps/cuisine` puis `npx expo start`.
 
 Le fichier `.env` de chaque app se place dans son dossier (`apps/cuisine/.env`,
-`apps/cadeaucommun/.env`, `apps/voyage/.env`, `apps/souvenirs/.env`, modèle dans chaque `.env.example`) avec `EXPO_PUBLIC_SUPABASE_URL` et
+`apps/cadeaucommun/.env`, `apps/voyage/.env`, `apps/souvenirs/.env`, `apps/quotidien/.env`, modèle dans chaque `.env.example`) avec `EXPO_PUBLIC_SUPABASE_URL` et
 `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Builds et mise en ligne
 
 - **Android / iOS (EAS)** : lancer les commandes `eas build` depuis le dossier
   de l'app, par exemple `cd apps/cuisine` puis `eas build --profile preview --platform android`.
-- **Web (Netlify) : un seul site pour les quatre apps.** `netlify.toml` à la
+- **Web (Netlify) : un seul site pour les cinq apps.** `netlify.toml` à la
   racine lance `npm run site:export:web` (script `scripts/construire-site.mjs`)
   et publie `site/dist` : accueil à la racine, puis `/cuisine/`, `/cadeaux/`,
-  `/voyages/` et `/souvenirs/`. Toutes les apps étant à la même adresse, le
+  `/voyages/`, `/souvenirs/` et `/quotidien/`. Toutes les apps étant à la même adresse, le
   navigateur garde **une seule connexion** pour toutes. Les anciennes adresses
   de Cuisine (`/recette/123`…) sont redirigées vers `/cuisine/…`. Dans
   Netlify, « Base directory » doit rester vide. Pour tester en local :
@@ -71,6 +74,6 @@ Le fichier `.env` de chaque app se place dans son dossier (`apps/cuisine/.env`,
 
 Un seul projet Supabase, découpé en schémas : `famille` (compte famille
 commun), `recettes` (app Cuisine), `wishlist` (CadeauCommun), `voyage`
-(VoyageCommun), `souvenirs` (SouvenirsFamille). Chaque
+(VoyageCommun), `souvenirs` (SouvenirsFamille), `quotidien` (Quotidien). Chaque
 changement de la base est un fichier numéroté dans `supabase/migrations/`,
 à exécuter une fois dans l'éditeur SQL (voir `supabase/migrations/LISEZMOI.md`).

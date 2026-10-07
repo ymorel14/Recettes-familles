@@ -7,6 +7,7 @@
 //   site/dist/cadeaux/          CadeauCommun
 //   site/dist/voyages/          VoyageCommun
 //   site/dist/souvenirs/        SouvenirsFamille
+//   site/dist/quotidien/        Quotidien
 //
 // Lancement depuis la racine du dépôt : npm run site:export:web
 // (Netlify le lance lui-même, voir netlify.toml). Pour n'en construire que
@@ -29,6 +30,7 @@ const APPS = [
   { dossier: 'cadeaucommun', chemin: 'cadeaux' },
   { dossier: 'voyage', chemin: 'voyages' },
   { dossier: 'souvenirs', chemin: 'souvenirs' },
+  { dossier: 'quotidien', chemin: 'quotidien' },
 ];
 
 // Anciennes adresses de l'app Cuisine, quand elle occupait seule le site :

@@ -5,13 +5,14 @@
 #   /cadeaux/    CadeauCommun
 #   /voyages/    VoyageCommun
 #   /souvenirs/  SouvenirsFamille
+#   /quotidien/  Quotidien
 # Les anciennes adresses de Cuisine (ex. /recette/123) sont redirigées vers
 # /cuisine/… (règles écrites par scripts/construire-site.mjs dans
 # site/dist/_redirects).
 #
 # Le dépôt contient plusieurs apps (apps/*) et du code commun (packages/*) :
 # Netlify installe les dépendances à la racine (npm workspaces), puis
-# construit les quatre apps.
+# construit les cinq apps.
 # Variables à définir dans Netlify (Site settings > Environment variables) :
 #   EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY
 # Dans Netlify, "Base directory" doit rester vide (racine du dépôt).

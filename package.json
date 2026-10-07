@@ -18,6 +18,9 @@
     "souvenirs": "npm run start -w souvenirsfamille",
     "souvenirs:web": "npm run web -w souvenirsfamille",
     "souvenirs:export:web": "npm run export:web -w souvenirsfamille",
+    "quotidien": "npm run start -w quotidienfamille",
+    "quotidien:web": "npm run web -w quotidienfamille",
+    "quotidien:export:web": "npm run export:web -w quotidienfamille",
     "site:export:web": "node scripts/construire-site.mjs"
   }
 }

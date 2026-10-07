@@ -2,7 +2,7 @@
   "name": "@apps-famille/famille",
   "version": "1.0.0",
   "private": true,
-  "description": "Compte famille commun aux apps de la famille (Cuisine, CadeauCommun, VoyageCommun, SouvenirsFamille) : familles, foyers, profils, famille active, connexion partagée entre les apps, photos de profil.",
+  "description": "Compte famille commun aux apps de la famille (Cuisine, CadeauCommun, VoyageCommun, SouvenirsFamille, Quotidien) : familles, foyers, profils, famille active, connexion partagée entre les apps, photos de profil.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "peerDependencies": {

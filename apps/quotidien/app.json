@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Quotidien",
+    "slug": "quotidienfamille",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "quotidienfamille",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.quotidienfamille"
+    },
+    "android": {
+      "package": "fr.morel.quotidienfamille",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F5EF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F7F5EF"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet de choisir votre photo de profil, visible par votre famille.",
+          "cameraPermission": "Permet de prendre votre photo de profil."
+        }
+      ]
+    ]
+  }
+}

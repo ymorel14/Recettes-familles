@@ -27,6 +27,18 @@ partagent le compte famille :
   Cahier des charges : document Claude "Cahier des charges — SouvenirsFamille".
   Qui voit un souvenir est garanti par les règles RLS de la base ; les photos
   s'affichent par adresses signées, jamais publiques.
+- `apps/quotidien` : app Quotidien (la logistique de tous les jours : activités
+  et trajets des enfants, covoiturage entre familles grâce aux « groupes »
+  rejoints par code — équipe, club, classe —, tâches de la maison, argent de
+  poche virtuel affiché en points avec l'équivalent en euros entre
+  parenthèses, sans aucun flux d'argent réel), données dans le schéma
+  `quotidien`. Cahier des charges : document Claude "Cahier des charges —
+  Quotidien". Phase 1 : covoiturage branché (`src/services/quotidien.ts`,
+  migration `20261007120000_quotidien.sql`) ; tâches et argent de poche
+  encore en démonstration (`src/donnees/demo.ts`). Un membre de groupe ne
+  voit que les trajets de l'activité commune et le prénom des enfants,
+  garanti par les règles RLS ; un parent invité sans compte passe par son
+  lien (`/quotidien/invite/<jeton>`, `InviteScreen`, fonctions `*_invite`).
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
   Supabase et le confie au paquet avec
