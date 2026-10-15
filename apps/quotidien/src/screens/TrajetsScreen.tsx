@@ -8,7 +8,7 @@ import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import { useCovoiturage } from '../hooks/useCovoiturage';
-import { inscrireEnfant, laisserTrajet, libelleJour, prendreTrajet } from '../services/quotidien';
+import { accepterTrajet, inscrireEnfant, laisserTrajet, libelleJour, prendreTrajet } from '../services/quotidien';
 
 // Trajets des trois prochaines semaines, tous groupes confondus, regroupés
 // par jour ; en haut, mes groupes (équipe, club, classe).
@@ -92,6 +92,7 @@ export default function TrajetsScreen({ navigation }: any) {
                   mesEnfants={c.mesEnfants(t.groupe_id)}
                   enCours={enCours === t.id}
                   onPrendre={() => agir(t.id, () => prendreTrajet(t.id))}
+                  onAccepter={() => agir(t.id, () => accepterTrajet(t.id))}
                   onLaisser={() => agir(t.id, () => laisserTrajet(t.id))}
                   onBasculerEnfant={(e, oui) => agir(t.id, () => inscrireEnfant(t.id, e, oui))}
                 />

@@ -23,6 +23,13 @@ import {
   type Personne,
 } from '../services/personnes';
 import { Bouton } from '../components/ui';
+import {
+  activerRappels,
+  desactiverRappels,
+  jetonRappels,
+  messageResultat,
+  rappelsPossibles,
+} from '../services/notifications';
 
 // Profil : famille affichée (commune à toutes les apps), code d'invitation,
 // personnes sans compte du foyer, thème de couleurs, déconnexion.
@@ -36,6 +43,7 @@ export default function ProfilScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [monPrenom, setMonPrenom] = useState('');
   const [prenomEnregistre, setPrenomEnregistre] = useState<string | null>(null);
+  const [rappelsActifs, setRappelsActifs] = useState(false);
 
   const charger = useCallback(async () => {
     if (!foyer || !session) return;
@@ -44,6 +52,7 @@ export default function ProfilScreen() {
       setPersonnes(p);
       setPrenomEnregistre(moi);
       setMonPrenom(moi ?? '');
+      setRappelsActifs(!!(await jetonRappels()));
     } catch {
       setPersonnes([]);
     }
@@ -128,6 +137,29 @@ export default function ProfilScreen() {
           ),
       },
     ]);
+
+  const basculerRappels = () =>
+    executer(
+      'rappels',
+      async () => {
+        if (rappelsActifs) {
+          await desactiverRappels();
+          setRappelsActifs(false);
+        } else {
+          const r = await activerRappels();
+          setRappelsActifs(r === 'ok');
+          if (r !== 'ok') setMessage(messageResultat(r));
+        }
+      },
+      'Impossible de changer les rappels.'
+    );
+
+  // Se déconnecter retire aussi ce téléphone des rappels (sinon l'ancien
+  // compte continuerait d'y recevoir les siens).
+  const seDeconnecter = async () => {
+    await desactiverRappels().catch(() => {});
+    await deconnexion();
+  };
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
@@ -233,6 +265,23 @@ export default function ProfilScreen() {
         <Bouton titre="Ajouter" onPress={ajouterPersonne} enCours={enCours === 'personne'} desactive={!prenom.trim()} />
       </View>
 
+      {rappelsPossibles() && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitre}>Rappels sur ce téléphone</Text>
+          <Text style={styles.aide}>
+            {rappelsActifs
+              ? 'Activés : une notification la veille de vos trajets, et une alerte quand un trajet n’a pas de conducteur.'
+              : 'Désactivés : aucune notification de Quotidien sur ce téléphone.'}
+          </Text>
+          <Bouton
+            variante={rappelsActifs ? 'contour' : 'plein'}
+            titre={rappelsActifs ? 'Désactiver les rappels' : 'Activer les rappels'}
+            onPress={basculerRappels}
+            enCours={enCours === 'rappels'}
+          />
+        </View>
+      )}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitre}>Thème de couleurs</Text>
         <Text style={styles.aide}>Les mêmes que dans les autres apps de la famille. Propre à ce téléphone.</Text>
@@ -262,7 +311,7 @@ export default function ProfilScreen() {
       </View>
 
       {message && <Text style={styles.erreur}>{message}</Text>}
-      <Bouton variante="contour" titre="Se déconnecter" onPress={deconnexion} />
+      <Bouton variante="contour" titre="Se déconnecter" onPress={seDeconnecter} />
     </ScrollView>
   );
 }

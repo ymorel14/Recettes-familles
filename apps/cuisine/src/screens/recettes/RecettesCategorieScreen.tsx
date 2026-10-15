@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { listerRecettes, etatSurprise, type PorteeRecettes } from '../../services/recettes';
+import { ID_SANS_CATEGORIE, listerRecettes, etatSurprise, type PorteeRecettes } from '../../services/recettes';
 import { supabase } from '../../services/supabase';
 import type { RecetteComplete } from '../../types/models';
 import { useGrilleVignettes } from '../../utils/grilleVignettes';
@@ -67,7 +67,10 @@ export default function RecettesCategorieScreen({ navigation, route }: any) {
   }, [foyer, charger, categorieId]);
 
   const recettesCategorie = useMemo(
-    () => recettes.filter((r) => r.categories.some((c) => c.id === categorieId)),
+    () =>
+      recettes.filter((r) =>
+        categorieId === ID_SANS_CATEGORIE ? r.categories.length === 0 : r.categories.some((c) => c.id === categorieId)
+      ),
     [recettes, categorieId]
   );
 
@@ -98,7 +101,9 @@ export default function RecettesCategorieScreen({ navigation, route }: any) {
               <Pressable
                 style={[styles.carte, styles.carteAjouter, { width: largeurVignette }]}
                 onPress={() =>
-                  navigation.navigate('CreationRecette', { categoriePreselectionnee: categorieNom })
+                  navigation.navigate('CreationRecette', {
+                    categoriePreselectionnee: categorieId === ID_SANS_CATEGORIE ? undefined : categorieNom,
+                  })
                 }
               >
                 <Text style={styles.carteAjouterSigne}>+</Text>

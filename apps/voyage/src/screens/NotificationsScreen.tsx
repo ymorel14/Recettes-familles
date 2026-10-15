@@ -26,6 +26,8 @@ const ICONES: Record<string, string> = {
   activite_retenue: 'ticket',
   plat_propose: 'restaurant-outline',
   tache_confiee: 'hand-right-outline',
+  option_trajet_proposee: 'git-branch-outline',
+  option_trajet_retenue: 'checkmark-circle-outline',
 };
 
 // Nouveautés : ce qui a bougé dans mes voyages (invitations, dates,

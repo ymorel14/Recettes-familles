@@ -20,6 +20,16 @@ import ArgentPocheScreen from '../screens/ArgentPocheScreen';
 import GroupeScreen from '../screens/GroupeScreen';
 import GroupeFormScreen from '../screens/GroupeFormScreen';
 import ActiviteFormScreen from '../screens/ActiviteFormScreen';
+import TacheFormScreen from '../screens/TacheFormScreen';
+import TirelireScreen from '../screens/TirelireScreen';
+import InventairesScreen from '../screens/InventairesScreen';
+import InventaireScreen from '../screens/InventaireScreen';
+import InventaireFormScreen from '../screens/InventaireFormScreen';
+import ObjetScreen from '../screens/ObjetScreen';
+import ObjetFormScreen from '../screens/ObjetFormScreen';
+import RangementsScreen from '../screens/RangementsScreen';
+import RangementScreen from '../screens/RangementScreen';
+import RangementFormScreen from '../screens/RangementFormScreen';
 import { obtenirMonPrenom, BoutonAppsFamille } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
@@ -78,6 +88,7 @@ function BarreOnglets({ navigation }: any) {
             Trajets: 'car-outline',
             Taches: 'checkbox-outline',
             ArgentPoche: 'wallet-outline',
+            Inventaires: 'cube-outline',
           };
           return <Ionicons name={icones[route.name] ?? 'ellipse-outline'} size={size} color={color} />;
         },
@@ -117,6 +128,11 @@ function BarreOnglets({ navigation }: any) {
         name="ArgentPoche"
         component={ArgentPocheScreen}
         options={{ title: 'Argent de poche', headerTitle: () => <TitreFamille titre="Argent de poche" /> }}
+      />
+      <Onglets.Screen
+        name="Inventaires"
+        component={InventairesScreen}
+        options={{ title: 'Inventaires', headerTitle: () => <TitreFamille titre="Inventaires" /> }}
       />
     </Onglets.Navigator>
   );
@@ -202,6 +218,15 @@ export default function AppNavigator() {
             <Pile.Screen name="Groupe" component={GroupeScreen} options={{ title: 'Groupe' }} />
             <Pile.Screen name="GroupeForm" component={GroupeFormScreen} options={{ title: 'Créer ou rejoindre un groupe' }} />
             <Pile.Screen name="ActiviteForm" component={ActiviteFormScreen} options={{ title: 'Nouvelle activité' }} />
+            <Pile.Screen name="TacheForm" component={TacheFormScreen} options={{ title: 'Tâche' }} />
+            <Pile.Screen name="Tirelire" component={TirelireScreen} options={{ title: 'Tirelire' }} />
+            <Pile.Screen name="Inventaire" component={InventaireScreen} options={{ title: 'Inventaire' }} />
+            <Pile.Screen name="InventaireForm" component={InventaireFormScreen} options={{ title: 'Inventaire' }} />
+            <Pile.Screen name="Objet" component={ObjetScreen} options={{ title: 'Objet' }} />
+            <Pile.Screen name="ObjetForm" component={ObjetFormScreen} options={{ title: 'Objet' }} />
+            <Pile.Screen name="Rangements" component={RangementsScreen} options={{ title: 'Lieux et contenants' }} />
+            <Pile.Screen name="Rangement" component={RangementScreen} options={{ title: 'Rangement' }} />
+            <Pile.Screen name="RangementForm" component={RangementFormScreen} options={{ title: 'Rangement' }} />
             <Pile.Screen name="Profil" component={ProfilScreen} options={{ title: 'Profil' }} />
           </>
         )}

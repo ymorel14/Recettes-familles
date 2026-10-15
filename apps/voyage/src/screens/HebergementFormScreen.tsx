@@ -13,10 +13,11 @@ import {
   type Hebergement,
   type TypeHebergement,
 } from '../services/hebergements';
-import { messageErreurVoyage } from '../services/voyage';
+import { messageErreurVoyage, obtenirVoyage } from '../services/voyage';
+import { listerPersonnesParIds } from '../services/personnes';
 import { lireAnnonce } from '../services/annonces';
 import { formaterEuros } from '../services/hebergements';
-import { Aide, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
+import { Aide, CaseACocher, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton } from '../components/ui';
 
 const texte = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','));
@@ -42,10 +43,26 @@ export default function HebergementFormScreen({ route, navigation }: any) {
   const [trouve, setTrouve] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Qui paie : vide = frais communs ; sinon les foyers cochés.
+  const [payeurs, setPayeurs] = useState<Set<string>>(new Set(existant?.pour_foyers ?? []));
+  const [parFoyers, setParFoyers] = useState((existant?.pour_foyers ?? []).length > 0);
+  const [foyers, setFoyers] = useState<{ id: string; nom: string }[]>([]);
 
   useEffect(() => {
     navigation.setOptions({ title: existant ? 'Modifier l’hébergement' : 'Proposer un hébergement' });
   }, [existant, navigation]);
+
+  // Foyers des invités (pour « Qui paie ? »).
+  useEffect(() => {
+    obtenirVoyage(voyageId)
+      .then((v) => listerPersonnesParIds(v.participants.filter((p) => p.reponse !== 'decline').map((p) => p.personne_id)))
+      .then((liste) => {
+        const vus = new Map<string, string>();
+        for (const p of liste) if (p.foyer_id && p.foyer_nom) vus.set(p.foyer_id, p.foyer_nom);
+        setFoyers([...vus].map(([id, nom]) => ({ id, nom })));
+      })
+      .catch(() => {});
+  }, [voyageId]);
 
   const changerLien = (l: string) => {
     setLien(l);
@@ -106,6 +123,10 @@ export default function HebergementFormScreen({ route, navigation }: any) {
       frais_annexes: montantFrais,
       description: description.trim() || null,
       image,
+      // Envoyé seulement s'il y a quelque chose à dire (base plus ancienne).
+      ...(parFoyers || (existant?.pour_foyers ?? []).length
+        ? { pour_foyers: parFoyers && payeurs.size ? [...payeurs] : null }
+        : {}),
     };
     setEnCours(true);
     try {
@@ -208,6 +229,42 @@ export default function HebergementFormScreen({ route, navigation }: any) {
         placeholder="Ex. Piscine, grand jardin, à 20 min du parc…"
         accessibilityLabelledBy="libelle-description"
       />
+
+      {foyers.length > 1 && (
+        <>
+          <Libelle>Qui paie ?</Libelle>
+          <Puces
+            options={[
+              { id: 'commun', libelle: 'En commun' },
+              { id: 'foyers', libelle: 'Certains foyers' },
+            ]}
+            valeur={parFoyers ? 'foyers' : 'commun'}
+            onChange={(v) => setParFoyers(v === 'foyers')}
+          />
+          {parFoyers ? (
+            <>
+              {foyers.map((f) => (
+                <CaseACocher
+                  key={f.id}
+                  coche={payeurs.has(f.id)}
+                  onChange={(c) =>
+                    setPayeurs((s) => {
+                      const n = new Set(s);
+                      if (c) n.add(f.id);
+                      else n.delete(f.id);
+                      return n;
+                    })
+                  }
+                  libelle={f.nom}
+                />
+              ))}
+              <Aide>Ex. une nuit d’étape où seuls certains dorment. Partagé entre ces foyers selon la règle du voyage.</Aide>
+            </>
+          ) : (
+            <Aide>Partagé entre tous selon la règle du voyage (par défaut : par adulte, enfants gratuits).</Aide>
+          )}
+        </>
+      )}
 
       <Erreur texte={erreur} />
       <Bouton titre={existant ? 'Enregistrer' : 'Proposer'} onPress={valider} enCours={enCours} style={styles.bouton} />

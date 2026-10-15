@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { listerRecettes, type PorteeRecettes } from '../services/recettes';
+import { ID_SANS_CATEGORIE, listerRecettes, type PorteeRecettes } from '../services/recettes';
 import { supabase } from '../services/supabase';
 import type { RecetteComplete } from '../types/models';
 import {
@@ -134,6 +134,23 @@ export default function CategoriesScreen({ navigation }: any) {
       description: 'Appui long sur une catégorie pour choisir son groupe.',
       categories: trier(parGroupe.get(ID_A_CLASSER)),
     });
+    // Recettes sans aucune catégorie (enregistrement interrompu…) : une
+    // vignette à part, pour qu'elles restent accessibles.
+    const sansCategorie = recettes.filter((r) => r.categories.length === 0);
+    if (sansCategorie.length > 0) {
+      resultat.push({
+        id: ID_SANS_CATEGORIE as IdGroupeAffiche,
+        nom: 'Sans catégorie',
+        description: 'Ouvrez la recette et choisissez-lui une catégorie avec le crayon ✎.',
+        categories: [
+          {
+            id: ID_SANS_CATEGORIE,
+            nom: `Sans catégorie (${sansCategorie.length})`,
+            photoUrl: sansCategorie.find((r) => r.photo_url)?.photo_url ?? null,
+          },
+        ],
+      });
+    }
     return resultat.filter((section) => section.categories.length > 0);
   }, [recettes, groupes]);
 
@@ -197,6 +214,7 @@ export default function CategoriesScreen({ navigation }: any) {
                       })
                     }
                     onLongPress={() =>
+                      item.id !== ID_SANS_CATEGORIE &&
                       setCategorieARanger({ id: item.id, nom: item.nom, groupeActuel: section.id })
                     }
                     delayLongPress={400}

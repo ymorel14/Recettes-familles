@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import type { Energie, Vehicule } from './voyage';
+import { etapesDe, etapesDuBudget, type SensEtape, type StatutOption } from './optionsTrajet';
+import type { PaiementEtape } from './budget';
 
 // Véhicules des foyers (voyage.vehicules) et trajets d'un voyage
 // (voyage.trajets, voyage.trajet_passagers). Le coût d'un trajet est calculé
@@ -11,6 +13,10 @@ export type ModeTrajet = 'voiture' | 'train' | 'avion' | 'bateau' | 'bus' | 'aut
 export type Trajet = {
   id: string;
   voyage_id: string;
+  // Option de trajet à laquelle appartient cette étape, et sa place dans
+  // l'option (voir optionsTrajet.ts).
+  option_id: string | null;
+  ordre: number;
   mode: ModeTrajet;
   libelle: string | null;
   foyer_id: string | null;
@@ -26,8 +32,20 @@ export type Trajet = {
   prix_unitaire: number | null;
   peages: number | null;
   prix_billets: number | null;
+  // Qui paie l'étape (budget.ts) ; vide : la voiture par son foyer, le
+  // reste en commun.
+  paiement?: PaiementEtape | null;
   lien: string | null;
   note: string | null;
+  // Aller-retour (défaut), aller ou retour seulement ; aller_retour en
+  // découle (supabase/migrations/20261015100000_voyage_rendez_vous.sql).
+  sens?: SensEtape;
+  // Étape d'un seul foyer (foyer_id) pour rejoindre le groupe : rejoint_id
+  // est l'étape commune rejointe (aller) ou quittée (retour) ; vide :
+  // directement, sans le groupe.
+  propre_foyer?: boolean;
+  rejoint_id?: string | null;
+  retour_de?: string | null;
   cout_total: number;
   passagers: { personne_id: string }[];
 };
@@ -88,13 +106,29 @@ export async function listerTrajets(voyageId: string): Promise<Trajet[]> {
     .eq('voyage_id', voyageId)
     .order('cree_le');
   if (error) throw error;
-  return (data ?? []) as Trajet[];
+  return ((data ?? []) as any[]).map((t) => ({
+    option_id: null,
+    ordre: 0,
+    sens: t.aller_retour === false ? 'aller' : 'aller_retour',
+    propre_foyer: false,
+    rejoint_id: null,
+    ...t,
+  })) as Trajet[];
 }
 
-export type FormulaireTrajet = Omit<Trajet, 'id' | 'responsable' | 'cout_total' | 'passagers'>;
+// Étapes qui comptent dans le budget (option retenue, ou à défaut la seule
+// ou la moins chère), avec une note quand c'est une estimation.
+export async function listerTrajetsDuBudget(voyageId: string): Promise<{ trajets: Trajet[]; note: string | null }> {
+  const [options, trajets] = await Promise.all([listerOptions(voyageId), listerTrajets(voyageId)]);
+  const r = etapesDuBudget(options, trajets);
+  return { trajets: r.etapes, note: r.note };
+}
 
-// Crée ou modifie un trajet, puis remplace sa liste de passagers.
-export async function enregistrerTrajet(t: FormulaireTrajet, passagers: string[], id?: string): Promise<void> {
+export type FormulaireTrajet = Omit<Trajet, 'id' | 'responsable' | 'cout_total' | 'passagers' | 'ordre'>;
+
+// Crée ou modifie un trajet, puis remplace sa liste de passagers ; renvoie
+// son identifiant.
+export async function enregistrerTrajet(t: FormulaireTrajet, passagers: string[], id?: string): Promise<string> {
   let trajetId = id;
   if (id) {
     const { voyage_id, ...champs } = t;
@@ -113,6 +147,154 @@ export async function enregistrerTrajet(t: FormulaireTrajet, passagers: string[]
       .insert(passagers.map((personne_id) => ({ trajet_id: trajetId, personne_id })));
     if (error) throw error;
   }
+  return trajetId!;
+}
+
+// Après un changement d'étape : la branche suit le nouveau rendez-vous, et
+// les passagers des étapes communes sont mis d'accord avec les branches
+// (rejoint à Portsmouth : à bord à partir de Portsmouth ; directement : sur
+// aucune). Base pas encore à jour : sans effet.
+export async function rangerEtapes(optionId: string, trajetId?: string, ancienRejoint?: string | null): Promise<void> {
+  const { error } = await supabase.rpc('ranger_etapes', {
+    id_option: optionId,
+    id_trajet: trajetId ?? null,
+    ancien_rejoint: ancienRejoint ?? null,
+  });
+  if (error && !/ranger_etapes|PGRST202/i.test(`${(error as any).code ?? ''} ${error.message}`)) throw error;
+}
+
+// Retour différent de l'aller : chaque étape aller-retour devient une étape
+// d'aller et une de retour, modifiables séparément ; ou l'inverse.
+export async function separerRetour(optionId: string): Promise<void> {
+  const { error } = await supabase.rpc('separer_retour', { id_option: optionId });
+  if (error) throw error;
+}
+
+export async function retourIdentique(optionId: string): Promise<void> {
+  const { error } = await supabase.rpc('retour_identique', { id_option: optionId });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Options de trajet (avion, bateau, voiture…) : supabase/migrations/
+// 20261012120000_voyage_options_trajet.sql. Chacun propose et commente ; un
+// organisateur retient. Base pas encore à jour : liste vide (l'écran montre
+// alors les trajets comme avant).
+// ---------------------------------------------------------------------------
+
+export type AvisOption = { utilisateur_id: string; commentaire: string; maj_le: string };
+export type OptionTrajet = {
+  id: string;
+  voyage_id: string;
+  nom: string;
+  description: string | null;
+  statut: StatutOption;
+  propose_par: string;
+  cree_le: string;
+  // Le retour a ses propres étapes (sinon : l'aller en sens inverse).
+  retour_different?: boolean;
+  avis: AvisOption[];
+};
+
+export async function listerOptions(voyageId: string): Promise<OptionTrajet[]> {
+  const { data, error } = await supabase
+    .from('options_trajet')
+    .select('*, avis:avis_options_trajet(utilisateur_id, commentaire, maj_le)')
+    .eq('voyage_id', voyageId)
+    .order('cree_le');
+  if (error) {
+    if (/options_trajet|PGRST20[05]|does not exist/i.test(`${(error as any).code ?? ''} ${error.message}`)) return [];
+    throw error;
+  }
+  return (data ?? []) as OptionTrajet[];
+}
+
+export async function enregistrerOption(
+  o: { voyage_id: string; nom: string; description: string | null },
+  id?: string
+): Promise<string> {
+  if (id) {
+    const { error } = await supabase.from('options_trajet').update({ nom: o.nom, description: o.description }).eq('id', id);
+    if (error) throw error;
+    return id;
+  }
+  const { data, error } = await supabase.from('options_trajet').insert(o).select('id').single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function supprimerOption(id: string): Promise<void> {
+  const { error } = await supabase.from('options_trajet').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Retenir une option (les autres sont écartées) ou lever le choix.
+export async function retenirOption(id: string, retenir = true): Promise<void> {
+  const { error } = await supabase.rpc('retenir_option_trajet', { id_option: id, retenir });
+  if (error) throw error;
+}
+
+// Copie d'une option avec toutes ses étapes et leurs passagers (pour
+// proposer une variante : « pareil, mais en avion depuis Paris ») ; les
+// rendez-vous pointent vers les copies des étapes communes.
+export async function dupliquerOption(option: OptionTrajet, etapes: Trajet[], nom: string): Promise<string> {
+  const nouvelle = await enregistrerOption({ voyage_id: option.voyage_id, nom, description: option.description });
+  if (option.retour_different) {
+    const { error } = await supabase.from('options_trajet').update({ retour_different: true }).eq('id', nouvelle);
+    if (error) throw error;
+  }
+  const copies = new Map<string, string>();
+  const liste = etapesDe(option.id, etapes);
+  for (const e of liste) {
+    const { id, responsable, cout_total, passagers, ordre, rejoint_id, retour_de, ...champs } = e as any;
+    copies.set(id, await enregistrerTrajet({ ...champs, option_id: nouvelle }, passagers.map((p: { personne_id: string }) => p.personne_id)));
+  }
+  for (const e of liste) {
+    const lien: Record<string, string> = {};
+    if (e.rejoint_id && copies.has(e.rejoint_id)) lien.rejoint_id = copies.get(e.rejoint_id)!;
+    if (e.retour_de && copies.has(e.retour_de)) lien.retour_de = copies.get(e.retour_de)!;
+    if (Object.keys(lien).length) {
+      const { error } = await supabase.from('trajets').update(lien).eq('id', copies.get(e.id)!);
+      if (error) throw error;
+    }
+  }
+  return nouvelle;
+}
+
+// Un commentaire par personne et par option (texte vide : retiré).
+export async function commenterOption(optionId: string, commentaire: string): Promise<void> {
+  const texte = commentaire.trim();
+  const { error } = texte
+    ? await supabase
+        .from('avis_options_trajet')
+        .upsert({ option_id: optionId, commentaire: texte, maj_le: new Date().toISOString() }, { onConflict: 'option_id,utilisateur_id' })
+    : await supabase.from('avis_options_trajet').delete().eq('option_id', optionId).eq('utilisateur_id', (await supabase.auth.getUser()).data.user?.id ?? '');
+  if (error) throw error;
+}
+
+// Monter ou descendre une étape dans son option (la base renumérote toutes
+// les étapes de l'option, même celles des autres).
+export async function deplacerEtape(id: string, sens: -1 | 1): Promise<void> {
+  const { error } = await supabase.rpc('deplacer_etape', { id_trajet: id, sens });
+  if (error) throw error;
+}
+
+// Rejoindre une étape (pour soi et les siens), ou la quitter.
+export async function rejoindreEtape(trajetId: string, personnes: string[]): Promise<void> {
+  if (personnes.length === 0) return;
+  const { error } = await supabase
+    .from('trajet_passagers')
+    .upsert(personnes.map((personne_id) => ({ trajet_id: trajetId, personne_id })), {
+      onConflict: 'trajet_id,personne_id',
+      ignoreDuplicates: true,
+    });
+  if (error) throw error;
+}
+
+export async function quitterEtape(trajetId: string, personnes: string[]): Promise<void> {
+  if (personnes.length === 0) return;
+  const { error } = await supabase.from('trajet_passagers').delete().eq('trajet_id', trajetId).in('personne_id', personnes);
+  if (error) throw error;
 }
 
 export async function supprimerTrajet(id: string): Promise<void> {

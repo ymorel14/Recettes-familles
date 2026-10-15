@@ -33,10 +33,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permet de choisir votre photo de profil, visible par votre famille.",
-          "cameraPermission": "Permet de prendre votre photo de profil."
+          "photosPermission": "Permet de choisir votre photo de profil et les photos de vos objets rangés.",
+          "cameraPermission": "Permet de prendre votre photo de profil et de photographier vos objets et leurs rangements."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1F5F8B"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4f84f261-1fdc-4d1f-8bb0-c7ade0e38fd2"
+      }
+    },
+    "owner": "ymorel76"
   }
 }

@@ -13,6 +13,7 @@ import ConnexionScreen from '../screens/ConnexionScreen';
 import BienvenueScreen from '../screens/BienvenueScreen';
 import FamilleScreen from '../screens/FamilleScreen';
 import ListeScreen from '../screens/ListeScreen';
+import ListeCommuneFormScreen from '../screens/ListeCommuneFormScreen';
 import SouhaitFormScreen from '../screens/SouhaitFormScreen';
 import ParticipationScreen from '../screens/ParticipationScreen';
 import AOffrirScreen from '../screens/AOffrirScreen';
@@ -191,6 +192,7 @@ export default function AppNavigator() {
           <>
             <Pile.Screen name="Onglets" component={BarreOnglets} options={{ headerShown: false }} />
             <Pile.Screen name="Liste" component={ListeScreen} options={{ title: 'Liste de souhaits' }} />
+            <Pile.Screen name="ListeCommune" component={ListeCommuneFormScreen} options={{ title: 'Liste commune' }} />
             <Pile.Screen name="Souhait" component={SouhaitFormScreen} options={{ title: 'Souhait' }} />
             <Pile.Screen name="Participation" component={ParticipationScreen} options={{ title: 'Pot commun' }} />
             <Pile.Screen name="Profil" component={ProfilScreen} options={{ title: 'Profil' }} />

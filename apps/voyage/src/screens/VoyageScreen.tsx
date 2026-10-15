@@ -38,7 +38,7 @@ import { versIso } from '../services/calendrier';
 import { listerPostes, type Poste } from '../services/voyage';
 import { listerRepas, listesLiees, type Repas } from '../services/repas';
 import { Champ } from '../components/formulaire';
-import { listerTrajets, type Trajet } from '../services/transport';
+import { listerOptions, listerTrajetsDuBudget, type OptionTrajet, type Trajet } from '../services/transport';
 import { listerActivites, type Activite } from '../services/activites';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
 import { Avatar, NomAvecAvatar } from '@apps-famille/famille';
@@ -70,10 +70,11 @@ export default function VoyageScreen({ route, navigation }: any) {
     hebergements: Hebergement[];
     postes: Poste[];
     trajets: Trajet[];
+    options: OptionTrajet[];
     activites: Activite[];
     repas: Repas[];
     listes: number;
-  }>({ propositions: 0, hebergements: [], postes: [], trajets: [], activites: [], repas: [], listes: 0 });
+  }>({ propositions: 0, hebergements: [], postes: [], trajets: [], options: [], activites: [], repas: [], listes: 0 });
   const [lieuOuvert, setLieuOuvert] = useState(false);
   const [lieuChoix, setLieuChoix] = useState('decider');
   const [lieuTexte, setLieuTexte] = useState('');
@@ -82,18 +83,20 @@ export default function VoyageScreen({ route, navigation }: any) {
     try {
       const v = await obtenirVoyage(voyageId);
       const estRepas = v.nature === 'repas';
-      const [invites, famille, propositions, hebergements, postes, trajets, activites, repas, listes] = await Promise.all([
+      const [invites, famille, propositions, hebergements, postes, trajets, options, activites, repas, listes] = await Promise.all([
         listerPersonnesParIds(v.participants.map((p) => p.personne_id)),
         listerPersonnes(foyersFamille),
         listerPropositions(v.id),
         listerHebergements(v.id),
         listerPostes(v.id),
-        listerTrajets(v.id),
+        // Seules les étapes de l'option de trajet retenue comptent.
+        listerTrajetsDuBudget(v.id).then((r) => r.trajets),
+        listerOptions(v.id),
         listerActivites(v.id),
         estRepas ? listerRepas(v.id) : Promise.resolve([] as Repas[]),
         estRepas ? listesLiees(v.id) : Promise.resolve([] as string[]),
       ]);
-      setEtat({ propositions: propositions.length, hebergements, postes, trajets, activites, repas, listes: listes.length });
+      setEtat({ propositions: propositions.length, hebergements, postes, trajets, options, activites, repas, listes: listes.length });
       const carte = new Map<string, Personne>();
       for (const p of [...famille, ...invites]) carte.set(p.id, p);
       setPersonnes(carte);
@@ -188,7 +191,19 @@ export default function VoyageScreen({ route, navigation }: any) {
             : 'Proposer un logement',
           fait: false,
         },
-    transport: etat.trajets.length
+    transport: etat.options.filter((o) => o.statut !== 'ecartee').length > 1 && !etat.options.some((o) => o.statut === 'retenue')
+      ? {
+          texte: `${etat.options.filter((o) => o.statut !== 'ecartee').length} façons d’y aller, à départager`,
+          fait: false,
+        }
+      : etat.options.some((o) => o.statut === 'retenue') && etat.options.length > 1
+      ? {
+          texte:
+            `Retenu : ${etat.options.find((o) => o.statut === 'retenue')!.nom} · ${formaterEuros(budget.transport)}` +
+            (sansTrajet ? ` · ${sansTrajet} sans place` : ''),
+          fait: sansTrajet === 0,
+        }
+      : etat.trajets.length
       ? {
           texte:
             `${etat.trajets.length} trajet${etat.trajets.length > 1 ? 's' : ''} · ${formaterEuros(budget.transport)}` +

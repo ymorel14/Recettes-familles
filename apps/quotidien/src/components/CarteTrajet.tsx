@@ -17,6 +17,8 @@ type Props = {
   mesEnfants: { id: string; prenom: string }[];
   enCours?: boolean;
   onPrendre: () => void;
+  // Accepter le trajet que le planning m'a proposé.
+  onAccepter: () => void;
   onLaisser: () => void;
   onBasculerEnfant: (enfantId: string, inscrire: boolean) => void;
 };
@@ -31,11 +33,13 @@ export default function CarteTrajet({
   mesEnfants,
   enCours,
   onPrendre,
+  onAccepter,
   onLaisser,
   onBasculerEnfant,
 }: Props) {
   const annule = trajet.statut === 'annulee';
   const libre = !trajet.conducteur_id;
+  const propose = !!trajet.conducteur_id && trajet.propose;
   const aBord = new Set(trajet.enfants.map((e) => e.id));
   const placesRestantes = Math.max(0, trajet.places - trajet.enfants.length);
 
@@ -59,7 +63,15 @@ export default function CarteTrajet({
         <Text style={[styles.conducteur, { color: theme.colors.textMuted }]}>Séance annulée</Text>
       ) : (
         <Text style={[styles.conducteur, libre && { color: theme.colors.warning }]}>
-          {libre ? 'Personne ne conduit encore' : moi ? 'C’est vous qui conduisez' : `Conduit par ${conducteur ?? '…'}`}
+          {libre
+            ? 'Personne ne conduit encore'
+            : propose
+              ? moi
+                ? 'Proposé pour vous : pouvez-vous conduire ?'
+                : `Proposé à ${conducteur ?? '…'} (en attente)`
+              : moi
+                ? 'C’est vous qui conduisez'
+                : `Conduit par ${conducteur ?? '…'}`}
           {!libre && trajet.places > 0 ? ` · ${placesRestantes} place${placesRestantes > 1 ? 's' : ''} libre${placesRestantes > 1 ? 's' : ''}` : ''}
         </Text>
       )}
@@ -94,7 +106,19 @@ export default function CarteTrajet({
       )}
 
       {!annule && libre && <Bouton titre="Je conduis" onPress={onPrendre} enCours={enCours} />}
-      {!annule && moi && <Bouton variante="discret" titre="Je ne peux plus conduire" onPress={onLaisser} desactive={enCours} />}
+      {!annule && moi && propose && (
+        <View style={styles.boutons}>
+          <View style={styles.bouton}>
+            <Bouton variante="contour" titre="Je ne peux pas" onPress={onLaisser} desactive={enCours} />
+          </View>
+          <View style={styles.bouton}>
+            <Bouton titre="J’accepte" onPress={onAccepter} enCours={enCours} />
+          </View>
+        </View>
+      )}
+      {!annule && moi && !propose && (
+        <Bouton variante="discret" titre="Je ne peux plus conduire" onPress={onLaisser} desactive={enCours} />
+      )}
     </View>
   );
 }
@@ -109,6 +133,8 @@ const styles = creerStylesThemes(() => ({
     gap: 6,
   },
   carteAccent: { borderColor: theme.colors.accent, borderWidth: 1.5 },
+  boutons: { flexDirection: 'row', gap: theme.spacing.sm },
+  bouton: { flex: 1 },
   carteAnnulee: { opacity: 0.6 },
   ligne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
   heure: { fontFamily: theme.fontBodyBold, fontSize: 17, color: theme.colors.accent, minWidth: 48 },

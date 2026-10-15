@@ -150,3 +150,72 @@ test('activité au forfait seul : pas de « gratuits » dans le détail', () => 
   assert.equal(c.total, 120);
   assert.equal(c.detail, 'forfait 120 €');
 });
+
+// Décision du 13 octobre 2026 : étapes payées en commun, voitures payées
+// par leur foyer, hébergement commun ou à la charge de certains foyers.
+const voiture = (foyer_id, km, passagers, extra = {}) => ({
+  mode: 'voiture', libelle: null, ville_depart: null, foyer_id, aller_retour: false, distance_km: km, consommation: 5, prix_unitaire: 2,
+  peages: null, prix_billets: null, passagers: passagers.map((personne_id) => ({ personne_id })), ...extra,
+});
+const ferry = (prix, passagers, extra = {}) => ({
+  mode: 'bateau', libelle: 'Ferry', ville_depart: 'Ouistreham', foyer_id: 'A', aller_retour: true, distance_km: null, consommation: null,
+  prix_unitaire: null, peages: null, prix_billets: prix, passagers: passagers.map((personne_id) => ({ personne_id })), ...extra,
+});
+const tous = ['yann', 'claire', 'leo', 'marc'];
+const part = (r, f) => r.parFoyer.find((x) => x.foyer_id === f).montant;
+
+test('ferry payé en commun : réparti comme l’hébergement (Léo, enfant, ne paie pas)', () => {
+  const r = calculerBudget({ nuits: 0, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [ferry(600, tous)] });
+  // 3 adultes : 200 € chacun → Morel 400, Dupont 200
+  assert.equal(part(r, 'A'), 400);
+  assert.equal(part(r, 'C'), 200);
+  assert.match(r.lignes[0].charge, /commun/);
+  // Même ferry « chaque passager sa part » : enfants compris, 150 € chacun
+  const r2 = calculerBudget({ nuits: 0, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [ferry(600, tous, { paiement: 'passagers' })] });
+  assert.equal(part(r2, 'A'), 450);
+  assert.equal(part(r2, 'C'), 150);
+});
+
+test('chacun paie l’essence de sa voiture, même avec des passagers d’un autre foyer', () => {
+  // Voiture des Morel : 100 km × 5 L × 2 € = 10 € ; Marc est dedans mais ne paie rien.
+  const r = calculerBudget({ nuits: 0, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [voiture('A', 100, tous), voiture('C', 300, ['marc'])] });
+  assert.equal(part(r, 'A'), 10);
+  assert.equal(part(r, 'C'), 30);
+  assert.equal(r.total, 40);
+  // À la demande : voiture partagée entre ses passagers
+  const r2 = calculerBudget({ nuits: 0, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [voiture('A', 100, tous, { paiement: 'passagers' })] });
+  assert.equal(part(r2, 'C'), 2.5);
+});
+
+test('hébergement à la charge de certains foyers', () => {
+  const hotel = { nom: 'Hôtel d’étape', statut: 'retenu', prix_total: 180, prix_nuit: null, frais_annexes: null, pour_foyers: ['A'] };
+  const r = calculerBudget({ nuits: 7, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [gite, hotel], postes: [] });
+  // Gîte commun 1320 : 440 par adulte ; hôtel 180 pour les Morel seuls
+  assert.equal(r.totalCommun, 1320);
+  assert.equal(part(r, 'A'), 880 + 180);
+  assert.equal(part(r, 'C'), 440);
+  assert.equal(r.total, 1500);
+  assert.match(r.lignes.find((l) => l.libelle === 'Hôtel d’étape').charge, /Morel/);
+});
+
+test('par foyer : le ferry commun se partage entre les foyers de ses passagers', () => {
+  const r = calculerBudget({ nuits: 0, repartition: 'par_foyer', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [ferry(600, tous)] });
+  assert.equal(part(r, 'A'), 300);
+  assert.equal(part(r, 'C'), 300);
+});
+
+// Décision du 15 octobre 2026 : le trajet d'un foyer jusqu'au rendez-vous
+// (étape propre à un foyer) est payé par lui, quel que soit le mode.
+test('trajet jusqu’au rendez-vous payé par son foyer', () => {
+  const train = { ...ferry(90, ['marc'], { foyer_id: 'C', propre_foyer: true }), mode: 'train', libelle: null, ville_depart: 'Paris' };
+  const r = calculerBudget({ nuits: 0, repartition: 'par_adulte', dateReference: '2027-08-07', personnes: famille, hebergements: [], postes: [],
+    trajets: [train, ferry(600, tous)] });
+  assert.equal(part(r, 'C'), 90 + 200);
+  assert.equal(part(r, 'A'), 400);
+  assert.match(r.lignes.find((l) => l.libelle === 'Depuis Paris').charge, /Dupont/);
+});

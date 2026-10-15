@@ -25,6 +25,7 @@ import RepasFormScreen from '../screens/RepasFormScreen';
 import PlatFormScreen from '../screens/PlatFormScreen';
 import ListesCadeauxScreen from '../screens/ListesCadeauxScreen';
 import SurpriseScreen from '../screens/SurpriseScreen';
+import OptionTrajetFormScreen from '../screens/OptionTrajetFormScreen';
 import { Bouton, Chargement } from '../components/ui';
 import ConnexionScreen from '../screens/ConnexionScreen';
 import BienvenueScreen from '../screens/BienvenueScreen';
@@ -272,6 +273,7 @@ export default function AppNavigator() {
             <Pile.Screen name="Poste" component={PosteFormScreen} options={{ title: 'Dépense' }} />
             <Pile.Screen name="Transport" component={TransportScreen} options={{ title: 'Transport' }} />
             <Pile.Screen name="Trajet" component={TrajetFormScreen} options={{ title: 'Trajet' }} />
+            <Pile.Screen name="OptionTrajet" component={OptionTrajetFormScreen} options={{ title: 'Une façon d’y aller' }} />
             <Pile.Screen name="Activites" component={ActivitesScreen} options={{ title: 'Activités' }} />
             <Pile.Screen name="Activite" component={ActiviteFormScreen} options={{ title: 'Activité' }} />
             <Pile.Screen name="Vehicule" component={VehiculeFormScreen} options={{ title: 'Véhicule' }} />

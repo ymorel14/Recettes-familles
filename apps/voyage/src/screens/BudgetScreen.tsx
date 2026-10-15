@@ -8,7 +8,7 @@ import { listerPersonnesParIds, type Personne } from '../services/personnes';
 import { formaterEuros, lireEntier, listerHebergements, type Hebergement } from '../services/hebergements';
 import { ageA, AGE_ADULTE, calculerBudget } from '../services/budget';
 import { fenetrePeriode } from '../services/dates';
-import { listerTrajets, type Trajet } from '../services/transport';
+import { listerTrajetsDuBudget, type Trajet } from '../services/transport';
 import { listerActivites, type Activite } from '../services/activites';
 import { versIso } from '../services/calendrier';
 import {
@@ -33,6 +33,8 @@ type Donnees = {
   hebergements: Hebergement[];
   postes: Poste[];
   trajets: Trajet[];
+  // Estimation tant qu'aucune option de trajet n'est retenue.
+  noteTransport: string | null;
   activites: Activite[];
 };
 
@@ -55,12 +57,12 @@ export default function BudgetScreen({ route, navigation }: any) {
         obtenirVoyage(voyageId),
         listerHebergements(voyageId),
         listerPostes(voyageId),
-        listerTrajets(voyageId),
+        listerTrajetsDuBudget(voyageId),
         listerActivites(voyageId),
       ]);
       const attendus = voyage.participants.filter((p) => p.reponse !== 'decline').map((p) => p.personne_id);
       const personnes = await listerPersonnesParIds(attendus);
-      setDonnees({ voyage, personnes, hebergements, postes, trajets, activites });
+      setDonnees({ voyage, personnes, hebergements, postes, trajets: trajets.trajets, noteTransport: trajets.note, activites });
       setNuits(voyage.nb_nuits == null ? '' : String(voyage.nb_nuits));
     } catch (e) {
       setErreurChargement(messageErreurVoyage(e));
@@ -120,7 +122,7 @@ export default function BudgetScreen({ route, navigation }: any) {
         </Text>
       </View>
 
-      {r.avertissements.map((a) => (
+      {[...(donnees.noteTransport ? [donnees.noteTransport] : []), ...r.avertissements].map((a) => (
         <View key={a} style={styles.avertissement}>
           <Ionicons name="information-circle-outline" size={18} color={theme.colors.textMuted} />
           <Text style={styles.detail}>{a}</Text>
@@ -206,7 +208,7 @@ export default function BudgetScreen({ route, navigation }: any) {
                 <Text style={styles.ligneLibelle}>{l.libelle}</Text>
                 <Text style={styles.detail}>
                   {l.detail}
-                  {l.commun ? ' · frais communs' : l.poste === 'transport' ? ' · partagé entre les passagers' : l.poste === 'activite' ? '' : ' · à la charge de chacun'}
+                  {l.commun ? ' · frais communs' : l.charge ? ` · ${l.charge}` : l.poste === 'activite' ? '' : ' · à la charge de chacun'}
                 </Text>
               </View>
               <Text style={styles.montant}>{formaterEuros(l.montant)}</Text>

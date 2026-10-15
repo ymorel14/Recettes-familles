@@ -10,7 +10,7 @@ familles, et une famille active commune à toutes les apps.
 | `apps/cadeaucommun` | App CadeauCommun : listes de souhaits, idées cachées, réservations anonymes |
 | `apps/voyage` | App VoyageCommun : calendrier commun des disponibilités, préparation des voyages en famille (dates, hébergement, transport, activités, budget) |
 | `apps/souvenirs` | App SouvenirsFamille : souvenirs de famille datés (voyages, naissances, premiers pas…), photos, vidéos, commentaires, recherche en français |
-| `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — Phase 1 : covoiturage branché sur Supabase (tâches et argent de poche encore en démonstration) |
+| `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — covoiturage (groupes, invités sans compte, planning équitable, rappels), tâches et argent de poche branchés sur Supabase |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
 | `packages/theme` | Thèmes de couleurs communs aux apps |
 | `supabase/` | Base de données : `setup.sql` (historique, ne plus lancer) et `migrations/` |

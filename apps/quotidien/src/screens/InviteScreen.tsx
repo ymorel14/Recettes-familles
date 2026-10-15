@@ -5,13 +5,16 @@ import { Carte, TitreSection } from '../components/elements';
 import CarteTrajet from '../components/CarteTrajet';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { alerte } from '../utils/alerte';
+import { formaterDate, formaterPlage, lireDateSaisie } from '../services/personnes';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import {
   ajouterEnfantInvite,
+  ajouterIndisponibiliteInvite,
   inscrireEnfantInvite,
   laisserTrajetInvite,
   libelleJour,
   prendreTrajetInvite,
+  retirerIndisponibiliteInvite,
   vueInvite,
   type VueInvite,
 } from '../services/quotidien';
@@ -24,6 +27,8 @@ export default function InviteScreen({ jeton }: { jeton: string }) {
   const [vue, setVue] = useState<VueInvite | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [prenom, setPrenom] = useState('');
+  const [du, setDu] = useState('');
+  const [au, setAu] = useState('');
   const [enCours, setEnCours] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
@@ -100,6 +105,56 @@ export default function InviteScreen({ jeton }: { jeton: string }) {
         </View>
       </Carte>
 
+      <TitreSection titre="Mes indisponibilités" />
+      <Carte>
+        <Text style={styles.aide}>Les jours où vous ne pouvez pas conduire : aucun trajet ne vous y sera proposé.</Text>
+        {vue.mes_indisponibilites.map((i) => (
+          <View key={i.id} style={styles.ligneSaisie}>
+            <Text style={[styles.nom, { flex: 1 }]}>
+              {i.date_debut === i.date_fin ? `Le ${formaterDate(i.date_debut)}` : formaterPlage(i.date_debut, i.date_fin)}
+            </Text>
+            <Bouton variante="discret" titre="Retirer" onPress={() => agir(i.id, () => retirerIndisponibiliteInvite(jeton, i.id))} />
+          </View>
+        ))}
+        <View style={styles.ligneSaisie}>
+          <TextInput
+            style={[styles.champ, { flex: 1 }]}
+            value={du}
+            onChangeText={setDu}
+            placeholder="Du (JJ/MM/AAAA)"
+            placeholderTextColor={theme.colors.textMuted}
+            accessibilityLabel="Indisponible à partir du"
+          />
+          <TextInput
+            style={[styles.champ, { flex: 1 }]}
+            value={au}
+            onChangeText={setAu}
+            placeholder="Au (facultatif)"
+            placeholderTextColor={theme.colors.textMuted}
+            accessibilityLabel="Indisponible jusqu'au"
+          />
+        </View>
+        <Bouton
+          variante="contour"
+          titre="Ajouter"
+          desactive={!du.trim()}
+          enCours={enCours === 'indispo'}
+          onPress={() => {
+            const d = lireDateSaisie(du);
+            const a = au.trim() ? lireDateSaisie(au) : d;
+            if (!d || !a || a < d) {
+              alerte('Dates à vérifier', 'Dates attendues au format JJ/MM/AAAA, la seconde après la première.');
+              return;
+            }
+            agir('indispo', async () => {
+              await ajouterIndisponibiliteInvite(jeton, d, a);
+              setDu('');
+              setAu('');
+            });
+          }}
+        />
+      </Carte>
+
       {jours.length === 0 ? (
         <MessageVide titre="Aucun trajet à venir" />
       ) : (
@@ -117,6 +172,7 @@ export default function InviteScreen({ jeton }: { jeton: string }) {
                   mesEnfants={vue.mes_enfants}
                   enCours={enCours === t.id}
                   onPrendre={() => agir(t.id, () => prendreTrajetInvite(jeton, t.id))}
+                  onAccepter={() => agir(t.id, () => prendreTrajetInvite(jeton, t.id))}
                   onLaisser={() => agir(t.id, () => laisserTrajetInvite(jeton, t.id))}
                   onBasculerEnfant={(e, oui) => agir(t.id, () => inscrireEnfantInvite(jeton, t.id, e, oui))}
                 />

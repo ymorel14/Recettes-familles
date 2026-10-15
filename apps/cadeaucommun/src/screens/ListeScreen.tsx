@@ -38,6 +38,8 @@ import {
   type Souhait,
   dateCle,
   libelleDates,
+  estListeCommune,
+  joindrePrenoms,
 } from '../services/wishlist';
 import { Bouton, Chargement, Pastille } from '../components/ui';
 import JaugePot from '../components/JaugePot';
@@ -61,6 +63,8 @@ function nomSite(lien: string): string {
 //    remplit aussi la liste à la place de l'enfant.
 // Une seule liste par personne, permanente. Un cadeau disparaît de la liste
 // quand son donateur le coche "offert" (onglet À offrir).
+// Liste commune (plusieurs destinataires, cachée à eux) : toujours vue en
+// donateur ; on n'y trouve que des idées de la famille.
 export default function ListeScreen({ route, navigation }: any) {
   const { listeId } = route.params as { listeId: string };
   const { session, foyersFamille } = useAuth();
@@ -125,8 +129,15 @@ export default function ListeScreen({ route, navigation }: any) {
 
   if (!liste || !mode) return erreur ? <Text style={styles.erreur}>{erreur}</Text> : <Chargement />;
 
+  const commune = estListeCommune(liste);
   const destinataire = personnes.find((p) => p.id === liste.destinataire_id);
-  const prenom = destinataire?.prenom || 'cette personne';
+  const destinatairesCommuns = (liste.destinataires ?? [])
+    .map((d) => personnes.find((p) => p.id === d.personne_id))
+    .filter((p): p is Personne => !!p)
+    .sort((a, b) => a.prenom.localeCompare(b.prenom));
+  const prenom = commune
+    ? joindrePrenoms(destinatairesCommuns.map((p) => p.prenom)) || 'ces personnes'
+    : destinataire?.prenom || 'cette personne';
   const prenomAuteur = (utilisateurId: string) =>
     utilisateurId === moiId ? 'vous' : personnes.find((p) => p.utilisateur_id === utilisateurId)?.prenom || 'un proche';
 
@@ -152,12 +163,21 @@ export default function ListeScreen({ route, navigation }: any) {
   );
   const idees = souhaits.filter((s) => s.secret && !s.supprime_le);
 
-  const titre =
-    mode === 'destinataire' ? `Ma liste${destinataire?.prenom ? ` · ${destinataire.prenom}` : ''}` : `La liste de ${prenom}`;
+  const titre = commune
+    ? liste.titre ?? 'Liste commune'
+    : mode === 'destinataire'
+      ? `Ma liste${destinataire?.prenom ? ` · ${destinataire.prenom}` : ''}`
+      : `La liste de ${prenom}`;
 
   // Rappel du rôle de l'utilisateur sur cette liste, et de ce qui reste caché.
-  const role =
-    mode === 'destinataire'
+  const role = commune
+    ? {
+        icone: 'eye-off-outline' as const,
+        texte: `Liste commune pour ${prenom}. ${
+          destinatairesCommuns.length > 1 ? 'Ils ne la voient pas' : 'Cette liste lui est invisible'
+        } : ni son titre, ni les idées, ni ce qui est réservé. Le reste de la famille peut y ajouter des idées et les réserver.`,
+      }
+    : mode === 'destinataire'
       ? {
           icone: 'heart-outline' as const,
           texte:
@@ -431,29 +451,51 @@ export default function ListeScreen({ route, navigation }: any) {
     );
   };
 
-  const nbSouhaitsActifs = souhaitsVisibles.filter((s) => !s.supprime_le).length;
-  const nbReservesActifs = souhaitsVisibles.filter((s) => !s.supprime_le && !s.pot_commun && estComplet(s)).length;
+  const aCompter = commune ? idees : souhaitsVisibles;
+  const nbSouhaitsActifs = aCompter.filter((s) => !s.supprime_le).length;
+  const nbReservesActifs = aCompter.filter((s) => !s.supprime_le && !s.pot_commun && estComplet(s)).length;
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
       <View style={styles.entete}>
         <View style={styles.titreLigne}>
-          <Avatar personneId={liste.destinataire_id} prenom={destinataire?.prenom} taille={40} />
+          {commune ? (
+            <View style={styles.avatars}>
+              {destinatairesCommuns.slice(0, 4).map((p, i) => (
+                <View key={p.id} style={i > 0 && styles.avatarSuivant}>
+                  <Avatar personneId={p.id} prenom={p.prenom} taille={32} />
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Avatar personneId={liste.destinataire_id!} prenom={destinataire?.prenom} taille={40} />
+          )}
           <Text style={[styles.titre, styles.titreTexte]}>{titre}</Text>
         </View>
+        {commune && <Text style={styles.pourQui}>Pour {prenom}</Text>}
         <View style={styles.role}>
           <Ionicons name={role.icone} size={20} color={theme.colors.accent} />
           <Text style={styles.roleTexte}>{role.texte}</Text>
         </View>
         {mode !== 'destinataire' && (
           <Text style={styles.sousTitre}>
-            {nbSouhaitsActifs} souhait{nbSouhaitsActifs > 1 ? 's' : ''}, {nbReservesActifs} déjà réservé
+            {nbSouhaitsActifs} {commune ? 'idée' : 'souhait'}
+            {nbSouhaitsActifs > 1 ? 's' : ''}, {nbReservesActifs} déjà réservé{commune ? 'e' : ''}
             {nbReservesActifs > 1 ? 's' : ''}
           </Text>
         )}
+        {commune && liste.cree_par === moiId && (
+          <Pressable
+            onPress={() => navigation.navigate('ListeCommune', { listeId })}
+            hitSlop={8}
+            accessibilityRole="button"
+          >
+            <Text style={styles.lien}>Modifier le titre ou les personnes</Text>
+          </Pressable>
+        )}
       </View>
 
-      {peutRemplir && liste.statut === 'brouillon' && (
+      {!commune && peutRemplir && liste.statut === 'brouillon' && (
         <View style={styles.bandeau}>
           <Text style={styles.bandeauTexte}>
             Brouillon : la famille ne voit pas encore cette liste.
@@ -466,7 +508,7 @@ export default function ListeScreen({ route, navigation }: any) {
         </View>
       )}
 
-      {souhaitsVisibles.length === 0 ? (
+      {commune ? null : souhaitsVisibles.length === 0 ? (
         <Text style={styles.aide}>
           {peutRemplir ? 'Ajoutez vos premiers souhaits.' : `${prenom} n'a pas encore ajouté de souhait.`}
         </Text>
@@ -483,10 +525,12 @@ export default function ListeScreen({ route, navigation }: any) {
 
       {mode !== 'destinataire' && (
         <>
-          <View style={styles.sectionIdees}>
+          <View style={[styles.sectionIdees, commune && styles.sectionIdeesCommune]}>
             <Ionicons name="eye-off-outline" size={18} color={theme.colors.accent} />
-            <Text style={styles.section}>Idées de la famille</Text>
-            <Text style={styles.aide}>{prenom} ne les voit pas</Text>
+            <Text style={styles.section}>{commune ? 'Idées de cadeaux' : 'Idées de la famille'}</Text>
+            <Text style={styles.aide}>
+              {prenom} ne {commune && destinatairesCommuns.length > 1 ? 'les voient' : 'les voit'} pas
+            </Text>
           </View>
           {idees.length === 0 ? (
             <Text style={styles.aide}>Une idée de cadeau pour {prenom} ? Ajoutez-la, elle restera secrète.</Text>
@@ -495,7 +539,7 @@ export default function ListeScreen({ route, navigation }: any) {
           )}
           <Bouton
             variante="pointille"
-            titre="+ Ajouter une idée cachée"
+            titre={commune ? '+ Ajouter une idée' : '+ Ajouter une idée cachée'}
             onPress={() => navigation.navigate('Souhait', { listeId, idee: true, prenom })}
           />
         </>
@@ -529,6 +573,9 @@ const styles = creerStylesThemes(() => ({
   titre: { fontFamily: theme.fontTitle, fontSize: 32, color: theme.colors.text },
   titreLigne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   titreTexte: { flexShrink: 1 },
+  avatars: { flexDirection: 'row' },
+  avatarSuivant: { marginLeft: -10 },
+  pourQui: { fontFamily: theme.fontManuscrit, fontSize: 16, color: theme.colors.textMuted },
   sousTitre: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
   role: {
     flexDirection: 'row',
@@ -595,6 +642,7 @@ const styles = creerStylesThemes(() => ({
     marginTop: theme.spacing.lg,
     flexWrap: 'wrap',
   },
+  sectionIdeesCommune: { marginTop: 0 },
   section: { fontFamily: theme.fontTitle, fontSize: 19, color: theme.colors.text },
   aide: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
   pourEvenement: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.success },

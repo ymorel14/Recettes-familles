@@ -42,6 +42,8 @@ export type Hebergement = {
   description: string | null;
   statut: StatutHebergement;
   propose_par: string;
+  // Foyers qui paient cet hébergement ; vide : frais communs du voyage.
+  pour_foyers?: string[] | null;
   avis: AvisHebergement[];
 };
 

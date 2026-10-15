@@ -47,6 +47,8 @@ export type Trajet = {
   places: number;
   note: string | null;
   conducteur_id: string | null;
+  // Conducteur proposé par le planning, en attente de son accord.
+  propose: boolean;
   date: string; // "2026-10-14"
   statut: 'prevue' | 'annulee';
   lieu: string | null;
@@ -190,6 +192,18 @@ export function adresseInvite(jeton: string): string {
   return `${site}${chemin}/invite/${jeton}`;
 }
 
+// Adresse de l'espace d'un enfant : <site>/quotidien/enfant/<jeton>.
+export function adresseEnfant(jeton: string): string {
+  return adresseInvite(jeton).replace('/invite/', '/enfant/');
+}
+
+// Jeton d'enfant lu dans l'adresse de la page (web) : …/enfant/<jeton>.
+export function jetonEnfantDansAdresse(): string | null {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  const m = window.location.pathname.match(/\/enfant\/([0-9a-f-]{36})\/?$/i);
+  return m ? m[1] : null;
+}
+
 // Jeton d'invité lu dans l'adresse de la page (web) : …/invite/<jeton>.
 export function jetonDansAdresse(): string | null {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
@@ -273,6 +287,7 @@ function versTrajet(l: any): Trajet {
     places: l.places,
     note: l.note,
     conducteur_id: l.conducteur_id,
+    propose: !!l.propose,
     date: l.seances.date,
     statut: l.seances.statut,
     lieu: l.seances.lieu ?? l.seances.activites.lieu,
@@ -287,7 +302,7 @@ export async function listerTrajets(du: string, au: string): Promise<Trajet[]> {
   const { data, error } = await supabase
     .from('trajets')
     .select(
-      'id, sens, heure, places, note, conducteur_id, seance_id, ' +
+      'id, sens, heure, places, note, conducteur_id, propose, seance_id, ' +
         'seances!inner(id, date, statut, lieu, activites!inner(id, nom, lieu, groupe_id)), ' +
         'trajet_enfants(enfants(id, prenom, participant_id))'
     )
@@ -302,6 +317,20 @@ export async function listerTrajets(du: string, au: string): Promise<Trajet[]> {
 export async function prendreTrajet(id: string, places?: number): Promise<void> {
   const { error } = await supabase.rpc('prendre_trajet', { id_trajet: id, nb_places: places ?? null });
   if (error) throw error;
+}
+
+// J'accepte le trajet que le planning m'a proposé.
+export async function accepterTrajet(id: string): Promise<void> {
+  const { error } = await supabase.rpc('accepter_trajet', { id_trajet: id });
+  if (error) throw error;
+}
+
+// Propose un conducteur pour chaque trajet libre de la période (le parent
+// qui a le moins conduit) ; renvoie le nombre de trajets proposés.
+export async function proposerPlanning(idGroupe: string, du: string, au: string): Promise<number> {
+  const { data, error } = await supabase.rpc('proposer_planning', { id_groupe: idGroupe, du, au });
+  if (error) throw error;
+  return data as number;
 }
 
 export async function laisserTrajet(id: string): Promise<void> {
@@ -322,6 +351,36 @@ export async function inscrireEnfant(trajetId: string, enfantId: string, inscrir
   if (error) throw error;
 }
 
+// ---------------------------------------------------------------------------
+// Indisponibilités (le planning n'y propose pas de trajet)
+// ---------------------------------------------------------------------------
+
+export type Indisponibilite = { id: string; participant_id: string; date_debut: string; date_fin: string };
+
+export async function listerIndisponibilites(participants: string[]): Promise<Indisponibilite[]> {
+  if (!participants.length) return [];
+  const { data, error } = await supabase
+    .from('indisponibilites')
+    .select('id, participant_id, date_debut, date_fin')
+    .in('participant_id', participants)
+    .gte('date_fin', aujourdHuiIso())
+    .order('date_debut');
+  if (error) throw error;
+  return (data as Indisponibilite[]) ?? [];
+}
+
+export async function ajouterIndisponibilite(participantId: string, du: string, au: string): Promise<void> {
+  const { error } = await supabase
+    .from('indisponibilites')
+    .insert({ participant_id: participantId, date_debut: du, date_fin: au });
+  if (error) throw error;
+}
+
+export async function retirerIndisponibilite(id: string): Promise<void> {
+  const { error } = await supabase.from('indisponibilites').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function equite(idGroupe: string): Promise<LigneEquite[]> {
   const { data, error } = await supabase.rpc('equite', { id_groupe: idGroupe });
   if (error) throw error;
@@ -337,6 +396,7 @@ export type VueInvite = {
   groupe: { id: string; nom: string };
   participants: { id: string; nom_affiche: string }[];
   mes_enfants: { id: string; prenom: string }[];
+  mes_indisponibilites: { id: string; date_debut: string; date_fin: string }[];
   trajets: (Omit<Trajet, 'groupe_id'> & {})[];
 };
 
@@ -368,5 +428,15 @@ export async function inscrireEnfantInvite(jeton: string, idTrajet: string, idEn
     id_enfant: idEnfant,
     inscrire,
   });
+  if (error) throw error;
+}
+
+export async function ajouterIndisponibiliteInvite(jeton: string, du: string, au: string): Promise<void> {
+  const { error } = await supabase.rpc('ajouter_indisponibilite_invite', { jeton_invite: jeton, du, au });
+  if (error) throw error;
+}
+
+export async function retirerIndisponibiliteInvite(jeton: string, id: string): Promise<void> {
+  const { error } = await supabase.rpc('retirer_indisponibilite_invite', { jeton_invite: jeton, id_indisponibilite: id });
   if (error) throw error;
 }

@@ -7,17 +7,22 @@ import { Karla_400Regular, Karla_700Bold } from '@expo-google-fonts/karla';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import './src/services/supabase';
+// Affichage des notifications reçues app ouverte (téléphone).
+import './src/services/notifications';
 import AppNavigator from './src/navigation/AppNavigator';
 import { PassageConnexion } from '@apps-famille/famille';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { PreferencesProvider, usePreferences } from './src/contexts/PreferencesContext';
 import { theme, themeActuel, LARGEUR_MAX_WEB } from './src/theme/theme';
 import InviteScreen from './src/screens/InviteScreen';
-import { jetonDansAdresse } from './src/services/quotidien';
+import EnfantScreen from './src/screens/EnfantScreen';
+import { jetonDansAdresse, jetonEnfantDansAdresse } from './src/services/quotidien';
 
 // Parent invité sans compte (lien …/quotidien/invite/<jeton>, web) : page
 // à part, sans connexion.
 const JETON_INVITE = jetonDansAdresse();
+// Espace d'un enfant (lien …/quotidien/enfant/<jeton>, web), sans connexion.
+const JETON_ENFANT = jetonEnfantDansAdresse();
 
 // Police des icônes. Sur le site web commun (EXPO_PUBLIC_BASE_WEB défini),
 // elle est servie depuis <app>/polices/Ionicons.ttf, copiée là par
@@ -77,6 +82,8 @@ function Racine() {
 
   const application = JETON_INVITE ? (
     <InviteScreen jeton={JETON_INVITE} />
+  ) : JETON_ENFANT ? (
+    <EnfantScreen jeton={JETON_ENFANT} />
   ) : (
     <AuthProvider>
       <AppNavigator />

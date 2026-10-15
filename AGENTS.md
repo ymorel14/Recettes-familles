@@ -11,8 +11,10 @@ partagent le compte famille :
   (« Recettes familiales »), scaffoldée en Phase 0 avec Claude Code. Son cahier
   des charges vit dans le document Claude "Cahier des charges – App recettes
   familiales".
-- `apps/cadeaucommun` : app de listes de souhaits (événements, listes, idées
-  cachées, réservations anonymes), données dans le schéma `wishlist`. Cahier des
+- `apps/cadeaucommun` : app de listes de souhaits (une liste par personne,
+  idées cachées, réservations anonymes, listes communes pour plusieurs
+  personnes cachées à ces personnes — `ListeCommuneFormScreen`, migration
+  `20261012110000_wishlist_listes_communes.sql`), données dans le schéma `wishlist`. Cahier des
   charges : document Claude "Cahier des charges — CadeauCommun". La surprise est
   garantie par les règles RLS de la base, jamais seulement par l'interface.
 - `apps/voyage` : app VoyageCommun (préparer un voyage en famille : calendrier
@@ -32,13 +34,24 @@ partagent le compte famille :
   rejoints par code — équipe, club, classe —, tâches de la maison, argent de
   poche virtuel affiché en points avec l'équivalent en euros entre
   parenthèses, sans aucun flux d'argent réel), données dans le schéma
-  `quotidien`. Cahier des charges : document Claude "Cahier des charges —
-  Quotidien". Phase 1 : covoiturage branché (`src/services/quotidien.ts`,
-  migration `20261007120000_quotidien.sql`) ; tâches et argent de poche
-  encore en démonstration (`src/donnees/demo.ts`). Un membre de groupe ne
+  `quotidien`. Tâches et tirelires (`src/services/maison.ts`) restent dans
+  le foyer (règles RLS) ; tâches et argent de poche branchés depuis les
+  Phases 3 et 4 (migration `20261008110000_quotidien_taches_argent.sql`).
+  Espace enfant (Phase 5) : lien `/quotidien/enfant/<jeton>`, `EnfantScreen`,
+  fonctions `*_enfant` ; « J'ai fini » attend la validation d'un parent. Cahier des charges : document Claude "Cahier des charges —
+  Quotidien". Covoiturage (`src/services/quotidien.ts`, migrations
+  `20261007120000_quotidien.sql`, `…_rappels`, `…_planning`). Un membre de groupe ne
   voit que les trajets de l'activité commune et le prénom des enfants,
   garanti par les règles RLS ; un parent invité sans compte passe par son
-  lien (`/quotidien/invite/<jeton>`, `InviteScreen`, fonctions `*_invite`).
+  lien (`/quotidien/invite/<jeton>`, `InviteScreen`, fonctions `*_invite`). Rappels de la veille sur
+  téléphone : `src/services/notifications.ts` (expo-notifications), table
+  `quotidien.appareils`, fonction Edge `rappels-veille` planifiée par
+  `supabase/planification_rappels.sql`.
+  Inventaires (onglet « Inventaires », `src/services/inventaires.ts`,
+  migration `20261012100000_quotidien_inventaires.sql`) : inventaires par
+  domaine, lieux et contenants de rangement, objets avec photo, prêts ;
+  réservés au foyer (règles RLS), photos dans l'espace privé
+  `quotidien-inventaires`, envoyées seulement à « Enregistrer » (`avecPhoto`).
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
   Supabase et le confie au paquet avec

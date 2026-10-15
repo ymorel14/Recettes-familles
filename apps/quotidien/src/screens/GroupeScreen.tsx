@@ -7,9 +7,11 @@ import { Carte, TitreSection } from '../components/elements';
 import { Bouton, Chargement } from '../components/ui';
 import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
-import { listerPersonnes, formaterDate, type Personne } from '../services/personnes';
+import { listerPersonnes, formaterDate, formaterPlage, lireDateSaisie, type Personne } from '../services/personnes';
 import {
   adresseInvite,
+  ajouterIndisponibilite,
+  aujourdHuiIso,
   ajouterEnfant,
   ajouterInvite,
   equite,
@@ -19,16 +21,20 @@ import {
   listerActivites,
   listerEnfants,
   listerGroupes,
+  listerIndisponibilites,
   listerParticipants,
   obtenirCodeGroupe,
+  proposerPlanning,
   quitterGroupe,
   renommerParticipant,
   retirerEnfant,
+  retirerIndisponibilite,
   retirerInvite,
   supprimerActivite,
   type Activite,
   type Enfant,
   type Groupe,
+  type Indisponibilite,
   type LigneEquite,
   type Participant,
 } from '../services/quotidien';
@@ -47,6 +53,9 @@ export default function GroupeScreen({ route, navigation }: any) {
   const [prenom, setPrenom] = useState('');
   const [nomInvite, setNomInvite] = useState('');
   const [monNom, setMonNom] = useState('');
+  const [indispos, setIndispos] = useState<Indisponibilite[]>([]);
+  const [indispoDu, setIndispoDu] = useState('');
+  const [indispoAu, setIndispoAu] = useState('');
   const [enCours, setEnCours] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
@@ -65,6 +74,7 @@ export default function GroupeScreen({ route, navigation }: any) {
       setEnfants(await listerEnfants(ps.map((p) => p.id)));
       const moi = ps.find((p) => p.foyer_id === foyer?.id && !p.parti_le);
       setMonNom(moi?.nom_affiche ?? '');
+      setIndispos(moi ? await listerIndisponibilites([moi.id]) : []);
       if (foyer) setPersonnesFoyer((await listerPersonnes([foyer.id])).filter((p) => !p.utilisateur_id));
       navigation.setOptions({ title: g?.nom ?? 'Groupe' });
     } catch (e) {
@@ -134,6 +144,32 @@ export default function GroupeScreen({ route, navigation }: any) {
         message: `Bonjour ${nom}, voici le lien pour voir et prendre les trajets du groupe « ${groupe.nom} », sans créer de compte : ${adresseInvite(jeton)}`,
       });
     }, false);
+
+  const proposer = () =>
+    agir('planning', async () => {
+      const n = await proposerPlanning(id, aujourdHuiIso(), aujourdHuiIso(27));
+      alerte(
+        n ? 'Tours proposés' : 'Rien à proposer',
+        n
+          ? `${n} trajet${n > 1 ? 's' : ''} proposé${n > 1 ? 's' : ''} aux parents qui ont le moins conduit. Chacun accepte ou refuse le sien dans Trajets.`
+          : 'Tous les trajets des quatre prochaines semaines ont déjà un conducteur, ou personne n’est disponible.'
+      );
+    });
+
+  const ajouterIndispo = () => {
+    if (!moi) return;
+    const du = lireDateSaisie(indispoDu);
+    const au = indispoAu.trim() ? lireDateSaisie(indispoAu) : du;
+    if (!du || !au || au < du) {
+      alerte('Dates à vérifier', 'Dates attendues au format JJ/MM/AAAA, la seconde après la première.');
+      return;
+    }
+    agir('indispo', async () => {
+      await ajouterIndisponibilite(moi.id, du, au);
+      setIndispoDu('');
+      setIndispoAu('');
+    });
+  };
 
   const quitter = () =>
     alerte('Quitter ce groupe ?', 'Vous ne verrez plus ses trajets, et vos trajets à venir seront libérés.', [
@@ -229,6 +265,58 @@ export default function GroupeScreen({ route, navigation }: any) {
         titre="Ajouter une activité"
         onPress={() => navigation.navigate('ActiviteForm', { groupeId: id, zone: groupe.zone_vacances })}
       />
+
+      <TitreSection titre="Planning" detail="4 prochaines semaines" />
+      <Carte>
+        <Text style={styles.aide}>
+          Chaque trajet libre est proposé au parent qui a le moins conduit, en évitant ses indisponibilités. Chacun
+          accepte ou refuse ensuite le sien ; un trajet refusé pourra être reproposé à quelqu’un d’autre.
+        </Text>
+        <Bouton titre="Proposer les tours" onPress={proposer} enCours={enCours === 'planning'} />
+        {moi && (
+          <>
+            <Text style={styles.sousTitre}>Mes indisponibilités</Text>
+            {indispos.length === 0 && <Text style={styles.aide}>Aucune : vous pouvez être proposé n’importe quel jour.</Text>}
+            {indispos.map((i) => (
+              <View key={i.id} style={styles.ligne}>
+                <Text style={styles.nom}>
+                  {i.date_debut === i.date_fin ? `Le ${formaterDate(i.date_debut)}` : formaterPlage(i.date_debut, i.date_fin)}
+                </Text>
+                <Pressable onPress={() => agir(i.id, () => retirerIndisponibilite(i.id))} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.lienDiscret}>Retirer</Text>
+                </Pressable>
+              </View>
+            ))}
+            <View style={styles.ligneSaisie}>
+              <TextInput
+                style={[styles.champ, { flex: 1 }]}
+                value={indispoDu}
+                onChangeText={setIndispoDu}
+                placeholder="Du (JJ/MM/AAAA)"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="numbers-and-punctuation"
+                accessibilityLabel="Indisponible à partir du"
+              />
+              <TextInput
+                style={[styles.champ, { flex: 1 }]}
+                value={indispoAu}
+                onChangeText={setIndispoAu}
+                placeholder="Au (facultatif)"
+                placeholderTextColor={theme.colors.textMuted}
+                keyboardType="numbers-and-punctuation"
+                accessibilityLabel="Indisponible jusqu'au"
+              />
+            </View>
+            <Bouton
+              variante="contour"
+              titre="Ajouter une indisponibilité"
+              onPress={ajouterIndispo}
+              enCours={enCours === 'indispo'}
+              desactive={!indispoDu.trim()}
+            />
+          </>
+        )}
+      </Carte>
 
       <TitreSection titre="Parents" detail={`${actifs.length}`} />
       <Carte>

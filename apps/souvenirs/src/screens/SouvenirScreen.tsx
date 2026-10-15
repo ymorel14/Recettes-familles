@@ -206,6 +206,20 @@ export default function SouvenirScreen({ route, navigation }: any) {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <ScrollView contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
         {souvenir.medias.length > 0 ? (
+          <Pressable
+            onPress={() => navigation.navigate('Galerie', { souvenirId: souvenir.id })}
+            style={styles.albumLigne}
+            accessibilityRole="button"
+            accessibilityLabel={`Ouvrir l'album (${souvenir.medias.length})`}
+          >
+            <Ionicons name="images-outline" size={16} color={theme.colors.accent} />
+            <Text style={styles.albumLigneTexte}>
+              Ouvrir l'album ({souvenir.medias.length})
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.accent} />
+          </Pressable>
+        ) : null}
+        {souvenir.medias.length > 0 ? (
           <FlatList
             horizontal
             data={souvenir.medias}
@@ -214,7 +228,7 @@ export default function SouvenirScreen({ route, navigation }: any) {
             contentContainerStyle={styles.bandeau}
             renderItem={({ item, index }) => (
               <Pressable
-                onPress={() => navigation.navigate('Media', { souvenirId: souvenir.id, index })}
+                onPress={() => navigation.navigate('Galerie', { souvenirId: souvenir.id })}
                 accessibilityRole="imagebutton"
                 accessibilityLabel={item.legende ?? `Média ${index + 1}`}
               >
@@ -411,6 +425,7 @@ export default function SouvenirScreen({ route, navigation }: any) {
         )}
         <Commentaires
           souvenirId={souvenir.id}
+          titreSouvenir={souvenir.titre}
           commentaires={souvenir.commentaires}
           peutModerer={modifiable}
           onChange={charger}
@@ -424,6 +439,8 @@ const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   contenu: { padding: theme.spacing.md, gap: theme.spacing.md, paddingBottom: theme.spacing.xl * 2 },
   bandeau: { gap: theme.spacing.sm },
+  albumLigne: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 32 },
+  albumLigneTexte: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
   choixWeb: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm, justifyContent: 'center' },
   vignette: { width: 150, height: 150 },
   vignettePremiere: { width: 220, height: 150 },

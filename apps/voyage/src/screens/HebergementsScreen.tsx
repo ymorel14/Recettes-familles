@@ -41,6 +41,7 @@ type Donnees = {
   hebergements: Hebergement[];
   prenoms: Map<string, string>;
   maPersonneId: string | null;
+  foyers: Map<string, string>; // foyers des invités (« à la charge de … »)
 };
 
 // Hébergements d'un voyage : propositions de chacun, avis, et le choix d'un
@@ -68,7 +69,8 @@ export default function HebergementsScreen({ route, navigation }: any) {
         listerPersonnesParIds(voyage.participants.map((p) => p.personne_id)),
       ]);
       const maPersonneId = invites.find((p) => p.utilisateur_id === moiId)?.id ?? null;
-      setDonnees({ voyage, hebergements, prenoms, maPersonneId });
+      const foyers = new Map(invites.filter((p) => p.foyer_id && p.foyer_nom).map((p) => [p.foyer_id!, p.foyer_nom!]));
+      setDonnees({ voyage, hebergements, prenoms, maPersonneId, foyers });
     } catch (e) {
       setErreurChargement(messageErreurVoyage(e));
     }
@@ -82,7 +84,7 @@ export default function HebergementsScreen({ route, navigation }: any) {
 
   if (erreurChargement) return <MessageVide titre="Hébergements indisponibles" texte={erreurChargement} />;
   if (!donnees) return <Chargement />;
-  const { voyage, hebergements, prenoms, maPersonneId } = donnees;
+  const { voyage, hebergements, prenoms, maPersonneId, foyers } = donnees;
 
   const organisateur = estOrganisateur(voyage, moiId, maPersonneId);
   const attendus = voyage.participants.filter((p) => p.reponse !== 'decline').length;
@@ -126,6 +128,11 @@ export default function HebergementsScreen({ route, navigation }: any) {
           {prix !== null ? `${formaterEuros(prix)} le séjour` : 'Prix à préciser'}
           {parPersonneNuit !== null ? ` · ${formaterEuros(parPersonneNuit)} / pers. / nuit` : ''}
         </Text>
+        {(h.pour_foyers ?? []).length > 0 && (
+          <Text style={styles.detail}>
+            À la charge de {(h.pour_foyers ?? []).map((f) => foyers.get(f) ?? 'un autre foyer').join(', ')}
+          </Text>
+        )}
         {h.prix_total == null && h.prix_nuit != null && (
           <Text style={styles.detail}>
             {formaterEuros(Number(h.prix_nuit))} la nuit × {nuits ?? '?'} nuit{(nuits ?? 0) > 1 ? 's' : ''}

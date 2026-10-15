@@ -59,13 +59,30 @@ export type StatutListe = 'brouillon' | 'publiee' | 'archivee';
 // CadeauCommun n'a plus de notion d'événement (c'est le rôle de
 // VoyageCommun) : `evenement_id` est un reste de l'ancien fonctionnement,
 // toujours vide.
+//
+// Liste commune (migration du 12 octobre 2026) : une liste pour plusieurs
+// personnes au choix, avec un titre, cachée à ses destinataires (ils ne la
+// voient pas du tout). `destinataire_id` est alors vide et les personnes
+// sont dans `destinataires`.
 export type Liste = {
   id: string;
   evenement_id: string | null;
-  destinataire_id: string;
+  destinataire_id: string | null;
+  titre: string | null;
   statut: StatutListe;
   cree_par: string;
+  destinataires?: { personne_id: string }[];
 };
+
+export function estListeCommune(l: Pick<Liste, 'destinataire_id'>): boolean {
+  return l.destinataire_id == null;
+}
+
+// ["Mamie", "Papi", "Léo"] → "Mamie, Papi et Léo"
+export function joindrePrenoms(prenoms: string[]): string {
+  if (prenoms.length <= 1) return prenoms[0] ?? '';
+  return `${prenoms.slice(0, -1).join(', ')} et ${prenoms[prenoms.length - 1]}`;
+}
 
 export type Souhait = {
   id: string;
@@ -296,9 +313,52 @@ export async function cadeauxOfferts(listeId: string): Promise<{ souhaits: Set<s
 }
 
 export async function obtenirListe(id: string): Promise<Liste & { evenement: Evenement | null }> {
-  const { data, error } = await supabase.from('listes').select('*, evenement:evenements(*)').eq('id', id).single();
+  const { data, error } = await supabase
+    .from('listes')
+    .select('*, evenement:evenements(*), destinataires:liste_destinataires(personne_id)')
+    .eq('id', id)
+    .single();
   if (error) throw error;
   return data as any;
+}
+
+// ---------------------------------------------------------------------------
+// Listes communes : pour plusieurs personnes, cachées à ces personnes
+// ---------------------------------------------------------------------------
+
+// Les listes communes de la famille affichée. La base ne renvoie jamais à
+// quelqu'un une liste dont il est destinataire.
+export async function listesCommunes(familleId: string): Promise<Liste[]> {
+  const { data, error } = await supabase
+    .from('listes')
+    .select('*, destinataires:liste_destinataires(personne_id), familles:liste_familles(famille_id)')
+    .is('destinataire_id', null)
+    .order('cree_le', { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as any[]).filter((l) =>
+    (l.familles ?? []).some((f: { famille_id: string }) => f.famille_id === familleId)
+  );
+}
+
+export async function creerListeCommune(titre: string, personnes: string[], familleId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('creer_liste_commune', {
+    titre_liste: titre.trim(),
+    personnes,
+    id_famille: familleId,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+// Titre et destinataires (créateur seulement). Une personne ajoutée aux
+// destinataires perd ses réservations sur la liste et ne la voit plus.
+export async function modifierListeCommune(id: string, titre: string, personnes: string[]): Promise<void> {
+  const { error } = await supabase.rpc('modifier_liste_commune', {
+    id_liste: id,
+    titre_liste: titre.trim(),
+    personnes,
+  });
+  if (error) throw error;
 }
 
 // Listes dont je suis le destinataire (ma personne), avec leur événement.
@@ -649,7 +709,10 @@ export type MaReservation = {
     supprime_le: string | null;
     liste: {
       id: string;
-      destinataire_id: string;
+      // Vide pour une liste commune : voir `titre` et `destinataires`.
+      destinataire_id: string | null;
+      titre: string | null;
+      destinataires: { personne_id: string }[] | null;
     } | null;
   } | null;
 };
@@ -659,7 +722,7 @@ export async function mesReservations(): Promise<MaReservation[]> {
   const { data, error } = await supabase
     .from('reservations')
     .select(
-      'id, souhait_id, quantite, achete, note_privee, offert_le, option:options(titre, prix, lien), souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id))'
+      'id, souhait_id, quantite, achete, note_privee, offert_le, option:options(titre, prix, lien), souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, titre, destinataires:liste_destinataires(personne_id)))'
     )
     .order('cree_le', { ascending: true });
   if (error) throw error;
@@ -754,7 +817,7 @@ export async function mesParticipations(): Promise<MaParticipation[]> {
   const { data, error } = await supabase
     .from('participations')
     .select(
-      'id, souhait_id, montant, verse, offert_le, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id))'
+      'id, souhait_id, montant, verse, offert_le, souhait:souhaits(id, titre, prix, type_prix, image, lien, secret, supprime_le, liste:listes(id, destinataire_id, titre, destinataires:liste_destinataires(personne_id)))'
     )
     .order('cree_le', { ascending: true });
   if (error) throw error;

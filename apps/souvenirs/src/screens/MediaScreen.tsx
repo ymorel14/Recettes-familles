@@ -239,6 +239,7 @@ export default function MediaScreen({ route, navigation }: any) {
 
           <Commentaires
             souvenirId={souvenir.id}
+            titreSouvenir={souvenir.titre}
             mediaId={courant.id}
             commentaires={souvenir.commentaires}
             peutModerer={modifiable}

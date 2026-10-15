@@ -18,6 +18,8 @@ import RechercheScreen from '../screens/RechercheScreen';
 import SouvenirScreen from '../screens/SouvenirScreen';
 import SouvenirFormScreen from '../screens/SouvenirFormScreen';
 import MediaScreen from '../screens/MediaScreen';
+import GalerieScreen from '../screens/GalerieScreen';
+import DiaporamaScreen from '../screens/DiaporamaScreen';
 import DepuisVoyageScreen from '../screens/DepuisVoyageScreen';
 import AlbumsScreen from '../screens/AlbumsScreen';
 import AnneeScreen from '../screens/AnneeScreen';
@@ -200,6 +202,18 @@ export default function AppNavigator() {
             <Pile.Screen name="Souvenir" component={SouvenirScreen} options={{ title: 'Souvenir' }} />
             <Pile.Screen name="SouvenirForm" component={SouvenirFormScreen} options={{ title: 'Nouveau souvenir' }} />
             <Pile.Screen name="Media" component={MediaScreen} options={{ title: 'Média' }} />
+            <Pile.Screen name="Galerie" component={GalerieScreen} options={{ title: 'Album' }} />
+            <Pile.Screen
+              name="Diaporama"
+              component={DiaporamaScreen}
+              options={{
+                headerShown: false,
+                presentation: 'fullScreenModal',
+                animation: 'fade',
+                contentStyle: { backgroundColor: '#000000' },
+                title: 'Photos',
+              }}
+            />
             <Pile.Screen name="Annee" component={AnneeScreen} options={{ title: 'Année' }} />
             <Pile.Screen name="Album" component={AlbumScreen} options={{ title: 'Album' }} />
             <Pile.Screen name="AlbumForm" component={AlbumFormScreen} options={{ title: 'Nouvel album' }} />

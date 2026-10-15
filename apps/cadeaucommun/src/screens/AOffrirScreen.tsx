@@ -8,6 +8,7 @@ import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
 import { alerte } from '../utils/alerte';
 import {
   formaterPrix,
+  joindrePrenoms,
   libellePrix,
   listerPersonnes,
   marquerAchete,
@@ -57,7 +58,20 @@ export default function AOffrirScreen({ navigation }: any) {
 
   if (reservations === null) return <Chargement />;
 
-  const prenomDe = (personneId?: string) => personnes.find((p) => p.id === personneId)?.prenom || 'un proche';
+  const prenomDe = (personneId?: string | null) => personnes.find((p) => p.id === personneId)?.prenom || 'un proche';
+
+  // Pour qui est un cadeau : la personne de la liste, ou les destinataires
+  // d'une liste commune ("Mamie et Papi"), avec le titre de cette liste.
+  type ListeDuCadeau = NonNullable<NonNullable<MaReservation['souhait']>['liste']>;
+  const pourQui = (l: ListeDuCadeau | null | undefined) => {
+    if (!l) return { cle: 'inconnu', personneId: null as string | null, prenom: 'un proche', titre: null as string | null };
+    if (l.destinataire_id) return { cle: l.destinataire_id, personneId: l.destinataire_id, prenom: prenomDe(l.destinataire_id), titre: null };
+    const noms = (l.destinataires ?? [])
+      .map((d) => personnes.find((p) => p.id === d.personne_id)?.prenom)
+      .filter((x): x is string => !!x)
+      .sort((a, b) => a.localeCompare(b));
+    return { cle: `liste-${l.id}`, personneId: null, prenom: joindrePrenoms(noms) || 'plusieurs proches', titre: l.titre };
+  };
 
   const enregistrer = async (action: () => Promise<unknown>) => {
     try {
@@ -96,22 +110,30 @@ export default function AOffrirScreen({ navigation }: any) {
   };
 
   // Regroupement par personne (destinataire), par ordre alphabétique.
-  type Groupe = { personneId: string; prenom: string; lignes: MaReservation[]; pots: MaParticipation[] };
+  // Une liste commune forme son propre groupe.
+  type Groupe = {
+    cle: string;
+    personneId: string | null;
+    prenom: string;
+    titre: string | null;
+    lignes: MaReservation[];
+    pots: MaParticipation[];
+  };
   const grouper = (lignes: MaReservation[], pots: MaParticipation[]) => {
     const groupes = new Map<string, Groupe>();
-    const groupeDe = (personneId: string) => {
-      if (!groupes.has(personneId))
-        groupes.set(personneId, { personneId, prenom: prenomDe(personneId), lignes: [], pots: [] });
-      return groupes.get(personneId)!;
+    const groupeDe = (l: ListeDuCadeau | null | undefined) => {
+      const q = pourQui(l);
+      if (!groupes.has(q.cle)) groupes.set(q.cle, { ...q, lignes: [], pots: [] });
+      return groupes.get(q.cle)!;
     };
-    lignes.forEach((r) => groupeDe(r.souhait?.liste?.destinataire_id ?? 'inconnu').lignes.push(r));
-    pots.forEach((p) => groupeDe(p.souhait?.liste?.destinataire_id ?? 'inconnu').pots.push(p));
+    lignes.forEach((r) => groupeDe(r.souhait?.liste).lignes.push(r));
+    pots.forEach((p) => groupeDe(p.souhait?.liste).pots.push(p));
     return [...groupes.values()].sort((a, b) => a.prenom.localeCompare(b.prenom));
   };
 
   const ligneReservation = (r: MaReservation, offert: boolean) => {
     const titre = `${r.souhait?.titre ?? 'Cadeau'}${r.option ? ` · ${r.option.titre}` : ''}`;
-    const pour = prenomDe(r.souhait?.liste?.destinataire_id);
+    const pour = pourQui(r.souhait?.liste).prenom;
     return (
       <View key={r.id} style={styles.ligne}>
         {!offert && (
@@ -173,7 +195,7 @@ export default function AOffrirScreen({ navigation }: any) {
 
   const lignePot = (p: MaParticipation, offert: boolean) => {
     const titre = p.souhait?.titre ?? 'Pot commun';
-    const pour = prenomDe(p.souhait?.liste?.destinataire_id);
+    const pour = pourQui(p.souhait?.liste).prenom;
     return (
       <View key={p.id} style={styles.ligne}>
         {!offert && (
@@ -270,11 +292,18 @@ export default function AOffrirScreen({ navigation }: any) {
               aVerser > 0 ? `${aVerser} participation${aVerser > 1 ? 's' : ''} à verser` : null,
             ].filter(Boolean);
             return (
-              <View key={g.personneId} style={styles.groupe}>
+              <View key={g.cle} style={styles.groupe}>
                 <View style={styles.groupeEntete}>
-                  <Avatar personneId={g.personneId} prenom={g.prenom} taille={36} />
+                  {g.personneId ? (
+                    <Avatar personneId={g.personneId} prenom={g.prenom} taille={36} />
+                  ) : (
+                    <View style={styles.iconeCommune}>
+                      <Ionicons name="gift-outline" size={20} color={theme.colors.accent} />
+                    </View>
+                  )}
                   <View style={styles.groupeTextes}>
                     <Text style={styles.groupeTitre}>Pour {g.prenom}</Text>
+                    {g.titre ? <Text style={styles.detail}>Liste commune · {g.titre}</Text> : null}
                     <Text style={styles.detail}>
                       {resume.length === 0 ? 'Tout est prêt' : resume.join(' · ')}
                       {total > 0 ? ` · budget ${formaterPrix(total)}` : ''}
@@ -297,7 +326,7 @@ export default function AOffrirScreen({ navigation }: any) {
           </Pressable>
           {voirOfferts &&
             grouper(offerts.lignes, offerts.pots).map((g) => (
-              <View key={g.personneId} style={[styles.groupe, styles.groupeOffert]}>
+              <View key={g.cle} style={[styles.groupe, styles.groupeOffert]}>
                 <Text style={styles.groupeTitreOffert}>Pour {g.prenom}</Text>
                 {g.lignes.map((r) => ligneReservation(r, true))}
                 {g.pots.map((p) => lignePot(p, true))}
@@ -324,6 +353,14 @@ const styles = creerStylesThemes(() => ({
   groupeOffert: { backgroundColor: theme.colors.background },
   groupeEntete: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   groupeTextes: { flex: 1, gap: 2 },
+  iconeCommune: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accentTransparent,
+  },
   groupeTitre: { fontFamily: theme.fontTitle, fontSize: 20, color: theme.colors.text },
   groupeTitreOffert: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.textMuted },
   ligne: {

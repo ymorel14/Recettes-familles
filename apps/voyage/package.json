@@ -11,7 +11,8 @@
     "export:web": "expo export --platform web",
     "test:budget": "node --experimental-strip-types --no-warnings --test scripts/tester-budget.mjs",
     "test:annonce": "node --experimental-strip-types --no-warnings --test scripts/tester-annonce.mjs",
-    "test:synthese": "node --experimental-strip-types --no-warnings --test scripts/tester-synthese.mjs"
+    "test:synthese": "node --experimental-strip-types --no-warnings --test scripts/tester-synthese.mjs",
+    "test:options": "node --experimental-strip-types --no-warnings --test scripts/tester-options-trajet.mjs"
   },
   "dependencies": {
     "@apps-famille/famille": "*",

@@ -184,6 +184,10 @@ export function formulaireVide(): RecetteFormulaire {
 const SELECTION_RECETTE_COMPLETE =
   'id, foyer_id, titre, photo_url, parts_defaut, temps_preparation_minutes, temps_cuisson_minutes, notes, note, source, source_url, cree_par, cree_le, maj_le, cachee, cachee_par, revelee_le, ingredients(*), etapes!etapes_recette_id_fkey(*, recette_liee:recette_liee_id(id, titre)), recette_categories(categories(*)), photos_recette(*), elements(*), foyer:foyers(id, nom), essais(verdict)';
 
+// Pseudo-catégorie de l'écran d'accueil qui regroupe les recettes sans
+// aucune catégorie (sinon introuvables dans l'app).
+export const ID_SANS_CATEGORIE = '__sans_categorie__';
+
 // Liste légère (id + titre seulement) des recettes du foyer, pour le
 // sélecteur "Lier à une recette" du formulaire (§8/§4) — exclut la recette
 // en cours d'édition (pas de lien d'une recette vers elle-même).
@@ -487,23 +491,20 @@ export async function mettreAJourRecette(recetteId: string, form: RecetteFormula
 
   await enregistrerPhotos(recetteId, urlsPhotos);
 
-  const { error: erreurSuppressionIngredients } = await supabase
+  // Rien n'est supprimé d'avance : les anciens ingrédients ne sont retirés
+  // qu'une fois les nouveaux enregistrés, et les catégories sont remplacées
+  // en premier (voir inserreIngredientsEtapesEtCategories). Une erreur en
+  // cours de route (réseau…) ne peut plus laisser une recette sans
+  // catégorie — donc invisible dans l'app — ni sans ingrédients.
+  const { data: anciens, error: erreurAnciens } = await supabase
     .from('ingredients')
-    .delete()
+    .select('id')
     .eq('recette_id', recetteId);
-  if (erreurSuppressionIngredients) throw erreurSuppressionIngredients;
+  if (erreurAnciens) throw erreurAnciens;
 
-  // (Les étapes ne sont plus supprimées ici : elles sont mises à jour sur
-  // place dans inserreIngredientsEtapesEtCategories, pour garder leurs
-  // identifiants.)
-
-  const { error: erreurSuppressionCategories } = await supabase
-    .from('recette_categories')
-    .delete()
-    .eq('recette_id', recetteId);
-  if (erreurSuppressionCategories) throw erreurSuppressionCategories;
-
-  await inserreIngredientsEtapesEtCategories(recetteId, form);
+  await inserreIngredientsEtapesEtCategories(recetteId, form, {
+    anciensIngredients: (anciens ?? []).map((i: any) => i.id as string),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -548,7 +549,13 @@ export async function supprimerRecette(recetteId: string): Promise<void> {
 // Insère les ingrédients, étapes et catégories d'un formulaire pour une
 // recette déjà créée (utilisé à la création, et après avoir vidé ces listes
 // lors d'une modification — voir `creerRecette` / `mettreAJourRecette`).
-async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut: RecetteFormulaire): Promise<void> {
+async function inserreIngredientsEtapesEtCategories(
+  recetteId: string,
+  formBrut: RecetteFormulaire,
+  // Modification : ingrédients de la version précédente, supprimés une fois
+  // les nouveaux enregistrés.
+  { anciensIngredients = [] }: { anciensIngredients?: string[] } = {}
+): Promise<void> {
   // Éléments : enregistrés seulement si la recette est vraiment découpée
   // (sinon aucun élément, recette d'un seul tenant). Ingrédients et étapes
   // sont remis dans l'ordre des éléments.
@@ -572,14 +579,39 @@ async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut:
   };
   const idElement = (clef?: string | null) => (avecElements ? clef ?? null : null);
 
+  // Catégories en premier : c'est par elles que la recette apparaît dans
+  // l'app. On ajoute les nouvelles avant de retirer celles qui ne sont plus
+  // cochées, si bien que la recette n'est jamais sans catégorie.
+  const categories = await Promise.all(form.nomsCategories.map((nom) => trouverOuCreerCategorie(nom)));
+  const idsCategories = Array.from(new Set(categories.map((c) => c.id)));
+  if (idsCategories.length > 0) {
+    const { error } = await supabase
+      .from('recette_categories')
+      .upsert(
+        idsCategories.map((id) => ({ recette_id: recetteId, categorie_id: id })),
+        { onConflict: 'recette_id,categorie_id', ignoreDuplicates: true }
+      );
+    if (error) throw error;
+    const { error: erreurRetrait } = await supabase
+      .from('recette_categories')
+      .delete()
+      .eq('recette_id', recetteId)
+      .not('categorie_id', 'in', `(${idsCategories.join(',')})`);
+    if (erreurRetrait) throw erreurRetrait;
+  }
+
   if (avecElements) {
+    // La colonne variante_de (migration 20261002110000) n'est envoyée que si
+    // la recette a des variantes : une base sans cette migration enregistre
+    // donc toujours les recettes découpées en éléments.
+    const avecVariantes = elements.some((e) => e.varianteDe);
     const { error } = await supabase.from('elements').upsert(
       elements.map((e, ordre) => ({
         id: e.clefId,
         recette_id: recetteId,
         nom: e.nom.trim(),
         ordre,
-        variante_de: e.varianteDe ?? null,
+        ...(avecVariantes ? { variante_de: e.varianteDe ?? null } : {}),
       }))
     );
     if (error) throw error;
@@ -606,6 +638,13 @@ async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut:
       .single();
     if (error) throw error;
     correspondanceClefVersId.set(brouillon.clefId, ingredientCree.id as string);
+  }
+
+  // Anciens ingrédients (modification) : retirés maintenant que les
+  // nouveaux sont enregistrés.
+  if (anciensIngredients.length > 0) {
+    const { error } = await supabase.from('ingredients').delete().in('id', anciensIngredients);
+    if (error) throw error;
   }
 
   // Étapes : chacune garde son identifiant (clefId = id en base). Les étapes
@@ -641,14 +680,6 @@ async function inserreIngredientsEtapesEtCategories(recetteId: string, formBrut:
   }
   const { error: erreurSuppressionElements } = await suppressionElements;
   if (erreurSuppressionElements) throw erreurSuppressionElements;
-
-  if (form.nomsCategories.length > 0) {
-    const categories = await Promise.all(form.nomsCategories.map((nom) => trouverOuCreerCategorie(nom)));
-    const { error } = await supabase
-      .from('recette_categories')
-      .insert(categories.map((c) => ({ recette_id: recetteId, categorie_id: c.id })));
-    if (error) throw error;
-  }
 }
 
 // Convertit une recette déjà enregistrée en formulaire pré-rempli, pour

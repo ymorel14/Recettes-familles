@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { Avatar, extraireMessageErreur, prenomsDe } from '@apps-famille/famille';
@@ -12,6 +13,7 @@ import {
 import { Champ } from './formulaire';
 import { Bouton } from './ui';
 import { alerte } from '../utils/alerte';
+import { messageCommentaire, partagerSurWhatsApp } from '../utils/partage';
 
 function quand(iso: string): string {
   const d = new Date(iso);
@@ -20,15 +22,18 @@ function quand(iso: string): string {
 
 // Commentaires d'un souvenir (mediaId vide) ou d'un de ses médias. Chacun
 // modifie ou supprime les siens ; ceux qui gèrent le souvenir peuvent aussi
-// supprimer ceux des autres (peutModerer).
+// supprimer ceux des autres (peutModerer). Chacun peut aussi partager les
+// siens (et seulement les siens) sur WhatsApp.
 export default function Commentaires({
   souvenirId,
+  titreSouvenir,
   mediaId = null,
   commentaires,
   peutModerer,
   onChange,
 }: {
   souvenirId: string;
+  titreSouvenir: string;
   mediaId?: string | null;
   commentaires: Commentaire[];
   peutModerer: boolean;
@@ -66,6 +71,15 @@ export default function Commentaires({
       setErreur(extraireMessageErreur(e, 'Envoi impossible.'));
     } finally {
       setEnCours(false);
+    }
+  };
+
+  const partager = async (c: Commentaire) => {
+    setErreur(null);
+    try {
+      await partagerSurWhatsApp(messageCommentaire(titreSouvenir, c.texte, !!mediaId));
+    } catch {
+      setErreur("Impossible d'ouvrir WhatsApp.");
     }
   };
 
@@ -116,6 +130,18 @@ export default function Commentaires({
                     accessibilityRole="button"
                   >
                     <Text style={styles.lien}>Modifier</Text>
+                  </Pressable>
+                )}
+                {mien && (
+                  <Pressable
+                    onPress={() => partager(c)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Partager ce commentaire sur WhatsApp"
+                    style={styles.partage}
+                  >
+                    <Ionicons name="logo-whatsapp" size={14} color={theme.colors.textMuted} />
+                    <Text style={styles.lien}>WhatsApp</Text>
                   </Pressable>
                 )}
                 <Pressable onPress={() => supprimer(c)} hitSlop={8} accessibilityRole="button">
@@ -175,6 +201,7 @@ const styles = creerStylesThemes(() => ({
   date: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
   texte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: theme.spacing.md, marginTop: 2 },
+  partage: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   lien: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, textDecorationLine: 'underline' },
   boutons: { flexDirection: 'row', justifyContent: 'flex-end', gap: theme.spacing.sm },
   publier: { minWidth: 120 },

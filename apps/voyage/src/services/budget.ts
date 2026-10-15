@@ -12,8 +12,19 @@
 //    chaque personne (enfants compris), donc de son foyer ;
 //  - tant qu'aucun hébergement n'est retenu, le budget prend la proposition
 //    la moins chère (et affiche la fourchette) ;
-//  - transport : chaque trajet est à la charge de ses passagers (à parts
-//    égales), donc de leurs foyers ; sans passager, du foyer du trajet ;
+//  - transport (décision du 13 octobre 2026), selon le paiement de chaque
+//    étape :
+//      foyer     : à la charge du foyer du trajet (sa voiture : chacun paie
+//                  son essence, même s'il emmène d'autres passagers) ;
+//                  défaut des trajets en voiture,
+//      commun    : payé en commun, réparti comme l'hébergement (règle du
+//                  voyage) entre les passagers de l'étape ; défaut des
+//                  autres modes (le ferry, l'avion),
+//      passagers : chaque passager sa part, enfants compris ;
+//    sans passager connu, l'étape est à la charge du foyer du trajet ;
+//  - un hébergement retenu peut être à la charge de certains foyers
+//    seulement (pour_foyers) : réparti selon la règle du voyage entre les
+//    personnes de ces foyers ;
 //  - loisirs : activités retenues ; prix adulte ou enfant selon l'âge au
 //    premier jour, gratuit sous l'âge indiqué, pour chaque invité qui n'a
 //    pas répondu « non » ; le forfait de groupe est un frais commun.
@@ -34,6 +45,8 @@ export type PersonneBudget = {
 export type HebergementBudget = {
   nom: string;
   statut: 'propose' | 'retenu' | 'ecarte';
+  // Foyers qui paient cet hébergement ; vide ou absent : frais communs.
+  pour_foyers?: string[] | null;
   prix_total: number | string | null;
   prix_nuit: number | string | null;
   frais_annexes: number | string | null;
@@ -59,8 +72,22 @@ export type TrajetBudget = {
   prix_unitaire: number | string | null;
   peages: number | string | null;
   prix_billets: number | string | null;
+  // Qui paie l'étape (voir en tête) ; absent : selon le mode.
+  paiement?: PaiementEtape | null;
+  // Étape d'un foyer jusqu'au rendez-vous : payée par lui par défaut.
+  propre_foyer?: boolean | null;
   passagers: { personne_id: string }[];
 };
+
+export type PaiementEtape = 'foyer' | 'commun' | 'passagers';
+
+// Paiement d'une étape quand rien n'est précisé : la voiture par son foyer,
+// le reste (ferry, avion, train…) en commun.
+// Par défaut : la voiture, et toute étape propre à un foyer (son trajet
+// jusqu'au rendez-vous), par ce foyer ; le reste en commun.
+export function paiementEtape(t: { mode: string; paiement?: PaiementEtape | null; propre_foyer?: boolean | null }): PaiementEtape {
+  return t.paiement ?? (t.mode === 'voiture' || t.propre_foyer ? 'foyer' : 'commun');
+}
 
 export type ActiviteBudget = {
   id?: string;
@@ -81,6 +108,9 @@ export type LigneBudget = {
   detail: string;
   montant: number;
   commun: boolean;
+  // Qui paie, en clair (ex. « payé en commun par les passagers »), quand ce
+  // n'est ni les frais communs du voyage ni la charge de chacun.
+  charge?: string;
 };
 
 export type PartFoyer = {
@@ -232,6 +262,16 @@ export function calculerBudget(entree: {
     .filter((x): x is { h: HebergementBudget; prix: number } => x.prix !== null)
     .sort((a, b) => a.prix - b.prix);
   let hebergement: ResultatBudget['hebergement'] = { montant: null, retenu: false, nom: null, fourchette: null };
+  // Frais partagés entre certaines personnes seulement (étape payée en
+  // commun, hébergement de certains foyers), répartis plus bas selon la
+  // règle du voyage.
+  const pots: { montant: number; concernes: PersonneBudget[] }[] = [];
+  const chargesFoyer = new Map<string, number>(); // à la charge d'un foyer précis
+  const nomFoyer = (id: string) => {
+    const nom = personnes.find((p) => p.foyer_id === id)?.foyer_nom;
+    return nom ? `foyer ${nom}` : 'un autre foyer';
+  };
+  let hebergementCommun = 0;
   if (retenus.length > 0) {
     let somme = 0;
     let complet = true;
@@ -240,7 +280,23 @@ export function calculerBudget(entree: {
       if (prix === null) complet = false;
       else {
         somme += prix;
-        lignes.push({ poste: 'hebergement', libelle: h.nom, detail: 'Hébergement retenu', montant: arrondi(prix), commun: true });
+        const payeurs = (h.pour_foyers ?? []).filter(Boolean);
+        if (payeurs.length === 0) {
+          hebergementCommun += prix;
+          lignes.push({ poste: 'hebergement', libelle: h.nom, detail: 'Hébergement retenu', montant: arrondi(prix), commun: true });
+        } else {
+          const concernes = personnes.filter((p) => p.foyer_id && payeurs.includes(p.foyer_id));
+          if (concernes.length) pots.push({ montant: prix, concernes });
+          else for (const f of payeurs) chargesFoyer.set(f, (chargesFoyer.get(f) ?? 0) + prix / payeurs.length);
+          lignes.push({
+            poste: 'hebergement',
+            libelle: h.nom,
+            detail: 'Hébergement retenu',
+            montant: arrondi(prix),
+            commun: false,
+            charge: `à la charge de ${payeurs.map(nomFoyer).join(', ')}`,
+          });
+        }
       }
     }
     if (!complet) avertissements.push('Un hébergement retenu n’a pas de prix (ou le nombre de nuits manque).');
@@ -253,6 +309,7 @@ export function calculerBudget(entree: {
       nom: moinsCher.h.nom,
       fourchette: [arrondi(moinsCher.prix), arrondi(prixCandidats[prixCandidats.length - 1].prix)],
     };
+    hebergementCommun = moinsCher.prix;
     lignes.push({
       poste: 'hebergement',
       libelle: moinsCher.h.nom,
@@ -302,19 +359,34 @@ export function calculerBudget(entree: {
     }
   }
 
-  // Transport : à la charge des passagers (ou du foyer du trajet).
-  const chargesFoyer = new Map<string, number>(); // trajets sans passager connu
+  // Transport : selon le paiement de chaque étape (voir en tête).
   let transport = 0;
+  let transportAttribue = 0;
   for (const t of entree.trajets ?? []) {
     const cout = coutTrajet(t);
     transport += cout;
     const passagers = t.passagers.filter((x) => personnes.some((p) => p.id === x.personne_id));
-    if (passagers.length > 0) {
-      for (const x of passagers) parPersonne.set(x.personne_id, (parPersonne.get(x.personne_id) ?? 0) + cout / passagers.length);
-    } else if (t.foyer_id) {
-      chargesFoyer.set(t.foyer_id, (chargesFoyer.get(t.foyer_id) ?? 0) + cout);
+    let paiement = paiementEtape(t);
+    if (paiement === 'foyer' && !t.foyer_id) paiement = 'passagers';
+    if (paiement !== 'foyer' && passagers.length === 0) paiement = 'foyer';
+    let charge: string;
+    if (paiement === 'foyer') {
+      if (t.foyer_id) {
+        chargesFoyer.set(t.foyer_id, (chargesFoyer.get(t.foyer_id) ?? 0) + cout);
+        transportAttribue += cout;
+        charge = `à la charge de ${nomFoyer(t.foyer_id)}`;
+      } else {
+        avertissements.push(`Le trajet « ${t.libelle ?? t.ville_depart ?? t.mode} » n’a ni passager ni foyer : compté dans le total seulement.`);
+        charge = 'sans payeur';
+      }
+    } else if (paiement === 'commun') {
+      pots.push({ montant: cout, concernes: personnes.filter((p) => passagers.some((x) => x.personne_id === p.id)) });
+      transportAttribue += cout;
+      charge = 'payé en commun par les passagers';
     } else {
-      avertissements.push(`Le trajet « ${t.libelle ?? t.ville_depart ?? t.mode} » n’a ni passager ni foyer : compté dans le total seulement.`);
+      for (const x of passagers) parPersonne.set(x.personne_id, (parPersonne.get(x.personne_id) ?? 0) + cout / passagers.length);
+      transportAttribue += cout;
+      charge = 'chaque passager sa part';
     }
     const km = nombre(t.distance_km);
     lignes.push({
@@ -327,6 +399,7 @@ export function calculerBudget(entree: {
           : `${t.mode.charAt(0).toUpperCase()}${t.mode.slice(1)}${passagers.length ? ` · ${passagers.length} pers.` : ''}`,
       montant: cout,
       commun: false,
+      charge,
     });
   }
 
@@ -341,13 +414,12 @@ export function calculerBudget(entree: {
     lignes.push({ poste: 'activite', posteId: a.id, libelle: a.titre, detail: c.detail || 'Gratuit', montant: c.total, commun: false });
   }
 
-  const totalCommun = arrondi((hebergement.montant ?? 0) + communDivers + forfaitsCommuns);
+  const totalCommun = arrondi(hebergementCommun + communDivers + forfaitsCommuns);
   const totalIndividuel = [...parPersonne.values()].reduce((a, b) => a + b, 0);
   const totalAutresFoyers = [...chargesFoyer.values()].reduce((a, b) => a + b, 0);
-  const sansAttribution = transport - [...(entree.trajets ?? [])]
-    .filter((t) => t.passagers.some((x) => personnes.some((p) => p.id === x.personne_id)) || t.foyer_id)
-    .reduce((a, t) => a + coutTrajet(t), 0);
-  const total = arrondi(totalCommun + totalIndividuel + totalAutresFoyers + sansAttribution);
+  const totalPots = pots.reduce((a, p) => a + p.montant, 0);
+  const sansAttribution = transport - transportAttribue;
+  const total = arrondi(totalCommun + totalIndividuel + totalAutresFoyers + totalPots + sansAttribution);
 
   // Répartition des frais communs.
   const foyers = new Map<string, PartFoyer>();
@@ -367,6 +439,21 @@ export function calculerBudget(entree: {
       foyers.set(foyerId, { foyer_id: foyerId, foyer_nom: 'Autre foyer', personnes: [], personneIds: [], payants: 0, montant: 0 });
     }
     foyers.get(foyerId)!.montant += montant;
+  }
+
+  // Frais partagés entre certaines personnes : même règle que les frais
+  // communs, appliquée aux seules personnes concernées.
+  const foyerDe = (p: PersonneBudget) => foyers.get(p.foyer_id ?? `sans-foyer-${p.id}`)!;
+  for (const pot of pots) {
+    if (pot.concernes.length === 0) continue;
+    if (repartition === 'par_foyer') {
+      const fs = [...new Set(pot.concernes.map(foyerDe))];
+      for (const f of fs) f.montant += pot.montant / fs.length;
+    } else {
+      let payants = pot.concernes.filter((p) => repartition === 'par_personne' || estAdulte.get(p.id) === true);
+      if (payants.length === 0) payants = pot.concernes;
+      for (const p of payants) foyerDe(p).montant += pot.montant / payants.length;
+    }
   }
 
   let partCommune: number | null = null;

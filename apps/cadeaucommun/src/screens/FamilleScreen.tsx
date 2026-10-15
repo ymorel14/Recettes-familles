@@ -5,8 +5,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
-import { listeDe, listerPersonnes, obtenirMaPersonne, type Personne } from '../services/wishlist';
-import { Chargement, MessageVide } from '../components/ui';
+import {
+  joindrePrenoms,
+  listeDe,
+  listerPersonnes,
+  listesCommunes,
+  obtenirMaPersonne,
+  type Liste,
+  type Personne,
+} from '../services/wishlist';
+import { Bouton, Chargement, MessageVide } from '../components/ui';
 
 // Un foyer de la famille et ses membres.
 type Groupe = { cle: string; titre: string; membres: Personne[] };
@@ -14,9 +22,12 @@ type Groupe = { cle: string; titre: string; membres: Personne[] };
 // Onglet "Famille" : les listes de souhaits de toute la famille, une par
 // personne, regroupées par foyer. Toucher un nom ouvre sa liste (créée au
 // besoin). Ma propre liste est dans "Mes envies".
+// En tête, les listes communes : pour plusieurs personnes au choix, cachées
+// à ces personnes (la base ne les envoie jamais à leurs destinataires).
 export default function FamilleScreen({ navigation }: any) {
-  const { session, foyersFamille } = useAuth();
+  const { session, famille, foyersFamille } = useAuth();
   const [personnes, setPersonnes] = useState<Personne[] | null>(null);
+  const [communes, setCommunes] = useState<Liste[]>([]);
   const [moi, setMoi] = useState<Personne | null>(null);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [rechargement, setRechargement] = useState(false);
@@ -25,14 +36,19 @@ export default function FamilleScreen({ navigation }: any) {
   const charger = useCallback(async () => {
     if (!session) return;
     try {
-      const [p, m] = await Promise.all([listerPersonnes(foyersFamille), obtenirMaPersonne(session.user.id)]);
+      const [p, m, c] = await Promise.all([
+        listerPersonnes(foyersFamille),
+        obtenirMaPersonne(session.user.id),
+        famille ? listesCommunes(famille.id) : Promise.resolve([]),
+      ]);
       setPersonnes(p);
       setMoi(m);
+      setCommunes(c);
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
       setPersonnes([]);
     }
-  }, [session, foyersFamille]);
+  }, [session, famille?.id, foyersFamille]);
 
   useFocusEffect(
     useCallback(() => {
@@ -98,6 +114,33 @@ export default function FamilleScreen({ navigation }: any) {
     </Pressable>
   );
 
+  const nomsDe = (l: Liste) =>
+    joindrePrenoms(
+      (l.destinataires ?? [])
+        .map((d) => personnes.find((p) => p.id === d.personne_id)?.prenom)
+        .filter((x): x is string => !!x)
+        .sort((a, b) => a.localeCompare(b))
+    ) || 'personne';
+
+  const carteCommune = (l: Liste) => (
+    <Pressable
+      key={l.id}
+      style={({ pressed }) => [styles.carte, styles.carteCommune, pressed && styles.appuye]}
+      onPress={() => navigation.navigate('Liste', { listeId: l.id })}
+      accessibilityRole="button"
+      accessibilityLabel={`Liste commune ${l.titre ?? ''}`}
+    >
+      <View style={styles.iconeCommune}>
+        <Ionicons name="gift-outline" size={22} color={theme.colors.accent} />
+      </View>
+      <View style={styles.carteTextes}>
+        <Text style={styles.carteTitre}>{l.titre}</Text>
+        <Text style={styles.carteDetail}>Pour {nomsDe(l)} · invisible pour eux</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+    </Pressable>
+  );
+
   return (
     <ScrollView
       style={styles.flex}
@@ -118,6 +161,18 @@ export default function FamilleScreen({ navigation }: any) {
         Une liste par personne. Ce que vous réservez ou suggérez reste caché à la personne concernée.
       </Text>
       {erreur && <Text style={styles.erreur}>{erreur}</Text>}
+      {groupes.length > 0 && (
+        <View style={styles.groupe}>
+          <Text style={styles.groupeTitre}>Listes communes</Text>
+          {communes.map(carteCommune)}
+          <Bouton
+            variante="pointille"
+            titre="+ Liste pour plusieurs personnes"
+            onPress={() => navigation.navigate('ListeCommune')}
+            accessibilityLabel="Créer une liste commune pour plusieurs personnes, cachée à ces personnes"
+          />
+        </View>
+      )}
       {groupes.length === 0 ? (
         <MessageVide
           titre="Personne d’autre dans la famille"
@@ -126,7 +181,7 @@ export default function FamilleScreen({ navigation }: any) {
       ) : (
         groupes.map((g) => (
           <View key={g.cle} style={styles.groupe}>
-            {groupes.length > 1 && <Text style={styles.groupeTitre}>{g.titre}</Text>}
+            <Text style={styles.groupeTitre}>{groupes.length > 1 ? g.titre : 'Une liste par personne'}</Text>
             {g.membres.map(carte)}
           </View>
         ))
@@ -160,6 +215,15 @@ const styles = creerStylesThemes(() => ({
     minHeight: 64,
   },
   appuye: { opacity: 0.7 },
+  carteCommune: { borderStyle: 'dashed', borderColor: theme.colors.accent },
+  iconeCommune: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.accentTransparent,
+  },
   carteTextes: { flex: 1, gap: 2 },
   carteTitre: { fontFamily: theme.fontBodyBold, fontSize: 17, color: theme.colors.text },
   carteDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
