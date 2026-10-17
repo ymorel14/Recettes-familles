@@ -3,7 +3,7 @@ import { View, Text, TextInput, ScrollView, Pressable } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
+import { Avatar, extraireMessageErreur, personnesMasqueesFamilleActive } from '@apps-famille/famille';
 import { alerte } from '../utils/alerte';
 import {
   creerListeCommune,
@@ -35,12 +35,14 @@ export default function ListeCommuneFormScreen({ route, navigation }: any) {
     if (!session) return;
     (async () => {
       try {
-        const [p, moi, l] = await Promise.all([
+        const [p, moi, l, masquees] = await Promise.all([
           listerPersonnes(foyersFamille),
           obtenirMaPersonne(session.user.id),
           listeId ? obtenirListe(listeId) : Promise.resolve(null),
+          personnesMasqueesFamilleActive(),
         ]);
-        setPersonnes(p.filter((x) => x.id !== moi?.id));
+        // Pas les enfants masqués dans cette famille (la base les refuserait).
+        setPersonnes(p.filter((x) => x.id !== moi?.id && !masquees.has(x.id)));
         if (l) {
           setTitre(l.titre ?? '');
           setChoisies(new Set((l.destinataires ?? []).map((d) => d.personne_id)));

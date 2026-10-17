@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 // Les apps de la famille : nom affiché, adresse (« scheme ») qui ouvre l'app
 // sur téléphone, et chemin de l'app sur le site web commun (un seul site,
 // une seule connexion : voir scripts/construire-site.mjs).
-export type IdAppFamille = 'cuisine' | 'cadeaucommun' | 'voyagecommun' | 'souvenirsfamille' | 'quotidien';
+export type IdAppFamille = 'cuisine' | 'cadeaucommun' | 'voyagecommun' | 'souvenirsfamille' | 'quotidien' | 'courses';
 
 export type AppFamille = {
   id: IdAppFamille;
@@ -21,6 +21,7 @@ export const APPS_FAMILLE: AppFamille[] = [
   { id: 'voyagecommun', nom: 'VoyageCommun', scheme: 'voyagecommun', cheminWeb: '/voyages', icone: 'airplane-outline' },
   { id: 'souvenirsfamille', nom: 'SouvenirsFamille', scheme: 'souvenirsfamille', cheminWeb: '/souvenirs', icone: 'images-outline' },
   { id: 'quotidien', nom: 'Quotidien', scheme: 'quotidienfamille', cheminWeb: '/quotidien', icone: 'today-outline' },
+  { id: 'courses', nom: 'Courses', scheme: 'coursesfamille', cheminWeb: '/courses', icone: 'cart-outline' },
 ];
 
 let appCourante: AppFamille | null = null;

@@ -52,8 +52,21 @@ partagent le compte famille :
   domaine, lieux et contenants de rangement, objets avec photo, prêts ;
   réservés au foyer (règles RLS), photos dans l'espace privé
   `quotidien-inventaires`, envoyées seulement à « Enregistrer » (`avecPhoto`).
+- `apps/courses` : app Courses (listes de courses du foyer : plusieurs
+  listes, partage avec des personnes choisies une par une — jamais toute la
+  famille —, rayons rangés automatiquement avec un ordre propre à chacun,
+  checklist à vérifier avant de partir, mode magasin où l'article disparaît
+  dès qu'il est dans le caddie, en direct, articles habituels ; quantités
+  toujours facultatives). Adresse `/courses/` du site commun, thème par
+  défaut « Forêt des montagnes ». Remplacera l'onglet « Courses » de
+  Recettes (Phase 3). Phase 0 : squelette (connexion, profil, écran
+  d'attente). Données à venir dans le schéma `courses`. Cahier des charges :
+  document Claude "Cahier des charges — Courses".
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
-  active, codes d'invitation, AuthProvider/useAuth). Chaque app crée son client
+  active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants
+  famille par famille : `<VisibiliteEnfants>` dans le Profil de chaque app,
+  `personnesMasqueesFamilleActive()` pour filtrer les listes de la famille
+  affichée). Chaque app crée son client
   Supabase et le confie au paquet avec
   `configurerFamille(supabase, { app, baseWeb: process.env.EXPO_PUBLIC_BASE_WEB })`.
   Une seule connexion pour toutes les apps : sur le web, site commun

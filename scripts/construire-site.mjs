@@ -8,6 +8,7 @@
 //   site/dist/voyages/          VoyageCommun
 //   site/dist/souvenirs/        SouvenirsFamille
 //   site/dist/quotidien/        Quotidien
+//   site/dist/courses/          Courses
 //
 // Lancement depuis la racine du dépôt : npm run site:export:web
 // (Netlify le lance lui-même, voir netlify.toml). Pour n'en construire que
@@ -31,13 +32,15 @@ const APPS = [
   { dossier: 'voyage', chemin: 'voyages' },
   { dossier: 'souvenirs', chemin: 'souvenirs' },
   { dossier: 'quotidien', chemin: 'quotidien' },
+  { dossier: 'courses', chemin: 'courses' },
 ];
 
 // Anciennes adresses de l'app Cuisine, quand elle occupait seule le site :
 // redirigées vers /cuisine/… pour que les favoris et liens partagés
-// continuent de marcher.
+// continuent de marcher. « courses » n'en fait plus partie : /courses/ est
+// désormais l'adresse de l'app Courses.
 const ANCIENNES_ADRESSES_CUISINE = [
-  'connexion', 'bienvenue', 'foyer', 'courses', 'congelateur', 'assistant', 'aide-memoire',
+  'connexion', 'bienvenue', 'foyer', 'congelateur', 'assistant', 'aide-memoire',
   'profil', 'categorie', 'recette', 'recette-edition', 'scanner', 'importer',
 ];
 

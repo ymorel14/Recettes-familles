@@ -20,7 +20,7 @@ import type { CodeInvitation, TypeCodeInvitation } from '../../types/models';
 import type { MembreFoyer } from '../../services/famille';
 import { definirMonPrenom, obtenirMonPrenom } from '../../services/profils';
 import ZoneClavier from '../../components/ZoneClavier';
-import { Avatar, PhotosProfil } from '@apps-famille/famille';
+import { Avatar, PhotosProfil, VisibiliteEnfants } from '@apps-famille/famille';
 
 // Carte affichant un code d'invitation (famille ou foyer) et permettant de le
 // partager. Le code est valable 24 h : il est rechargé à chaque affichage de
@@ -473,6 +473,13 @@ export default function ProfilScreen() {
         <View style={styles.section}>
           <PhotosProfil polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
         </View>
+      )}
+
+      {foyer && (
+        <VisibiliteEnfants
+          style={styles.section}
+          polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }}
+        />
       )}
 
       {session && foyer && <CarteFoyer utilisateurId={session.user.id} />}

@@ -23,3 +23,7 @@ export { BoutonAppsFamille } from './BoutonAppsFamille';
 export * from './photos';
 export { Avatar, NomAvecAvatar, GroupeNoms, type ProprietesAvatar } from './Avatar';
 export { PhotosProfil } from './PhotosProfil';
+// Visibilité des enfants famille par famille (familles recomposées) :
+// réglage du Profil et liste des personnes masquées dans la famille active.
+export * from './visibilite';
+export { VisibiliteEnfants } from './VisibiliteEnfants';

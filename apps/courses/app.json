@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Courses",
+    "slug": "coursesfamille",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "coursesfamille",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.coursesfamille"
+    },
+    "android": {
+      "package": "fr.morel.coursesfamille",
+      "adaptiveIcon": {
+        "backgroundColor": "#F5F3EE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F3EE"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet de choisir votre photo de profil.",
+          "cameraPermission": "Permet de prendre votre photo de profil."
+        }
+      ]
+    ],
+    "owner": "ymorel76"
+  }
+}

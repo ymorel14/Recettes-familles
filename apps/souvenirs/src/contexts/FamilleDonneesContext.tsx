@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { personnesMasqueesFamilleActive } from '@apps-famille/famille';
 import { useAuth } from './AuthContext';
 import { listerPersonnes, listerPersonnesParIds, type Personne } from '../services/personnes';
 import { categorieDe, listerCategories, type Categorie, type PersonneDuSouvenir } from '../services/souvenirs';
@@ -33,9 +34,16 @@ export function FamilleDonneesProvider({ children }: { children: React.ReactNode
   const recharger = useCallback(async () => {
     if (!session || !famille) return;
     const foyers = Array.from(new Set([...(foyersFamille ?? []), ...(foyer ? [foyer.id] : [])]));
-    const [c, p] = await Promise.all([listerCategories(), listerPersonnes(foyers)]);
+    const [c, p, masquees] = await Promise.all([
+      listerCategories(),
+      listerPersonnes(foyers),
+      personnesMasqueesFamilleActive().catch(() => new Set<string>()),
+    ]);
     setCategories(c);
-    setPersonnes(p);
+    // Enfants masqués dans la famille active (famille recomposée) : pas
+    // proposés dans cette famille ; leur prénom reste lisible là où ils
+    // apparaissent déjà (completer).
+    setPersonnes(p.filter((x) => !masquees.has(x.id)));
   }, [session, famille?.id, foyer?.id, foyersFamille]);
 
   useEffect(() => {

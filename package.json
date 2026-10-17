@@ -21,6 +21,9 @@
     "quotidien": "npm run start -w quotidienfamille",
     "quotidien:web": "npm run web -w quotidienfamille",
     "quotidien:export:web": "npm run export:web -w quotidienfamille",
+    "courses": "npm run start -w coursesfamille",
+    "courses:web": "npm run web -w coursesfamille",
+    "courses:export:web": "npm run export:web -w coursesfamille",
     "site:export:web": "node scripts/construire-site.mjs"
   }
 }

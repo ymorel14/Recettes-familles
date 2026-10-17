@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { Avatar, extraireMessageErreur } from '@apps-famille/famille';
+import { Avatar, extraireMessageErreur, personnesMasqueesFamilleActive } from '@apps-famille/famille';
 import {
   joindrePrenoms,
   listeDe,
@@ -36,12 +36,15 @@ export default function FamilleScreen({ navigation }: any) {
   const charger = useCallback(async () => {
     if (!session) return;
     try {
-      const [p, m, c] = await Promise.all([
+      const [p, m, c, masquees] = await Promise.all([
         listerPersonnes(foyersFamille),
         obtenirMaPersonne(session.user.id),
         famille ? listesCommunes(famille.id) : Promise.resolve([]),
+        personnesMasqueesFamilleActive(),
       ]);
-      setPersonnes(p);
+      // Enfants masqués dans la famille affichée (famille recomposée) : la
+      // base les cache aux autres ; on ne les montre pas non plus ici.
+      setPersonnes(p.filter((x) => !masquees.has(x.id)));
       setMoi(m);
       setCommunes(c);
     } catch (e) {

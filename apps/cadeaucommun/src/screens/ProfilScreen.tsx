@@ -16,7 +16,7 @@ import {
   retirerDuFoyer,
   type MembreFoyer,
 } from '@apps-famille/famille';
-import { Avatar, PhotosProfil } from '@apps-famille/famille';
+import { Avatar, PhotosProfil, VisibiliteEnfants } from '@apps-famille/famille';
 import { alerte } from '../utils/alerte';
 import {
   ajouterPersonneSansCompte,
@@ -224,6 +224,13 @@ export default function ProfilScreen() {
         <View style={styles.section}>
           <PhotosProfil polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} />
         </View>
+      )}
+
+      {foyer && (
+        <VisibiliteEnfants
+          style={styles.section}
+          polices={{ titre: theme.fontTitle, corps: theme.fontBody, gras: theme.fontBodyBold }} version={personnes.length}
+        />
       )}
 
       <View style={styles.section}>
