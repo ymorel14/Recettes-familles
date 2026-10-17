@@ -21,6 +21,7 @@ import BienvenueScreen from '../screens/BienvenueScreen';
 import PrenomScreen from '../screens/PrenomScreen';
 import ProfilScreen from '../screens/ProfilScreen';
 import ListesScreen from '../screens/ListesScreen';
+import HabituelsScreen from '../screens/HabituelsScreen';
 import ListeScreen from '../screens/ListeScreen';
 import ArticleScreen from '../screens/ArticleScreen';
 import ListeFormScreen from '../screens/ListeFormScreen';
@@ -43,7 +44,7 @@ const liens: LinkingOptions<any> = {
     screens: {
       Connexion: 'connexion',
       Bienvenue: 'bienvenue',
-      Onglets: { screens: { Listes: '', Profil: 'profil' } },
+      Onglets: { screens: { Listes: '', Habituels: 'habituels', Profil: 'profil' } },
       Liste: 'liste/:listeId',
       ListeForm: 'nouvelle-liste',
       Article: 'liste/:listeId/article/:articleId',
@@ -94,7 +95,7 @@ function TitreFamille({ titre }: { titre: string }) {
   );
 }
 
-// Deux onglets (cahier des charges, « Écrans et navigation ») : Listes et
+// Trois onglets : Listes, Habituels (articles récurrents du foyer) et
 // Profil ; le reste s'ouvre depuis une liste.
 function BarreOnglets() {
   return (
@@ -109,6 +110,7 @@ function BarreOnglets() {
         tabBarIcon: ({ color, size }) => {
           const icones: Record<string, keyof typeof Ionicons.glyphMap> = {
             Listes: 'cart-outline',
+            Habituels: 'repeat-outline',
             Profil: 'person-circle-outline',
           };
           return <Ionicons name={icones[route.name] ?? 'ellipse-outline'} size={size} color={color} />;
@@ -122,6 +124,11 @@ function BarreOnglets() {
         name="Listes"
         component={ListesScreen}
         options={{ title: 'Listes', headerTitle: () => <TitreFamille titre="Mes listes" /> }}
+      />
+      <Onglets.Screen
+        name="Habituels"
+        component={HabituelsScreen}
+        options={{ title: 'Habituels', headerTitle: () => <TitreFamille titre="Habituels" /> }}
       />
       <Onglets.Screen
         name="Profil"
@@ -213,8 +220,8 @@ export default function AppNavigator() {
             <Pile.Screen name="Liste" component={ListeScreen} options={{ title: 'Liste' }} />
             <Pile.Screen name="Article" component={ArticleScreen} options={{ title: 'Article' }} />
             <Pile.Screen name="ListeForm" component={ListeFormScreen} options={{ title: 'Liste' }} />
-            <Pile.Screen name="Magasin" component={MagasinScreen} options={{ title: 'Au magasin' }} />
-            <Pile.Screen name="Preparer" component={VerificationScreen} options={{ title: 'Préparer les courses' }} />
+            <Pile.Screen name="Magasin" component={MagasinScreen} options={{ title: 'Je suis au magasin' }} />
+            <Pile.Screen name="Preparer" component={VerificationScreen} options={{ title: 'À la maison' }} />
             <Pile.Screen name="Historique" component={HistoriqueScreen} options={{ title: 'Historique' }} />
             <Pile.Screen name="Checklist" component={ChecklistScreen} options={{ title: 'Checklist du foyer' }} />
           </>

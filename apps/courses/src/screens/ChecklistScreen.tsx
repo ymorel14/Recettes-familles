@@ -91,7 +91,7 @@ export default function ChecklistScreen() {
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
       <Text style={styles.intro}>
-        Avant chaque course, « Préparer les courses » vous fait passer cette liste article par article : ce qui
+        Avant chaque course, « À la maison » (sur une liste) vous fait passer cette liste article par article : ce qui
         manque s’ajoute à la liste de courses. Une seule checklist pour tout le foyer {foyer?.nom ?? ''}.
       </Text>
 

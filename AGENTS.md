@@ -67,10 +67,16 @@ partagent le compte famille :
   `20261017100000_courses.sql`) ; qui voit une liste est garanti par les
   règles RLS. Phase 3 (migration `20261017120000_courses_recettes.sql`) :
   reçoit les recettes de Recettes (détail par recette, « Retirer »),
-  reprise des anciennes listes de Recettes. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
+  reprise des anciennes listes de Recettes. Photo d'un produit
+  (migration `20261017130000_courses_photos.sql`, `src/services/photos.ts`,
+  `src/components/Photo.tsx`) : gardée avec le produit du foyer, pas avec
+  l'article. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
   checklist du foyer, une seule pour toutes ses listes (`ChecklistScreen`),
-  « Préparer les courses » partagé en direct (`VerificationScreen`),
-  articles habituels (`courses.habituels`), historique (`HistoriqueScreen`),
+  bouton « À la maison » : vérification partagée en direct
+  (`VerificationScreen`), bouton « Je suis au magasin » (`MagasinScreen`),
+  articles habituels (`courses.habituels`), onglet « Habituels » en bas
+  (`HabituelsScreen` : épingler, ne plus proposer, ajouter à une liste,
+  oublier un produit), historique (`HistoriqueScreen`),
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".

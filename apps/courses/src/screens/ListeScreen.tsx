@@ -8,6 +8,7 @@ import { Bouton, Chargement } from '../components/ui';
 import { useAuth } from '../contexts/AuthContext';
 import { alerte } from '../utils/alerte';
 import { useListe } from '../hooks/useListe';
+import { Vignette } from '../components/Photo';
 import {
   ajouterArticle,
   ajouterAVerifier,
@@ -29,8 +30,8 @@ import { formaterDateCourte } from '../utils/dates';
 
 // Une liste : ajout rapide en haut (« 2 lait », « pain »…), articles rangés
 // par rayon dans MON ordre des rayons, prénom de qui a ajouté chaque
-// article, articles habituels en un appui. « Préparer » passe la checklist
-// du foyer ; « Au magasin » ouvre le mode magasin.
+// article, articles habituels en un appui. « À la maison » passe la checklist
+// du foyer ; « Je suis au magasin » ouvre le mode magasin.
 
 // Endroit de la maison proposé pour la checklist, d'après le rayon.
 const ENDROIT_PAR_RAYON: Record<string, string> = {
@@ -46,7 +47,7 @@ const ENDROIT_PAR_RAYON: Record<string, string> = {
 export default function ListeScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
   const donnees = useListe(listeId);
-  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur, horsLigne, enAttente, contributions, rechargerArticles } = donnees;
+  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur, horsLigne, enAttente, contributions, rechargerArticles, photos } = donnees;
   const [voirRecettes, setVoirRecettes] = useState(false);
   // Rapprochements refusés pendant cette visite (« ce n'est pas le même produit »).
   const [refuses, setRefuses] = useState<Set<string>>(new Set());
@@ -254,6 +255,7 @@ export default function ListeScreen({ route, navigation }: any) {
         accessibilityRole="button"
         accessibilityLabel={`${item.libelle}${quantite ? `, ${quantite}` : ''}`}
       >
+        <Vignette chemin={photos.get(cleProduit(item.libelle))} taille={40} legende={item.libelle} />
         <View style={styles.ligneTextes}>
           <Text style={styles.libelle}>
             {item.libelle}
@@ -444,14 +446,14 @@ export default function ListeScreen({ route, navigation }: any) {
           {duFoyer && (
             <Bouton
               variante="contour"
-              titre="Préparer"
+              titre="À la maison"
               onPress={() => navigation.navigate('Preparer', { listeId })}
               style={styles.boutonPied}
-              accessibilityLabel="Préparer les courses : vérifier la checklist du foyer"
+              accessibilityLabel="À la maison : vérifier la checklist du foyer avant de partir"
             />
           )}
           <Bouton
-            titre={dansCaddie > 0 ? 'Reprendre les courses' : 'Au magasin'}
+            titre={dansCaddie > 0 ? 'Reprendre les courses' : 'Je suis au magasin'}
             onPress={() => navigation.navigate('Magasin', { listeId })}
             desactive={aAcheter.length === 0 && dansCaddie === 0}
             style={styles.boutonPied}

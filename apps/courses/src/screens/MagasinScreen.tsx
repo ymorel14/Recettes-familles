@@ -7,6 +7,8 @@ import { theme, creerStylesThemes } from '../theme/theme';
 import { Bouton, Chargement } from '../components/ui';
 import { alerte } from '../utils/alerte';
 import { useListe } from '../hooks/useListe';
+import { Vignette } from '../components/Photo';
+import { cleProduit } from '../utils/texte';
 import { changerEtat, terminerCourses, type Article, type EtatArticle } from '../services/courses';
 import { formaterQuantite } from '../services/saisie';
 import { estErreurReseau, mettreEnAttente, rejouerAttente } from '../services/horsLigne';
@@ -25,9 +27,11 @@ type Annulable = { article: Article; etatAvant: EtatArticle; texte: string };
 // « Terminer les courses » vide le caddie dans l'historique.
 export default function MagasinScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
-  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, moi, chargement, horsLigne, enAttente, setEnAttente } =
+  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, moi, chargement, horsLigne, enAttente, setEnAttente, photos } =
     useListe(listeId);
-  const entree = useRef(new Date().toISOString());
+  // Heure d'arrivée sur l'écran (en millisecondes) : les articles ajoutés
+  // ensuite par quelqu'un d'autre sont marqués « Nouveau ».
+  const entree = useRef(Date.now());
   // Articles déclarés introuvables PENDANT ces courses (ceux d'une fois
   // précédente restent à chercher).
   const [pasTrouves, setPasTrouves] = useState<Set<string>>(new Set());
@@ -38,7 +42,7 @@ export default function MagasinScreen({ route, navigation }: any) {
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    navigation.setOptions({ title: liste ? `Au magasin · ${liste.nom}` : 'Au magasin' });
+    navigation.setOptions({ title: liste ? `Au magasin · ${liste.nom}` : 'Je suis au magasin' });
   }, [navigation, liste]);
 
   useEffect(
@@ -156,7 +160,7 @@ export default function MagasinScreen({ route, navigation }: any) {
 
   if (chargement) return <Chargement />;
 
-  const nouveau = (a: Article) => a.ajoute_le > entree.current && a.ajoute_par !== moi;
+  const nouveau = (a: Article) => Date.parse(a.ajoute_le) > entree.current && !!a.ajoute_par && a.ajoute_par !== moi;
 
   return (
     <View style={styles.flex}>
@@ -197,6 +201,8 @@ export default function MagasinScreen({ route, navigation }: any) {
                     accessibilityLabel={`Mettre ${a.libelle} dans le caddie`}
                   >
                     <View style={styles.caseVide} />
+                    {/* Photo du produit (la bonne marque) : touchée, elle s'affiche en grand. */}
+                    <Vignette chemin={photos.get(cleProduit(a.libelle))} taille={52} legende={a.libelle} />
                     <View style={styles.textes}>
                       <Text style={styles.libelle}>
                         {a.libelle}

@@ -22,7 +22,7 @@ import {
 } from '../services/courses';
 import { cleProduit } from '../utils/texte';
 
-// « Préparer les courses » : on passe la checklist du foyer, endroit par
+// « À la maison » (préparer les courses) : on passe la checklist du foyer, endroit par
 // endroit. « À acheter » ajoute aussitôt l'article à cette liste ; un
 // article déjà sur la liste est marqué « déjà prévu ». À plusieurs, chacun
 // voit en direct ce que l'autre a déjà vérifié.
@@ -76,7 +76,7 @@ export default function VerificationScreen({ route, navigation }: any) {
   }, [preparation, chargerVerifications]);
 
   useEffect(() => {
-    navigation.setOptions({ title: liste ? `Préparer · ${liste.nom}` : 'Préparer les courses' });
+    navigation.setOptions({ title: liste ? `À la maison · ${liste.nom}` : 'À la maison' });
   }, [navigation, liste]);
 
   const surLaListe = useMemo(

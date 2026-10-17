@@ -213,7 +213,15 @@ export async function enregistrerMonOrdre(listeId: string, rayons: string[]): Pr
 
 // --- Mémoire du foyer par produit ----------------------------------------
 
-export type Produit = { cle: string; libelle: string; rayon_id: string | null; nb_achats: number; dernier_achat: string | null };
+export type Produit = {
+  cle: string;
+  libelle: string;
+  rayon_id: string | null;
+  nb_achats: number;
+  dernier_achat: string | null;
+  // Photo du produit (espace privé « courses-photos »), voir services/photos.ts.
+  photo?: string | null;
+};
 
 // Produits connus du foyer (rayon choisi, nombre d'achats). Vide pour un
 // invité d'un autre foyer (règles RLS) : on se rabat alors sur le
@@ -221,7 +229,7 @@ export type Produit = { cle: string; libelle: string; rayon_id: string | null; n
 export async function listerProduits(foyerId: string): Promise<Produit[]> {
   const { data, error } = await supabase
     .from('produits')
-    .select('cle, libelle, rayon_id, nb_achats, dernier_achat')
+    .select('cle, libelle, rayon_id, nb_achats, dernier_achat, photo')
     .eq('foyer_id', foyerId)
     .eq('masque', false)
     .order('nb_achats', { ascending: false })
@@ -580,4 +588,54 @@ export function suivreContributions(listeId: string, rappel: () => void): () => 
   return () => {
     supabase.removeChannel(canal);
   };
+}
+
+// --- Gestion des articles habituels (onglet « Habituels ») ---------------
+
+export type ProduitGere = Produit & { epingle: boolean; masque: boolean };
+
+// Tous les produits connus du foyer, y compris ceux qu'on ne propose plus :
+// épinglés d'abord, puis les plus achetés.
+export async function listerProduitsAGerer(foyerId: string): Promise<ProduitGere[]> {
+  const { data, error } = await supabase
+    .from('produits')
+    .select('cle, libelle, rayon_id, nb_achats, dernier_achat, photo, epingle, masque')
+    .eq('foyer_id', foyerId)
+    .order('epingle', { ascending: false })
+    .order('nb_achats', { ascending: false })
+    .order('libelle');
+  if (error) throw error;
+  return (data ?? []) as ProduitGere[];
+}
+
+export async function modifierProduit(
+  foyerId: string,
+  cle: string,
+  champs: Partial<Pick<ProduitGere, 'epingle' | 'masque' | 'rayon_id' | 'libelle'>>
+): Promise<void> {
+  const { error } = await supabase.from('produits').update(champs).eq('foyer_id', foyerId).eq('cle', cle);
+  if (error) throw error;
+}
+
+// Nouvel habituel saisi à la main (épinglé, pour qu'il soit proposé tout de
+// suite, même sans avoir encore été acheté).
+export async function creerHabituel(foyerId: string, libelle: string, produits: Produit[]): Promise<void> {
+  const propre = majusculeInitiale(libelle);
+  const cle = cleProduit(propre);
+  if (!cle) throw new Error('Nom vide.');
+  const { data: existant } = await supabase.from('produits').select('cle').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle();
+  const { error } = existant
+    ? await supabase.from('produits').update({ epingle: true, masque: false }).eq('foyer_id', foyerId).eq('cle', cle)
+    : await supabase
+        .from('produits')
+        .insert({ foyer_id: foyerId, cle, libelle: propre, rayon_id: devinerRayon(propre, produits), epingle: true });
+  if (error) throw error;
+}
+
+// Oublie complètement un produit (rayon retenu, compteur d'achats, photo).
+export async function supprimerProduit(foyerId: string, cle: string): Promise<string | null> {
+  const { data } = await supabase.from('produits').select('photo').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle();
+  const { error } = await supabase.from('produits').delete().eq('foyer_id', foyerId).eq('cle', cle);
+  if (error) throw error;
+  return ((data as any)?.photo as string | null) ?? null;
 }

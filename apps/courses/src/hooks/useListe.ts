@@ -157,6 +157,11 @@ export function useListe(listeId: string) {
   const monOrdre = useMemo(() => ordres.find((o) => o.utilisateurId === moi)?.rayons ?? null, [ordres, moi]);
   const rayonsOrdonnes = useMemo(() => ordonnerRayons(rayons, monOrdre), [rayons, monOrdre]);
   const parUtilisateur = useMemo(() => new Map(personnes.map((p) => [p.utilisateurId, p])), [personnes]);
+  // Photo de chaque produit du foyer (clé du produit → chemin de la photo).
+  const photos = useMemo(
+    () => new Map(produits.filter((p) => p.photo).map((p) => [p.cle, p.photo as string])),
+    [produits]
+  );
 
   return {
     moi,
@@ -172,6 +177,7 @@ export function useListe(listeId: string) {
     parUtilisateur,
     produits,
     setProduits,
+    photos,
     contributions,
     setContributions,
     chargement,
