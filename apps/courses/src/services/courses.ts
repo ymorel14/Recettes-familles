@@ -9,7 +9,7 @@ import {
   listerContributions as listerContributionsCommun,
   retirerAjout as retirerAjoutCommun,
   type Contribution,
-} from '@apps-famille/courses';
+} from '../../../../packages/courses/src';
 
 // Données de l'app Courses (schéma "courses", migration
 // 20261017100000_courses.sql). Qui voit quoi est garanti par les règles RLS
@@ -540,8 +540,8 @@ export async function listerPassages(listeId: string, nombre = 30): Promise<Pass
 
 // --- Recettes (Phase 3) ----------------------------------------------------
 
-export type { Contribution, AjoutRecette } from '@apps-famille/courses';
-export { ajoutsDeRecettes, cleArticle } from '@apps-famille/courses';
+export type { Contribution, AjoutRecette } from '../../../../packages/courses/src';
+export { ajoutsDeRecettes, cleArticle } from '../../../../packages/courses/src';
 
 // Détail des ingrédients envoyés par l'app Recettes dans cette liste.
 export function listerContributions(listeId: string): Promise<Contribution[]> {

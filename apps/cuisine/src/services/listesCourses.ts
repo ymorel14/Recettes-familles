@@ -1,5 +1,7 @@
 import { Linking, Platform } from 'react-native';
-import { envoyerRecettes, type RecetteEnvoyee } from '@apps-famille/courses';
+// Code commun chargé par son chemin direct (et non « @apps-famille/courses ») :
+// sous Windows, Metro ne trouvait pas ce paquet pour le site web.
+import { envoyerRecettes, type RecetteEnvoyee } from '../../../../packages/courses/src';
 import { supabase } from './supabase';
 import { appliquerVariantes, etatSurprise } from './recettes';
 import type { RecetteComplete } from '../types/models';
