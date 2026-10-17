@@ -399,6 +399,35 @@ export const ENDROITS = ['Frigo', 'Congélateur', 'Placards', 'Salle de bain', '
 
 export type AVerifier = { id: string; foyer_id: string; libelle: string; endroit: string; ordre: number };
 
+// Emplacement proposé pour mettre un produit dans la checklist, d'après
+// son rayon (s'il existe chez ce foyer ; sinon le premier emplacement).
+const ENDROIT_PAR_RAYON: Record<string, string> = {
+  cremerie: 'Frigo',
+  boucherie: 'Frigo',
+  fruits_legumes: 'Frigo',
+  surgeles: 'Congélateur',
+  hygiene: 'Salle de bain',
+  bebe: 'Salle de bain',
+  entretien: 'Cellier',
+  boissons: 'Cellier',
+};
+export function endroitPropose(rayonId: string | null | undefined, emplacements?: string[]): string {
+  const propose = (rayonId && ENDROIT_PAR_RAYON[rayonId]) || 'Placards';
+  if (!emplacements || emplacements.length === 0 || emplacements.includes(propose)) return propose;
+  return emplacements[0];
+}
+
+// Entrée de la checklist qui correspond à un produit (même clé), s'il y en a une.
+export function dansChecklist(checklist: AVerifier[], cle: string): AVerifier | undefined {
+  return checklist.find((a) => cleProduit(a.libelle) === cle);
+}
+
+// Photos des produits du foyer (clé du produit → chemin), pour les vignettes.
+export async function photosDuFoyer(foyerId: string): Promise<Map<string, string>> {
+  const { data } = await supabase.from('produits').select('cle, photo').eq('foyer_id', foyerId).not('photo', 'is', null);
+  return new Map((data ?? []).map((p: any) => [p.cle as string, p.photo as string]));
+}
+
 // --- Emplacements de la checklist, propres au foyer ----------------------
 // (migration 20261017150000_courses_emplacements.sql). « Autre » existe
 // toujours : il recueille les articles d'un emplacement supprimé.
@@ -752,6 +781,19 @@ export async function renommerProduit(
     nouveau_libelle: libelle,
   });
   if (error) throw error;
+  // La checklist du foyer suit le nouveau nom (en fusion, une seule entrée).
+  try {
+    const checklist = await listerChecklist(foyerId);
+    const anciens = checklist.filter((a) => cleProduit(a.libelle) === ancienneCle);
+    const dejaLa = cle !== ancienneCle ? checklist.find((a) => cleProduit(a.libelle) === cle) : undefined;
+    for (const [i, a] of anciens.entries()) {
+      if (dejaLa || i > 0) await supprimerAVerifier(a.id);
+      else await modifierAVerifier(a.id, { libelle });
+    }
+    if (dejaLa && dejaLa.libelle !== libelle) await modifierAVerifier(dejaLa.id, { libelle });
+  } catch {
+    // le produit est renommé ; la checklist garde l'ancien nom
+  }
   return { cle, photoInutile: (data as string | null) ?? null };
 }
 

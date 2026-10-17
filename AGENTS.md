@@ -78,7 +78,8 @@ partagent le compte famille :
   articles habituels (`courses.habituels`), onglet « Habituels » en bas
   (`HabituelsScreen` : épingler, ne plus proposer, ajouter à une liste,
   oublier un produit ; toucher un produit ouvre sa fiche `ProduitScreen` :
-  photo, rayon, épingle, ajout à une liste, renommer ou fusionner — migration
+  photo, rayon, épingle, ajout à une liste, « À vérifier à la maison »
+  (lien avec la checklist par la clé du produit), renommer ou fusionner — migration
   `20261017140000_courses_renommer_produit.sql`), historique (`HistoriqueScreen`),
   × sur une ligne de liste pour retirer un article (avec « Annuler »),
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée

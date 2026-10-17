@@ -22,6 +22,7 @@ import {
   type Verification,
 } from '../services/courses';
 import { cleProduit } from '../utils/texte';
+import { Vignette } from '../components/Photo';
 
 // « À la maison » (préparer les courses) : on passe la checklist du foyer, endroit par
 // endroit. « À acheter » ajoute aussitôt l'article à cette liste ; un
@@ -30,7 +31,7 @@ import { cleProduit } from '../utils/texte';
 export default function VerificationScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
   const { foyer } = useAuth();
-  const { liste, articles, setArticles, produits, parUtilisateur, chargement, moi } = useListe(listeId);
+  const { liste, articles, setArticles, produits, parUtilisateur, chargement, moi, photos } = useListe(listeId);
   const [preparation, setPreparation] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<AVerifier[] | null>(null);
   const [emplacements, setEmplacements] = useState<string[]>([]);
@@ -184,6 +185,9 @@ export default function VerificationScreen({ route, navigation }: any) {
               const qui = v?.par ? parUtilisateur.get(v.par) : undefined;
               return (
                 <View key={a.id} style={[styles.ligne, (v || dejaPrevu) && styles.ligneFaite]}>
+                  {photos.get(cleProduit(a.libelle)) && (
+                    <Vignette chemin={photos.get(cleProduit(a.libelle))} taille={44} legende={a.libelle} />
+                  )}
                   <View style={styles.textes}>
                     <Text style={styles.libelle}>{a.libelle}</Text>
                     {dejaPrevu && <Text style={styles.etat}>Déjà prévu sur la liste</Text>}

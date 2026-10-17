@@ -13,6 +13,13 @@ import { cleProduit } from '../utils/texte';
 import { choisirPhoto, definirPhotoProduit, supprimerPhoto } from '../services/photos';
 import {
   ajouterArticle,
+  ajouterAVerifier,
+  dansChecklist,
+  endroitPropose,
+  listerChecklist,
+  listerEmplacements,
+  modifierAVerifier,
+  supprimerAVerifier,
   listerArticles,
   listerListes,
   listerProduits,
@@ -21,6 +28,7 @@ import {
   obtenirProduit,
   renommerProduit,
   supprimerProduit,
+  type AVerifier,
   type ListeResume,
   type ProduitGere,
 } from '../services/courses';
@@ -38,17 +46,23 @@ export default function ProduitScreen({ route, navigation }: any) {
   const [listes, setListes] = useState<ListeResume[]>([]);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [nom, setNom] = useState<string | null>(null); // null : pas en train de renommer
+  const [nom, setNom] = useState<string | null>(null);
+  const [checklist, setChecklist] = useState<AVerifier[]>([]);
+  const [emplacements, setEmplacements] = useState<string[]>([]); // null : pas en train de renommer
 
   const charger = useCallback(async () => {
     if (!foyer) return;
     try {
-      const [p, l, r] = await Promise.all([
+      const [p, l, r, c, e] = await Promise.all([
         obtenirProduit(foyer.id, cle),
         listerListes(),
         listerRayons().catch(() => RAYONS_DEPART),
+        listerChecklist(foyer.id).catch(() => [] as AVerifier[]),
+        listerEmplacements(foyer.id).catch(() => [] as string[]),
       ]);
       setProduit(p);
+      setChecklist(c);
+      setEmplacements(e);
       setListes(l.filter((x) => x.foyer_id === foyer.id));
       if (r.length > 0) setRayons(r);
     } catch {
@@ -156,6 +170,31 @@ export default function ProduitScreen({ route, navigation }: any) {
     } else {
       executer(nouveau);
     }
+  };
+
+  // Checklist du foyer : ce produit est-il à vérifier à la maison ?
+  const aVerifier = dansChecklist(checklist, produit.cle);
+  const basculerChecklist = async () => {
+    setMessage(null);
+    setEnCours('checklist');
+    try {
+      if (aVerifier) {
+        await supprimerAVerifier(aVerifier.id);
+        setChecklist((c) => c.filter((x) => x.id !== aVerifier.id));
+      } else {
+        const ajoute = await ajouterAVerifier(foyer.id, produit.libelle, endroitPropose(produit.rayon_id, emplacements));
+        setChecklist((c) => [...c.filter((x) => x.id !== ajoute.id), ajoute]);
+      }
+    } catch {
+      setMessage('Checklist non modifiée. Vérifiez votre connexion.');
+    } finally {
+      setEnCours(null);
+    }
+  };
+  const changerEmplacement = async (endroit: string) => {
+    if (!aVerifier) return;
+    setChecklist((c) => c.map((x) => (x.id === aVerifier.id ? { ...x, endroit } : x)));
+    await modifierAVerifier(aVerifier.id, { endroit }).catch(() => setMessage('Emplacement non enregistré.'));
   };
 
   const oublier = () =>
@@ -313,6 +352,45 @@ export default function ProduitScreen({ route, navigation }: any) {
             <Text style={styles.aide}>Il n’apparaît plus dans le panneau « Habituels », même s’il est souvent acheté.</Text>
           </View>
         </Pressable>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.titreSection}>À vérifier à la maison</Text>
+        <Pressable
+          onPress={basculerChecklist}
+          disabled={enCours === 'checklist'}
+          style={styles.choix}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: !!aVerifier }}
+        >
+          <Ionicons name={aVerifier ? 'home' : 'home-outline'} size={22} color={theme.colors.accent} />
+          <View style={styles.textes}>
+            <Text style={styles.choixTitre}>{aVerifier ? `Dans la checklist · ${aVerifier.endroit}` : 'Ajouter à la checklist du foyer'}</Text>
+            <Text style={styles.aide}>
+              {aVerifier
+                ? 'Toucher pour le retirer de la checklist.'
+                : 'On vérifiera s’il en reste avant chaque course (« À la maison »).'}
+            </Text>
+          </View>
+        </Pressable>
+        {aVerifier && (
+          <View style={styles.puces}>
+            {(emplacements.includes(aVerifier.endroit) ? emplacements : [...emplacements, aVerifier.endroit]).map((e) => {
+              const actif = e === aVerifier.endroit;
+              return (
+                <Pressable
+                  key={e}
+                  onPress={() => changerEmplacement(e)}
+                  style={[styles.puce, actif && styles.puceActive]}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: actif }}
+                >
+                  <Text style={[styles.puceTexte, actif && styles.puceTexteActive]}>{e}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       <Bouton variante="discret" titre="Oublier ce produit" onPress={oublier} />

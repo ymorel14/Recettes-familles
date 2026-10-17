@@ -12,6 +12,8 @@ import { Vignette } from '../components/Photo';
 import {
   ajouterArticle,
   ajouterAVerifier,
+  endroitPropose,
+  listerEmplacements,
   ajoutsDeRecettes,
   fusionnerArticles,
   retirerRecette,
@@ -35,17 +37,6 @@ import { formaterDateCourte } from '../utils/dates';
 // article, articles habituels en un appui. « À la maison » passe la checklist
 // du foyer ; « Je suis au magasin » ouvre le mode magasin.
 
-// Endroit de la maison proposé pour la checklist, d'après le rayon.
-const ENDROIT_PAR_RAYON: Record<string, string> = {
-  cremerie: 'Frigo',
-  boucherie: 'Frigo',
-  fruits_legumes: 'Frigo',
-  surgeles: 'Congélateur',
-  hygiene: 'Salle de bain',
-  bebe: 'Salle de bain',
-  entretien: 'Cellier',
-  boissons: 'Cellier',
-};
 export default function ListeScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
   const donnees = useListe(listeId);
@@ -263,7 +254,8 @@ export default function ListeScreen({ route, navigation }: any) {
         text: 'Ajouter à la checklist',
         onPress: async () => {
           try {
-            await ajouterAVerifier(foyer.id, a.libelle, ENDROIT_PAR_RAYON[a.rayon_id] ?? 'Placards');
+            const emplacements = await listerEmplacements(foyer.id).catch(() => undefined);
+            await ajouterAVerifier(foyer.id, a.libelle, endroitPropose(a.rayon_id, emplacements));
             setMessage(`« ${a.libelle} » ajouté à la checklist du foyer.`);
           } catch {
             setMessage('Ajout à la checklist impossible.');

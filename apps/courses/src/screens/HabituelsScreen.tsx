@@ -13,11 +13,14 @@ import { supprimerPhoto } from '../services/photos';
 import {
   ajouterArticle,
   creerHabituel,
+  dansChecklist,
+  listerChecklist,
   listerArticles,
   listerListes,
   listerProduitsAGerer,
   modifierProduit,
   supprimerProduit,
+  type AVerifier,
   type ListeResume,
   type ProduitGere,
 } from '../services/courses';
@@ -31,6 +34,7 @@ export default function HabituelsScreen({ navigation }: any) {
   const { foyer } = useAuth();
   const [produits, setProduits] = useState<ProduitGere[] | null>(null);
   const [listes, setListes] = useState<ListeResume[]>([]);
+  const [checklist, setChecklist] = useState<AVerifier[]>([]);
   const [voirMasques, setVoirMasques] = useState(false);
   const [nouveau, setNouveau] = useState('');
   const [choixListePour, setChoixListePour] = useState<string | null>(null);
@@ -40,8 +44,13 @@ export default function HabituelsScreen({ navigation }: any) {
   const charger = useCallback(async () => {
     if (!foyer) return;
     try {
-      const [p, l] = await Promise.all([listerProduitsAGerer(foyer.id), listerListes()]);
+      const [p, l, c] = await Promise.all([
+        listerProduitsAGerer(foyer.id),
+        listerListes(),
+        listerChecklist(foyer.id).catch(() => [] as AVerifier[]),
+      ]);
       setProduits(p);
+      setChecklist(c);
       setListes(l.filter((x) => x.foyer_id === foyer.id));
     } catch {
       setMessage('Chargement impossible. Vérifiez votre connexion.');
@@ -217,7 +226,17 @@ export default function HabituelsScreen({ navigation }: any) {
               accessibilityRole="button"
               accessibilityLabel={`Fiche de ${p.libelle}`}
             >
-              <Text style={styles.libelle}>{p.libelle}</Text>
+              <View style={styles.ligneNom}>
+                <Text style={styles.libelle}>{p.libelle}</Text>
+                {dansChecklist(checklist, p.cle) && (
+                  <Ionicons
+                    name="home-outline"
+                    size={14}
+                    color={theme.colors.accent}
+                    accessibilityLabel={`À vérifier à la maison (${dansChecklist(checklist, p.cle)?.endroit})`}
+                  />
+                )}
+              </View>
               <Text style={styles.detail} numberOfLines={2}>
                 {p.nb_achats > 0
                   ? `Acheté ${p.nb_achats} fois${p.dernier_achat ? `, la dernière ${formaterDateCourte(p.dernier_achat)}` : ''}`
@@ -324,7 +343,8 @@ const styles = creerStylesThemes(() => ({
   ligne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 48 },
   icone: { width: 44, height: 44, borderRadius: theme.radii.md, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' },
   textes: { flex: 1, gap: 2 },
-  libelle: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
+  libelle: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text, flexShrink: 1 },
+  ligneNom: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   detail: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.textMuted },
   action: { width: 38, height: 44, alignItems: 'center', justifyContent: 'center' },
   choixListes: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, paddingLeft: 52 },

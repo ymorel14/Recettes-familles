@@ -6,7 +6,8 @@ import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { Bouton, Chargement } from '../components/ui';
 import { alerte } from '../utils/alerte';
-import { normaliserTexte } from '../utils/texte';
+import { cleProduit, normaliserTexte } from '../utils/texte';
+import { Vignette } from '../components/Photo';
 import {
   EMPLACEMENT_AUTRE,
   ENDROITS,
@@ -15,6 +16,7 @@ import {
   grouperParEmplacement,
   listerChecklist,
   listerEmplacements,
+  photosDuFoyer,
   modifierAVerifier,
   ordonnerEmplacements,
   renommerEmplacement,
@@ -36,6 +38,7 @@ export default function ChecklistScreen() {
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [emplacements, setEmplacements] = useState<string[]>([...ENDROITS]);
+  const [photos, setPhotos] = useState<Map<string, string>>(new Map());
   const [gererEmplacements, setGererEmplacements] = useState(false);
   const [nouvelEmplacement, setNouvelEmplacement] = useState('');
   const [renomme, setRenomme] = useState<{ ancien: string; nom: string } | null>(null);
@@ -43,7 +46,12 @@ export default function ChecklistScreen() {
   const charger = useCallback(async () => {
     if (!foyer) return;
     try {
-      const [a, e] = await Promise.all([listerChecklist(foyer.id), listerEmplacements(foyer.id)]);
+      const [a, e, ph] = await Promise.all([
+        listerChecklist(foyer.id),
+        listerEmplacements(foyer.id),
+        photosDuFoyer(foyer.id).catch(() => new Map<string, string>()),
+      ]);
+      setPhotos(ph);
       setArticles(a);
       setEmplacements(e);
       setEndroit((actuel) => (e.includes(actuel) ? actuel : e[0] ?? EMPLACEMENT_AUTRE));
@@ -218,6 +226,9 @@ export default function ChecklistScreen() {
           {liste.map((a) => (
             <View key={a.id}>
               <View style={styles.ligne}>
+                {photos.get(cleProduit(a.libelle)) && (
+                  <Vignette chemin={photos.get(cleProduit(a.libelle))} taille={36} legende={a.libelle} />
+                )}
                 <Text style={styles.libelle}>{a.libelle}</Text>
                 <Pressable
                   onPress={() => setDeplace(deplace === a.id ? null : a.id)}
