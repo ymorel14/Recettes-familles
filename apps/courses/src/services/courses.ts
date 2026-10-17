@@ -608,6 +608,18 @@ export async function listerProduitsAGerer(foyerId: string): Promise<ProduitGere
   return (data ?? []) as ProduitGere[];
 }
 
+// Un produit du foyer (fiche produit), ou null s'il a été oublié.
+export async function obtenirProduit(foyerId: string, cle: string): Promise<ProduitGere | null> {
+  const { data, error } = await supabase
+    .from('produits')
+    .select('cle, libelle, rayon_id, nb_achats, dernier_achat, photo, epingle, masque')
+    .eq('foyer_id', foyerId)
+    .eq('cle', cle)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ProduitGere | null) ?? null;
+}
+
 export async function modifierProduit(
   foyerId: string,
   cle: string,

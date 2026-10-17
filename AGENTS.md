@@ -76,7 +76,8 @@ partagent le compte famille :
   (`VerificationScreen`), bouton « Je suis au magasin » (`MagasinScreen`),
   articles habituels (`courses.habituels`), onglet « Habituels » en bas
   (`HabituelsScreen` : épingler, ne plus proposer, ajouter à une liste,
-  oublier un produit), historique (`HistoriqueScreen`),
+  oublier un produit ; toucher un produit ouvre sa fiche `ProduitScreen` :
+  photo, rayon, épingle, ajout à une liste), historique (`HistoriqueScreen`),
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".

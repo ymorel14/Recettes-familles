@@ -22,6 +22,7 @@ import PrenomScreen from '../screens/PrenomScreen';
 import ProfilScreen from '../screens/ProfilScreen';
 import ListesScreen from '../screens/ListesScreen';
 import HabituelsScreen from '../screens/HabituelsScreen';
+import ProduitScreen from '../screens/ProduitScreen';
 import ListeScreen from '../screens/ListeScreen';
 import ArticleScreen from '../screens/ArticleScreen';
 import ListeFormScreen from '../screens/ListeFormScreen';
@@ -52,6 +53,7 @@ const liens: LinkingOptions<any> = {
       Preparer: 'liste/:listeId/preparer',
       Historique: 'liste/:listeId/historique',
       Checklist: 'checklist',
+      Produit: 'habituels/:cle',
     },
   },
   getStateFromPath: (chemin, options) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, options)),
@@ -224,6 +226,7 @@ export default function AppNavigator() {
             <Pile.Screen name="Preparer" component={VerificationScreen} options={{ title: 'À la maison' }} />
             <Pile.Screen name="Historique" component={HistoriqueScreen} options={{ title: 'Historique' }} />
             <Pile.Screen name="Checklist" component={ChecklistScreen} options={{ title: 'Checklist du foyer' }} />
+            <Pile.Screen name="Produit" component={ProduitScreen} options={{ title: 'Produit' }} />
           </>
         )}
       </Pile.Navigator>

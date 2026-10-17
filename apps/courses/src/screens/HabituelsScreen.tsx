@@ -26,8 +26,8 @@ import {
 // régulièrement, ou épinglés), pour les gérer en un seul endroit :
 // épingler en tête, ne plus proposer (ou de nouveau), oublier, ajouter à
 // une liste, en créer un nouveau. Les photos se prennent depuis la fiche
-// d'un article.
-export default function HabituelsScreen() {
+// d'un article ou de la fiche produit (toucher un produit).
+export default function HabituelsScreen({ navigation }: any) {
   const { foyer } = useAuth();
   const [produits, setProduits] = useState<ProduitGere[] | null>(null);
   const [listes, setListes] = useState<ListeResume[]>([]);
@@ -211,7 +211,12 @@ export default function HabituelsScreen() {
                 />
               </View>
             )}
-            <View style={styles.textes}>
+            <Pressable
+              onPress={() => navigation.navigate('Produit', { cle: p.cle })}
+              style={({ pressed }) => [styles.textes, pressed && styles.appuye]}
+              accessibilityRole="button"
+              accessibilityLabel={`Fiche de ${p.libelle}`}
+            >
               <Text style={styles.libelle}>{p.libelle}</Text>
               <Text style={styles.detail} numberOfLines={2}>
                 {p.nb_achats > 0
@@ -219,7 +224,7 @@ export default function HabituelsScreen() {
                   : 'Jamais encore acheté'}
                 {p.rayon_id ? ` · ${nomRayon(RAYONS_DEPART, p.rayon_id)}` : ''}
               </Text>
-            </View>
+            </Pressable>
             {!p.masque && (
               <Pressable
                 onPress={() => changer(p, { epingle: !p.epingle })}
