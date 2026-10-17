@@ -9,6 +9,7 @@ import { alerte } from '../utils/alerte';
 import { useListe } from '../hooks/useListe';
 import { changerEtat, terminerCourses, type Article, type EtatArticle } from '../services/courses';
 import { formaterQuantite } from '../services/saisie';
+import { estErreurReseau, mettreEnAttente, rejouerAttente } from '../services/horsLigne';
 
 // Écran allumé seulement sur téléphone (sans objet dans un navigateur).
 function GarderEcranAllume() {
@@ -24,7 +25,8 @@ type Annulable = { article: Article; etatAvant: EtatArticle; texte: string };
 // « Terminer les courses » vide le caddie dans l'historique.
 export default function MagasinScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
-  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, moi, chargement } = useListe(listeId);
+  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, moi, chargement, horsLigne, enAttente, setEnAttente } =
+    useListe(listeId);
   const entree = useRef(new Date().toISOString());
   // Articles déclarés introuvables PENDANT ces courses (ceux d'une fois
   // précédente restent à chercher).
@@ -79,9 +81,17 @@ export default function MagasinScreen({ route, navigation }: any) {
     }
     try {
       await changerEtat(article.id, etat);
-    } catch {
-      setArticles((actuels) => actuels.map((a) => (a.id === article.id ? { ...a, etat: etatAvant } : a)));
-      setMessage('Pas de réseau : réessayez dans un instant.');
+      setMessage(null);
+    } catch (e) {
+      if (estErreurReseau(e)) {
+        // Pas de réseau : l'appui est gardé sur le téléphone et sera envoyé
+        // dès que la connexion revient.
+        await mettreEnAttente({ articleId: article.id, listeId, etat });
+        setEnAttente((n) => n + 1);
+      } else {
+        setArticles((actuels) => actuels.map((a) => (a.id === article.id ? { ...a, etat: etatAvant } : a)));
+        setMessage('Cet article a changé entre-temps : la liste va se mettre à jour.');
+      }
     }
   };
 
@@ -125,9 +135,14 @@ export default function MagasinScreen({ route, navigation }: any) {
           onPress: async () => {
             setEnCours(true);
             try {
+              // Les appuis faits sans réseau partent d'abord.
+              if ((await rejouerAttente()) > 0) {
+                setMessage('Toujours pas de réseau : terminez les courses une fois la connexion revenue (rien n’est perdu).');
+                return;
+              }
               await terminerCourses(listeId, articles);
               // Retour à la liste (ce qui reste pour la prochaine fois).
-              navigation.navigate('Liste', { listeId });
+              navigation.popTo('Liste', { listeId });
             } catch {
               setMessage('Impossible de terminer pour l’instant (réseau ?). Le caddie est conservé.');
             } finally {
@@ -147,6 +162,15 @@ export default function MagasinScreen({ route, navigation }: any) {
     <View style={styles.flex}>
       {Platform.OS !== 'web' && <GarderEcranAllume />}
       <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
+        {(horsLigne || enAttente > 0) && (
+          <View style={styles.horsLigne} accessibilityLiveRegion="polite">
+            <Ionicons name="cloud-offline-outline" size={20} color={theme.colors.warning} />
+            <Text style={styles.horsLigneTexte}>
+              Pas de réseau : vous pouvez continuer.
+              {enAttente > 0 ? ` ${enAttente} appui${enAttente > 1 ? 's' : ''} en attente d’envoi.` : ''}
+            </Text>
+          </View>
+        )}
         {message && <Text style={styles.erreur}>{message}</Text>}
         {sections.length === 0 && (
           <View style={styles.fini}>
@@ -325,6 +349,16 @@ const styles = creerStylesThemes(() => ({
   finiTitre: { fontFamily: theme.fontTitle, fontSize: 22, color: theme.colors.text },
   aide: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted, textAlign: 'center' },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
+  horsLigne: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.warning,
+  },
+  horsLigneTexte: { flex: 1, fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.text },
   bandeau: {
     position: 'absolute',
     left: theme.spacing.md,

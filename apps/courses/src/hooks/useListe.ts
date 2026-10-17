@@ -16,10 +16,21 @@ import {
   type Produit,
 } from '../services/courses';
 import { RAYONS_DEPART, ordonnerRayons, type Rayon } from '../services/rayons';
+import { appliquerAttente, enregistrerCache, lireAttente, lireCache, rejouerAttente } from '../services/horsLigne';
+
+type Cache = {
+  liste: ListeResume;
+  articles: Article[];
+  rayons: Rayon[];
+  ordres: OrdreRayons[];
+  personnes: PersonneCompte[];
+  produits: Produit[];
+};
 
 // Tout ce qu'il faut pour afficher une liste : la liste, ses articles (mis
 // à jour en direct), les rayons dans MON ordre, les prénoms des personnes
-// et la mémoire des produits du foyer.
+// et la mémoire des produits du foyer. Sans réseau : la dernière version
+// gardée sur le téléphone, avec les appuis en attente d'envoi.
 export function useListe(listeId: string) {
   const { session } = useAuth();
   const moi = session?.user.id ?? null;
@@ -31,15 +42,29 @@ export function useListe(listeId: string) {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Affichage de la version gardée sur le téléphone (pas de réseau).
+  const [horsLigne, setHorsLigne] = useState(false);
+  // Appuis faits sans réseau, pas encore envoyés.
+  const [enAttente, setEnAttente] = useState(0);
   const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Articles reçus de la base, corrigés des appuis pas encore envoyés.
+  const avecAttente = useCallback(
+    async (a: Article[]) => {
+      const attente = (await lireAttente()).filter((x) => x.listeId === listeId);
+      setEnAttente(attente.length);
+      return appliquerAttente(a, attente);
+    },
+    [listeId]
+  );
 
   const rechargerArticles = useCallback(async () => {
     try {
-      setArticles(await listerArticles(listeId));
+      setArticles(await avecAttente(await listerArticles(listeId)));
     } catch {
       // réseau momentané : on garde ce qu'on a
     }
-  }, [listeId]);
+  }, [listeId, avecAttente]);
 
   const recharger = useCallback(async () => {
     try {
@@ -56,18 +81,45 @@ export function useListe(listeId: string) {
         listerPersonnesAvecCompte().catch(() => []),
         listerProduits(l.foyer_id),
       ]);
-      setArticles(a);
+      setArticles(await avecAttente(a));
       setRayons(r);
       setOrdres(o);
       setPersonnes(p);
       setProduits(prod);
       setErreur(null);
+      setHorsLigne(false);
+      enregistrerCache<Cache>(listeId, { liste: l, articles: a, rayons: r, ordres: o, personnes: p, produits: prod });
     } catch {
-      setErreur('Impossible de charger la liste. Vérifiez votre connexion.');
+      // Pas de réseau : la dernière version gardée sur le téléphone.
+      const cache = await lireCache<Cache>(listeId);
+      if (cache) {
+        setListe(cache.liste);
+        setArticles(await avecAttente(cache.articles));
+        setRayons(cache.rayons);
+        setOrdres(cache.ordres);
+        setPersonnes(cache.personnes);
+        setProduits(cache.produits);
+        setHorsLigne(true);
+        setErreur(null);
+      } else {
+        setErreur('Impossible de charger la liste. Vérifiez votre connexion.');
+      }
     } finally {
       setChargement(false);
     }
-  }, [listeId]);
+  }, [listeId, avecAttente]);
+
+  // Tant qu'on est hors ligne ou que des appuis attendent : on réessaie
+  // toutes les 10 secondes d'envoyer, puis de recharger.
+  useEffect(() => {
+    if (!horsLigne && enAttente === 0) return;
+    const minuterie = setInterval(async () => {
+      const restantes = await rejouerAttente();
+      setEnAttente(restantes);
+      if (restantes === 0) recharger();
+    }, 10000);
+    return () => clearInterval(minuterie);
+  }, [horsLigne, enAttente, recharger]);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +159,9 @@ export function useListe(listeId: string) {
     setProduits,
     chargement,
     erreur,
+    horsLigne,
+    enAttente,
+    setEnAttente,
     recharger,
     rechargerArticles,
   };

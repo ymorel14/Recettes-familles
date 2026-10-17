@@ -112,6 +112,18 @@ export default function ListesScreen() {
         );
       })}
       <Bouton variante="pointille" titre="Nouvelle liste" onPress={() => navigation.navigate('ListeForm', {})} />
+      <Pressable
+        onPress={() => navigation.navigate('Checklist')}
+        style={({ pressed }) => [styles.lienChecklist, pressed && styles.appuye]}
+        accessibilityRole="button"
+      >
+        <Ionicons name="list-outline" size={22} color={theme.colors.accent} />
+        <View style={styles.textes}>
+          <Text style={styles.nomChecklist}>Checklist du foyer</Text>
+          <Text style={styles.detail}>Ce qu’il faut vérifier à la maison avant chaque course</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+      </Pressable>
     </ScrollView>
   );
 }
@@ -139,4 +151,16 @@ const styles = creerStylesThemes(() => ({
   compteur: { alignItems: 'center', minWidth: 52 },
   nombre: { fontFamily: theme.fontTitle, fontSize: 24, color: theme.colors.accent },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
+  lienChecklist: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    minHeight: 60,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  nomChecklist: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
 }));

@@ -1,22 +1,58 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAvoidingView, Platform, Pressable, SectionList, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Avatar } from '@apps-famille/famille';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { Bouton, Chargement } from '../components/ui';
+import { useAuth } from '../contexts/AuthContext';
+import { alerte } from '../utils/alerte';
 import { useListe } from '../hooks/useListe';
-import { ajouterArticle, suggestions as chercherSuggestions, type Article, type Produit } from '../services/courses';
+import {
+  ajouterArticle,
+  ajouterAVerifier,
+  epinglerProduit,
+  listerHabituels,
+  masquerProduit,
+  suggestions as chercherSuggestions,
+  type Article,
+  type Habituel,
+  type Produit,
+} from '../services/courses';
 import { formaterQuantite, lireSaisie } from '../services/saisie';
 import { cleProduit } from '../utils/texte';
 import { formaterDateCourte } from '../utils/dates';
 
 // Une liste : ajout rapide en haut (« 2 lait », « pain »…), articles rangés
 // par rayon dans MON ordre des rayons, prénom de qui a ajouté chaque
-// article. « Au magasin » ouvre le mode magasin.
+// article, articles habituels en un appui. « Préparer » passe la checklist
+// du foyer ; « Au magasin » ouvre le mode magasin.
+
+// Endroit de la maison proposé pour la checklist, d'après le rayon.
+const ENDROIT_PAR_RAYON: Record<string, string> = {
+  cremerie: 'Frigo',
+  boucherie: 'Frigo',
+  fruits_legumes: 'Frigo',
+  surgeles: 'Congélateur',
+  hygiene: 'Salle de bain',
+  bebe: 'Salle de bain',
+  entretien: 'Cellier',
+  boissons: 'Cellier',
+};
 export default function ListeScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
   const donnees = useListe(listeId);
-  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur } = donnees;
+  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur, horsLigne, enAttente } = donnees;
+  const { foyer } = useAuth();
+  const duFoyer = !!liste && !!foyer && liste.foyer_id === foyer.id;
+  const [habituels, setHabituels] = useState<Habituel[]>([]);
+  const [voirHabituels, setVoirHabituels] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      listerHabituels(listeId).then(setHabituels);
+    }, [listeId])
+  );
   const [saisie, setSaisie] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -27,18 +63,31 @@ export default function ListeScreen({ route, navigation }: any) {
       title: liste?.nom ?? 'Liste',
       headerRight: () =>
         liste ? (
-          <Pressable
-            onPress={() => navigation.navigate('ListeForm', { listeId })}
-            accessibilityRole="button"
-            accessibilityLabel="Réglages de la liste"
-            hitSlop={8}
-            style={styles.boutonEntete}
-          >
-            <Ionicons name="settings-outline" size={24} color={theme.colors.accent} />
-          </Pressable>
+          <View style={styles.entete}>
+            {duFoyer && (
+              <Pressable
+                onPress={() => navigation.navigate('Historique', { listeId })}
+                accessibilityRole="button"
+                accessibilityLabel="Historique des courses"
+                hitSlop={8}
+                style={styles.boutonEntete}
+              >
+                <Ionicons name="time-outline" size={24} color={theme.colors.accent} />
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => navigation.navigate('ListeForm', { listeId })}
+              accessibilityRole="button"
+              accessibilityLabel="Réglages de la liste"
+              hitSlop={8}
+              style={styles.boutonEntete}
+            >
+              <Ionicons name="settings-outline" size={24} color={theme.colors.accent} />
+            </Pressable>
+          </View>
         ) : null,
     });
-  }, [navigation, liste, listeId]);
+  }, [navigation, liste, listeId, duFoyer]);
 
   const aAcheter = useMemo(() => articles.filter((a) => a.etat !== 'caddie'), [articles]);
   const dansCaddie = articles.length - aAcheter.length;
@@ -83,6 +132,65 @@ export default function ListeScreen({ route, navigation }: any) {
 
   const ajouterProduit = (p: Produit) => ajouter(p.libelle);
 
+  // Habituels pas encore sur la liste, épinglés en tête.
+  const habituelsProposes = useMemo(() => habituels.filter((h) => !clesSurLaListe.has(h.cle)), [habituels, clesSurLaListe]);
+
+  const ajouterHabituel = async (h: Habituel) => {
+    setMessage(null);
+    try {
+      const { article, fusionne } = await ajouterArticle(
+        listeId,
+        { libelle: h.libelle, quantite: h.quantite, unite: h.unite },
+        produits,
+        articles
+      );
+      setArticles((actuels) => (fusionne ? actuels.map((a) => (a.id === article.id ? article : a)) : [...actuels, article]));
+    } catch {
+      setMessage('Ajout impossible. Vérifiez votre connexion.');
+    }
+  };
+
+  const reglerHabituel = (h: Habituel) => {
+    if (!foyer) return;
+    alerte(h.libelle, h.nb_achats > 0 ? `Acheté ${h.nb_achats} fois avec cette liste.` : 'Épinglé dans les habituels.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: h.epingle ? 'Ne plus épingler' : 'Épingler en tête',
+        onPress: async () => {
+          await epinglerProduit(foyer.id, h, !h.epingle).catch(() => {});
+          setHabituels(await listerHabituels(listeId));
+        },
+      },
+      {
+        text: 'Ne plus proposer',
+        style: 'destructive',
+        onPress: async () => {
+          setHabituels((liste) => liste.filter((x) => x.cle !== h.cle));
+          await masquerProduit(foyer.id, h).catch(() => {});
+        },
+      },
+    ]);
+  };
+
+  // Appui long sur un article : l'ajouter à la checklist du foyer.
+  const versChecklist = (a: Article) => {
+    if (!foyer || !duFoyer) return;
+    alerte(`Vérifier « ${a.libelle} » avant chaque course ?`, 'Il sera ajouté à la checklist du foyer.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Ajouter à la checklist',
+        onPress: async () => {
+          try {
+            await ajouterAVerifier(foyer.id, a.libelle, ENDROIT_PAR_RAYON[a.rayon_id] ?? 'Placards');
+            setMessage(`« ${a.libelle} » ajouté à la checklist du foyer.`);
+          } catch {
+            setMessage('Ajout à la checklist impossible.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (chargement) return <Chargement />;
   if (!liste) {
     return (
@@ -99,6 +207,7 @@ export default function ListeScreen({ route, navigation }: any) {
       <Pressable
         style={({ pressed }) => [styles.ligne, pressed && styles.appuye]}
         onPress={() => navigation.navigate('Article', { listeId, articleId: item.id })}
+        onLongPress={() => versChecklist(item)}
         accessibilityRole="button"
         accessibilityLabel={`${item.libelle}${quantite ? `, ${quantite}` : ''}`}
       >
@@ -174,6 +283,46 @@ export default function ListeScreen({ route, navigation }: any) {
             ))}
           </View>
         )}
+        {duFoyer && habituelsProposes.length > 0 && (
+          <Pressable
+            onPress={() => setVoirHabituels((v) => !v)}
+            style={styles.habituelsEntete}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: voirHabituels }}
+          >
+            <Ionicons name="repeat-outline" size={18} color={theme.colors.accent} />
+            <Text style={styles.habituelsTitre}>Habituels ({habituelsProposes.length})</Text>
+            <Ionicons name={voirHabituels ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+          </Pressable>
+        )}
+        {duFoyer && voirHabituels && (
+          <View style={styles.suggestions}>
+            {habituelsProposes.map((h) => {
+              const q = formaterQuantite(h.quantite, h.unite);
+              return (
+                <Pressable
+                  key={h.cle}
+                  onPress={() => ajouterHabituel(h)}
+                  onLongPress={() => reglerHabituel(h)}
+                  style={({ pressed }) => [styles.suggestion, h.epingle && styles.epingle, pressed && styles.appuye]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ajouter ${h.libelle}${q ? `, ${q}` : ''}`}
+                  accessibilityHint="Appui long : épingler ou ne plus proposer"
+                >
+                  <Ionicons name={h.epingle ? 'pin' : 'add-circle-outline'} size={15} color={theme.colors.accent} />
+                  <Text style={styles.suggestionTexte}>
+                    {h.libelle}
+                    {q ? <Text style={styles.quantite}>{` ${q}`}</Text> : null}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Text style={styles.message}>Appui long sur un habituel : l’épingler en tête, ou ne plus le proposer.</Text>
+          </View>
+        )}
+        {(horsLigne || enAttente > 0) && (
+          <Text style={styles.horsLigne}>Pas de réseau : version gardée sur le téléphone.</Text>
+        )}
         {message && <Text style={styles.message}>{message}</Text>}
       </View>
 
@@ -207,11 +356,23 @@ export default function ListeScreen({ route, navigation }: any) {
             {dansCaddie} article{dansCaddie > 1 ? 's' : ''} déjà dans le caddie
           </Text>
         )}
-        <Bouton
-          titre={dansCaddie > 0 ? 'Reprendre les courses' : 'Au magasin'}
-          onPress={() => navigation.navigate('Magasin', { listeId })}
-          desactive={aAcheter.length === 0 && dansCaddie === 0}
-        />
+        <View style={styles.boutons}>
+          {duFoyer && (
+            <Bouton
+              variante="contour"
+              titre="Préparer"
+              onPress={() => navigation.navigate('Preparer', { listeId })}
+              style={styles.boutonPied}
+              accessibilityLabel="Préparer les courses : vérifier la checklist du foyer"
+            />
+          )}
+          <Bouton
+            titre={dansCaddie > 0 ? 'Reprendre les courses' : 'Au magasin'}
+            onPress={() => navigation.navigate('Magasin', { listeId })}
+            desactive={aAcheter.length === 0 && dansCaddie === 0}
+            style={styles.boutonPied}
+          />
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -220,6 +381,13 @@ export default function ListeScreen({ route, navigation }: any) {
 const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.lg, backgroundColor: theme.colors.background },
+  entete: { flexDirection: 'row', alignItems: 'center' },
+  habituelsEntete: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36 },
+  habituelsTitre: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  epingle: { borderColor: theme.colors.accent },
+  horsLigne: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.warning },
+  boutons: { flexDirection: 'row', gap: theme.spacing.sm },
+  boutonPied: { flex: 1, minWidth: 0 },
   boutonEntete: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: theme.spacing.sm },
   saisie: {
     padding: theme.spacing.md,

@@ -65,7 +65,12 @@ partagent le compte famille :
   ordre des rayons de chacun, temps réel (`src/hooks/useListe.ts`), mode
   magasin (`MagasinScreen`). Données dans le schéma `courses` (migration
   `20261017100000_courses.sql`) ; qui voit une liste est garanti par les
-  règles RLS. Checklist à vérifier : une seule par foyer (Phase 2).
+  règles RLS. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
+  checklist du foyer, une seule pour toutes ses listes (`ChecklistScreen`),
+  « Préparer les courses » partagé en direct (`VerificationScreen`),
+  articles habituels (`courses.habituels`), historique (`HistoriqueScreen`),
+  mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
+  sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

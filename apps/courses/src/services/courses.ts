@@ -372,3 +372,158 @@ export function suivreArticles(listeId: string, rappel: () => void): () => void 
     supabase.removeChannel(canal);
   };
 }
+
+// --- Checklist du foyer (Phase 2) ----------------------------------------
+
+// Endroits de la maison proposés pour ranger la checklist (on fait le tour
+// une seule fois).
+export const ENDROITS = ['Frigo', 'Congélateur', 'Placards', 'Salle de bain', 'Cellier', 'Autre'] as const;
+
+export type AVerifier = { id: string; foyer_id: string; libelle: string; endroit: string; ordre: number };
+
+export async function listerChecklist(foyerId: string): Promise<AVerifier[]> {
+  const { data, error } = await supabase
+    .from('a_verifier')
+    .select('id, foyer_id, libelle, endroit, ordre')
+    .eq('foyer_id', foyerId)
+    .order('ordre')
+    .order('libelle');
+  if (error) throw error;
+  return (data ?? []) as AVerifier[];
+}
+
+export async function ajouterAVerifier(foyerId: string, libelle: string, endroit: string): Promise<AVerifier> {
+  const propre = majusculeInitiale(libelle);
+  const existants = await listerChecklist(foyerId);
+  const doublon = existants.find((a) => cleProduit(a.libelle) === cleProduit(propre));
+  if (doublon) return doublon;
+  const { data, error } = await supabase
+    .from('a_verifier')
+    .insert({ foyer_id: foyerId, libelle: propre, endroit, ordre: existants.length })
+    .select('id, foyer_id, libelle, endroit, ordre')
+    .single();
+  if (error) throw error;
+  return data as AVerifier;
+}
+
+export async function modifierAVerifier(id: string, champs: Partial<Pick<AVerifier, 'libelle' | 'endroit'>>): Promise<void> {
+  const { error } = await supabase.from('a_verifier').update(champs).eq('id', id);
+  if (error) throw error;
+}
+
+export async function supprimerAVerifier(id: string): Promise<void> {
+  const { error } = await supabase.from('a_verifier').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// --- Préparation (« Préparer les courses ») ------------------------------
+
+export type Reponse = 'en_stock' | 'a_acheter';
+export type Verification = { a_verifier_id: string; reponse: Reponse; par: string | null; le: string };
+
+// Préparation en cours de la liste (partagée par le foyer), créée si besoin.
+export async function preparationEnCours(listeId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('preparation_en_cours', { id_liste: listeId });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function listerVerifications(preparationId: string): Promise<Verification[]> {
+  const { data, error } = await supabase
+    .from('verifications')
+    .select('a_verifier_id, reponse, par, le')
+    .eq('preparation_id', preparationId);
+  if (error) throw error;
+  return (data ?? []) as Verification[];
+}
+
+export async function repondre(preparationId: string, aVerifierId: string, reponse: Reponse): Promise<void> {
+  const { data: utilisateur } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from('verifications')
+    .upsert(
+      { preparation_id: preparationId, a_verifier_id: aVerifierId, reponse, par: utilisateur.user?.id, le: new Date().toISOString() },
+      { onConflict: 'preparation_id,a_verifier_id' }
+    );
+  if (error) throw error;
+}
+
+export async function annulerReponse(preparationId: string, aVerifierId: string): Promise<void> {
+  const { error } = await supabase
+    .from('verifications')
+    .delete()
+    .eq('preparation_id', preparationId)
+    .eq('a_verifier_id', aVerifierId);
+  if (error) throw error;
+}
+
+export async function terminerPreparation(preparationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('preparations')
+    .update({ terminee_le: new Date().toISOString() })
+    .eq('id', preparationId);
+  if (error) throw error;
+}
+
+export function suivreVerifications(preparationId: string, rappel: () => void): () => void {
+  const canal = supabase
+    .channel(`courses-verifications-${preparationId}-${Math.random().toString(36).slice(2, 10)}`)
+    .on('postgres_changes', { event: '*', schema: 'courses', table: 'verifications', filter: `preparation_id=eq.${preparationId}` }, rappel)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(canal);
+  };
+}
+
+// --- Habituels et historique ----------------------------------------------
+
+export type Habituel = {
+  cle: string;
+  libelle: string;
+  nb_achats: number;
+  dernier_achat: string | null;
+  quantite: number | null;
+  unite: string | null;
+  rayon_id: string | null;
+  epingle: boolean;
+};
+
+// Produits achetés le plus souvent avec cette liste (vide pour un invité
+// d'un autre foyer).
+export async function listerHabituels(listeId: string, nombre = 30): Promise<Habituel[]> {
+  const { data, error } = await supabase.rpc('habituels', { id_liste: listeId, nombre });
+  if (error) return [];
+  return ((data ?? []) as any[]).map((h) => ({ ...h, nb_achats: Number(h.nb_achats) }));
+}
+
+async function reglerProduit(foyerId: string, cle: string, libelle: string, champs: { epingle?: boolean; masque?: boolean }) {
+  const { data: existant } = await supabase.from('produits').select('cle').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle();
+  const { error } = existant
+    ? await supabase.from('produits').update(champs).eq('foyer_id', foyerId).eq('cle', cle)
+    : await supabase.from('produits').insert({ foyer_id: foyerId, cle, libelle, ...champs });
+  if (error) throw error;
+}
+
+export const epinglerProduit = (foyerId: string, h: Pick<Habituel, 'cle' | 'libelle'>, epingle: boolean) =>
+  reglerProduit(foyerId, h.cle, h.libelle, { epingle });
+export const masquerProduit = (foyerId: string, h: Pick<Habituel, 'cle' | 'libelle'>) =>
+  reglerProduit(foyerId, h.cle, h.libelle, { masque: true, epingle: false });
+
+export type Passage = {
+  id: string;
+  termine_par: string | null;
+  termine_le: string;
+  articles: { libelle: string; quantite: number | null; unite: string | null; rayon_id: string | null }[];
+};
+
+// Courses terminées de cette liste, les plus récentes d'abord (foyer seul).
+export async function listerPassages(listeId: string, nombre = 30): Promise<Passage[]> {
+  const { data, error } = await supabase
+    .from('passages')
+    .select('id, termine_par, termine_le, articles:passage_articles(libelle, quantite, unite, rayon_id)')
+    .eq('liste_id', listeId)
+    .order('termine_le', { ascending: false })
+    .limit(nombre);
+  if (error) throw error;
+  return (data ?? []) as Passage[];
+}

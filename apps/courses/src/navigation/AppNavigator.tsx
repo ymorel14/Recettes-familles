@@ -25,6 +25,9 @@ import ListeScreen from '../screens/ListeScreen';
 import ArticleScreen from '../screens/ArticleScreen';
 import ListeFormScreen from '../screens/ListeFormScreen';
 import MagasinScreen from '../screens/MagasinScreen';
+import ChecklistScreen from '../screens/ChecklistScreen';
+import VerificationScreen from '../screens/VerificationScreen';
+import HistoriqueScreen from '../screens/HistoriqueScreen';
 import { obtenirMonPrenom, BoutonAppsFamille, baseWeb, etatDepuisCheminWeb } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
@@ -45,6 +48,9 @@ const liens: LinkingOptions<any> = {
       ListeForm: 'nouvelle-liste',
       Article: 'liste/:listeId/article/:articleId',
       Magasin: 'liste/:listeId/magasin',
+      Preparer: 'liste/:listeId/preparer',
+      Historique: 'liste/:listeId/historique',
+      Checklist: 'checklist',
     },
   },
   getStateFromPath: (chemin, options) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, options)),
@@ -208,6 +214,9 @@ export default function AppNavigator() {
             <Pile.Screen name="Article" component={ArticleScreen} options={{ title: 'Article' }} />
             <Pile.Screen name="ListeForm" component={ListeFormScreen} options={{ title: 'Liste' }} />
             <Pile.Screen name="Magasin" component={MagasinScreen} options={{ title: 'Au magasin' }} />
+            <Pile.Screen name="Preparer" component={VerificationScreen} options={{ title: 'Préparer les courses' }} />
+            <Pile.Screen name="Historique" component={HistoriqueScreen} options={{ title: 'Historique' }} />
+            <Pile.Screen name="Checklist" component={ChecklistScreen} options={{ title: 'Checklist du foyer' }} />
           </>
         )}
       </Pile.Navigator>
