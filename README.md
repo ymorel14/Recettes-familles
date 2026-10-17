@@ -11,7 +11,7 @@ familles, et une famille active commune à toutes les apps.
 | `apps/voyage` | App VoyageCommun : calendrier commun des disponibilités, préparation des voyages en famille (dates, hébergement, transport, activités, budget) |
 | `apps/souvenirs` | App SouvenirsFamille : souvenirs de famille datés (voyages, naissances, premiers pas…), photos, vidéos, commentaires, recherche en français |
 | `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — covoiturage (groupes, invités sans compte, planning équitable, rappels), tâches et argent de poche branchés sur Supabase |
-| `apps/courses` | App Courses : listes de courses du foyer (plusieurs listes, partage avec des personnes choisies, rayons, mode magasin) — Phase 0 : squelette, connexion et profil ; remplacera l'onglet Courses de Recettes |
+| `apps/courses` | App Courses : listes de courses du foyer (plusieurs listes, partage avec des personnes choisies, rayons, mode magasin) — listes, partage, rayons, mode magasin branchés sur Supabase (Phase 1) ; remplacera l'onglet Courses de Recettes |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
 | `packages/theme` | Thèmes de couleurs communs aux apps |
 | `supabase/` | Base de données : `setup.sql` (historique, ne plus lancer) et `migrations/` |
@@ -78,6 +78,6 @@ Le fichier `.env` de chaque app se place dans son dossier (`apps/cuisine/.env`,
 
 Un seul projet Supabase, découpé en schémas : `famille` (compte famille
 commun), `recettes` (app Cuisine), `wishlist` (CadeauCommun), `voyage`
-(VoyageCommun), `souvenirs` (SouvenirsFamille), `quotidien` (Quotidien), `courses` (Courses, à partir de la Phase 1). Chaque
+(VoyageCommun), `souvenirs` (SouvenirsFamille), `quotidien` (Quotidien), `courses` (Courses). Chaque
 changement de la base est un fichier numéroté dans `supabase/migrations/`,
 à exécuter une fois dans l'éditeur SQL (voir `supabase/migrations/LISEZMOI.md`).

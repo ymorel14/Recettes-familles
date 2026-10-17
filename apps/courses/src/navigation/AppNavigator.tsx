@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { View, Text, Pressable, Platform } from 'react-native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  DarkTheme,
+  getPathFromState,
+  getStateFromPath,
+  type LinkingOptions,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -14,10 +21,35 @@ import BienvenueScreen from '../screens/BienvenueScreen';
 import PrenomScreen from '../screens/PrenomScreen';
 import ProfilScreen from '../screens/ProfilScreen';
 import ListesScreen from '../screens/ListesScreen';
-import { obtenirMonPrenom, BoutonAppsFamille } from '@apps-famille/famille';
+import ListeScreen from '../screens/ListeScreen';
+import ArticleScreen from '../screens/ArticleScreen';
+import ListeFormScreen from '../screens/ListeFormScreen';
+import MagasinScreen from '../screens/MagasinScreen';
+import { obtenirMonPrenom, BoutonAppsFamille, baseWeb, etatDepuisCheminWeb } from '@apps-famille/famille';
 
 const Pile = createNativeStackNavigator();
 const Onglets = createBottomTabNavigator();
+
+// Adresses web sous le chemin de l'app sur le site commun (/courses/…) :
+// recharger une page ou partager un lien rouvre le bon écran.
+const liens: LinkingOptions<any> = {
+  enabled: Platform.OS === 'web',
+  prefixes: [],
+  config: {
+    initialRouteName: 'Onglets',
+    screens: {
+      Connexion: 'connexion',
+      Bienvenue: 'bienvenue',
+      Onglets: { screens: { Listes: '', Profil: 'profil' } },
+      Liste: 'liste/:listeId',
+      ListeForm: 'nouvelle-liste',
+      Article: 'liste/:listeId/article/:articleId',
+      Magasin: 'liste/:listeId/magasin',
+    },
+  },
+  getStateFromPath: (chemin, options) => etatDepuisCheminWeb(chemin, (c) => getStateFromPath(c, options)),
+  getPathFromState: (etat, options) => `${baseWeb()}${getPathFromState(etat, options)}`,
+};
 
 function optionsEntete() {
   return {
@@ -57,7 +89,7 @@ function TitreFamille({ titre }: { titre: string }) {
 }
 
 // Deux onglets (cahier des charges, « Écrans et navigation ») : Listes et
-// Profil ; le reste s'ouvrira depuis une liste (Phase 1).
+// Profil ; le reste s'ouvre depuis une liste.
 function BarreOnglets() {
   return (
     <Onglets.Navigator
@@ -161,6 +193,7 @@ export default function AppNavigator() {
     <NavigationContainer
       key={themeId}
       theme={themeNavigation}
+      linking={liens}
       documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name ?? ''} · Courses` }}
     >
       <Pile.Navigator screenOptions={optionsEntete()}>
@@ -169,7 +202,13 @@ export default function AppNavigator() {
         ) : !famille || !foyer ? (
           <Pile.Screen name="Bienvenue" component={BienvenueScreen} options={{ headerShown: false }} />
         ) : (
-          <Pile.Screen name="Onglets" component={BarreOnglets} options={{ headerShown: false }} />
+          <>
+            <Pile.Screen name="Onglets" component={BarreOnglets} options={{ headerShown: false }} />
+            <Pile.Screen name="Liste" component={ListeScreen} options={{ title: 'Liste' }} />
+            <Pile.Screen name="Article" component={ArticleScreen} options={{ title: 'Article' }} />
+            <Pile.Screen name="ListeForm" component={ListeFormScreen} options={{ title: 'Liste' }} />
+            <Pile.Screen name="Magasin" component={MagasinScreen} options={{ title: 'Au magasin' }} />
+          </>
         )}
       </Pile.Navigator>
     </NavigationContainer>

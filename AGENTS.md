@@ -59,9 +59,14 @@ partagent le compte famille :
   dès qu'il est dans le caddie, en direct, articles habituels ; quantités
   toujours facultatives). Adresse `/courses/` du site commun, thème par
   défaut « Forêt des montagnes ». Remplacera l'onglet « Courses » de
-  Recettes (Phase 3). Phase 0 : squelette (connexion, profil, écran
-  d'attente). Données à venir dans le schéma `courses`. Cahier des charges :
-  document Claude "Cahier des charges — Courses".
+  Recettes (Phase 3). Phase 1 : listes, partage, articles par rayon
+  (dictionnaire `src/services/rayons.ts`, mémoire du foyer
+  `courses.produits`), ajout rapide (`src/services/saisie.ts` : « 2 lait »),
+  ordre des rayons de chacun, temps réel (`src/hooks/useListe.ts`), mode
+  magasin (`MagasinScreen`). Données dans le schéma `courses` (migration
+  `20261017100000_courses.sql`) ; qui voit une liste est garanti par les
+  règles RLS. Checklist à vérifier : une seule par foyer (Phase 2).
+  Cahier des charges : document Claude "Cahier des charges — Courses".
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants
   famille par famille : `<VisibiliteEnfants>` dans le Profil de chaque app,

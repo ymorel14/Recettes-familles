@@ -42,6 +42,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20261013100000_voyage_paiement_commun.sql` | VoyageCommun : qui paie quoi. Chaque étape de trajet dit qui la paie (son foyer — chacun son essence —, en commun selon la règle du voyage — le ferry —, ou chaque passager sa part ; par défaut la voiture par son foyer, le reste en commun) ; un hébergement est commun ou à la charge de certains foyers seulement |
 | `20261015100000_voyage_rendez_vous.sql` | VoyageCommun : les familles n'habitent pas au même endroit. Une étape peut être propre à un foyer (son trajet jusqu'au rendez-vous : le départ d'une étape en commun, ou directement à destination), hors de l'enchaînement commun ; plusieurs rendez-vous possibles dans une option ; les passagers des étapes communes suivent les rendez-vous. Le retour est l'aller en sens inverse, ou ses propres étapes si on le rend différent |
 | `20261016100000_famille_visibilite_par_famille.sql` | Compte famille : **visibilité d'un enfant famille par famille** (familles recomposées) — une personne sans compte peut être masquée dans l'une des familles de son foyer (`famille.personnes_masquees`, réglée par son foyer ou celui qui la gère) ; ses membres ne la voient plus dans aucune app (`famille.personnes_visibles`, règle RLS de `famille.personnes`, photos), sauf son foyer et ceux qui la voient par une autre famille. CadeauCommun : sa liste leur devient invisible, pas de liste commune pour elle dans cette famille. VoyageCommun : ni invitée d'office aux voyages « toute la famille », ni invitable, ni dans le calendrier commun de cette famille. SouvenirsFamille : plus associable ni recherchée par son prénom. Rien n'est supprimé ; `famille.personnes_masquees_famille_active` sert aux apps à retirer ces enfants des listes de la famille affichée |
+| `20261017100000_courses.sql` | Courses (Phase 1) : schéma `courses` — plusieurs listes par foyer (une « liste principale » qui ne se supprime pas, créée par `courses.assurer_liste_principale`), portée `foyer` ou `moi`, invités choisis un par un parmi les comptes visibles dans la famille (jamais toute la famille), articles à quantité et unité facultatives, rayons de départ et ordre des rayons propre à chacun par liste (`courses.ordres_rayons`), mémoire du foyer par produit (rayon choisi, achats), historique des courses terminées (`courses.terminer_courses`). Qui voit une liste est garanti par les règles RLS ; `courses.articles` est publiée en temps réel. **Après** : ajouter `courses` aux schémas exposés |
 
 ## Exécution
 
@@ -49,7 +50,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
    sur une copie du projet.
 2. Dashboard > SQL Editor : coller et exécuter les migrations dans l'ordre (1, 2, 3…).
    Chaque fichier est une transaction : en cas d'erreur, rien n'est modifié.
-3. Project Settings > API > Exposed schemas : ajouter `famille`, `wishlist`, `voyage`, `souvenirs` et `quotidien`
+3. Project Settings > API > Exposed schemas : ajouter `famille`, `wishlist`, `voyage`, `souvenirs`, `quotidien` et `courses`
    (à côté de `public` et `recettes`).
 4. Vérifier que l'app Cuisine fonctionne toujours (connexion, recettes, courses,
    profil). Elle passe par les vues de compatibilité laissées dans `recettes`.
