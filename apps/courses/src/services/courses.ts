@@ -2,6 +2,14 @@ import { supabase, schemaFamille } from './supabase';
 import { cleProduit, majusculeInitiale, normaliserTexte } from '../utils/texte';
 import { RAYONS_DEPART, RAYON_AUTRES, devinerRayonDictionnaire, type Rayon } from './rayons';
 import type { Saisie } from './saisie';
+import {
+  ajoutsDeRecettes,
+  detecterSuggestionsFusion,
+  fusionnerArticles as fusionnerArticlesCommun,
+  listerContributions as listerContributionsCommun,
+  retirerAjout as retirerAjoutCommun,
+  type Contribution,
+} from '@apps-famille/courses';
 
 // Données de l'app Courses (schéma "courses", migration
 // 20261017100000_courses.sql). Qui voit quoi est garanti par les règles RLS
@@ -38,6 +46,8 @@ export type Article = {
   caddie_par: string | null;
   caddie_le: string | null;
   maj_le: string;
+  // Article repris de l'ancienne liste de Recettes : rayon encore à deviner.
+  rayon_auto?: boolean;
 };
 
 // Icônes et couleurs proposées pour une liste.
@@ -526,4 +536,48 @@ export async function listerPassages(listeId: string, nombre = 30): Promise<Pass
     .limit(nombre);
   if (error) throw error;
   return (data ?? []) as Passage[];
+}
+
+// --- Recettes (Phase 3) ----------------------------------------------------
+
+export type { Contribution, AjoutRecette } from '@apps-famille/courses';
+export { ajoutsDeRecettes, cleArticle } from '@apps-famille/courses';
+
+// Détail des ingrédients envoyés par l'app Recettes dans cette liste.
+export function listerContributions(listeId: string): Promise<Contribution[]> {
+  return listerContributionsCommun(supabase, listeId).catch(() => []);
+}
+
+// Retire ce qu'une recette ajoutée avait apporté à la liste.
+export function retirerRecette(listeId: string, ajoutId: string): Promise<void> {
+  return retirerAjoutCommun(supabase, listeId, ajoutId);
+}
+
+export const suggestionsFusion = (articles: Article[]) => detecterSuggestionsFusion(articles);
+
+export function fusionnerArticles(listeId: string, articles: Article[]): Promise<void> {
+  return fusionnerArticlesCommun(supabase, listeId, articles);
+}
+
+// Articles repris de Recettes : rangés dans leur rayon (dictionnaire ou
+// mémoire du foyer), une seule fois.
+export async function rangerArticlesRepris(articles: Article[], produits: Produit[]): Promise<boolean> {
+  const aRanger = articles.filter((a) => a.rayon_auto);
+  if (aRanger.length === 0) return false;
+  await Promise.all(
+    aRanger.map((a) =>
+      supabase.from('articles').update({ rayon_id: devinerRayon(a.libelle, produits), rayon_auto: false }).eq('id', a.id)
+    )
+  );
+  return true;
+}
+
+export function suivreContributions(listeId: string, rappel: () => void): () => void {
+  const canal = supabase
+    .channel(`courses-contributions-${listeId}-${Math.random().toString(36).slice(2, 10)}`)
+    .on('postgres_changes', { event: '*', schema: 'courses', table: 'contributions', filter: `liste_id=eq.${listeId}` }, rappel)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(canal);
+  };
 }

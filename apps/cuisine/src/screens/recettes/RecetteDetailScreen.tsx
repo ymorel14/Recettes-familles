@@ -33,7 +33,7 @@ import {
   listerEssais,
   syntheseEssais,
 } from '../../services/essais';
-import { obtenirOuCreerListeActive, ajouterRecettesALaListe } from '../../services/listesCourses';
+import { useEnvoiCourses } from '../../hooks/useEnvoiCourses';
 import type { ChoixVariantes, EssaiComplet, RecetteComplete } from '../../types/models';
 import { Avatar } from '@apps-famille/famille';
 import ReglageQuantites, { AJUSTEMENT_INITIAL, type AjustementQuantites } from '../../components/ReglageQuantites';
@@ -134,7 +134,9 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const [recette, setRecette] = useState<RecetteComplete | null>(null);
   const [chargement, setChargement] = useState(true);
   const [suppression, setSuppression] = useState(false);
-  const [ajoutListe, setAjoutListe] = useState(false);
+  // Envoi des ingrédients dans une liste de l'app Courses.
+  const envoiCourses = useEnvoiCourses();
+  const ajoutListe = envoiCourses.enCours;
   const [revelation, setRevelation] = useState(false);
   const [essais, setEssais] = useState<EssaiComplet[]>([]);
   // Quantités adaptées au moment de faire la recette (parts, ou "ce que
@@ -219,25 +221,13 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     );
   };
 
-  // Ajoute directement cette recette (à ses parts par défaut) à la liste de
-  // courses du foyer, sans passer par l'écran de sélection parmi toutes les
-  // recettes (retour utilisateur : seule la recette courante est concernée
-  // ici — cet écran de sélection multiple reste utile depuis l'onglet
-  // "Liste de courses", pour composer les courses de plusieurs recettes).
-  const ajouterALaListeDeCourses = async () => {
+  // Envoie cette recette (aux parts choisies, dans la version choisie) dans
+  // une liste de l'app Courses — la liste de courses a quitté Recettes. La
+  // sélection de plusieurs recettes reste possible (bouton panier de
+  // l'onglet Recettes).
+  const ajouterALaListeDeCourses = () => {
     if (!recette || !foyer) return;
-    setAjoutListe(true);
-    try {
-      const liste = await obtenirOuCreerListeActive(foyer.id);
-      await ajouterRecettesALaListe(liste.id, [
-        { recette: affichee, partsSouhaitees: recette.parts_defaut * ajustement.facteur },
-      ]);
-      navigation.navigate('Onglets', { screen: 'Courses' });
-    } catch (e) {
-      alerte('Échec de l’ajout', e instanceof Error ? e.message : 'Veuillez réessayer.');
-    } finally {
-      setAjoutListe(false);
-    }
+    envoiCourses.envoyer([{ recette: affichee, partsSouhaitees: recette.parts_defaut * ajustement.facteur }]);
   };
 
   // Recette surprise : la rendre visible de toute la famille dès maintenant.
@@ -522,6 +512,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
           />
         ))
       )}
+      {envoiCourses.fenetre}
     </ScrollView>
   );
 }

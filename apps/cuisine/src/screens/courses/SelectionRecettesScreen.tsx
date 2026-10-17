@@ -3,17 +3,18 @@ import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from '
 import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { listerRecettes } from '../../services/recettes';
-import { obtenirOuCreerListeActive, ajouterRecettesALaListe } from '../../services/listesCourses';
+import { useEnvoiCourses } from '../../hooks/useEnvoiCourses';
 import type { RecetteComplete } from '../../types/models';
 
 // Sélection de plusieurs recettes et ajustement de leurs parts avant
-// agrégation dans la liste de courses (cahier des charges §7).
+// envoi dans une liste de l'app Courses (cahier des charges §7).
 export default function SelectionRecettesScreen({ route, navigation }: any) {
   const preselection: string[] = route.params?.preselection ?? [];
   const { foyer } = useAuth();
   const [recettes, setRecettes] = useState<RecetteComplete[]>([]);
   const [chargement, setChargement] = useState(true);
-  const [enregistrement, setEnregistrement] = useState(false);
+  const envoiCourses = useEnvoiCourses();
+  const enregistrement = envoiCourses.enCours;
   const [selection, setSelection] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -55,14 +56,7 @@ export default function SelectionRecettesScreen({ route, navigation }: any) {
       navigation.goBack();
       return;
     }
-    setEnregistrement(true);
-    try {
-      const liste = await obtenirOuCreerListeActive(foyer.id);
-      await ajouterRecettesALaListe(liste.id, choisies);
-      navigation.goBack();
-    } finally {
-      setEnregistrement(false);
-    }
+    await envoiCourses.envoyer(choisies, () => navigation.goBack());
   };
 
   if (chargement) {
@@ -110,6 +104,7 @@ export default function SelectionRecettesScreen({ route, navigation }: any) {
           <Text style={styles.boutonPrincipalTexte}>Ajouter à la liste de courses</Text>
         )}
       </Pressable>
+      {envoiCourses.fenetre}
     </View>
   );
 }

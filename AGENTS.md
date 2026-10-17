@@ -65,7 +65,9 @@ partagent le compte famille :
   ordre des rayons de chacun, temps réel (`src/hooks/useListe.ts`), mode
   magasin (`MagasinScreen`). Données dans le schéma `courses` (migration
   `20261017100000_courses.sql`) ; qui voit une liste est garanti par les
-  règles RLS. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
+  règles RLS. Phase 3 (migration `20261017120000_courses_recettes.sql`) :
+  reçoit les recettes de Recettes (détail par recette, « Retirer »),
+  reprise des anciennes listes de Recettes. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
   checklist du foyer, une seule pour toutes ses listes (`ChecklistScreen`),
   « Préparer les courses » partagé en direct (`VerificationScreen`),
   articles habituels (`courses.habituels`), historique (`HistoriqueScreen`),
@@ -87,6 +89,11 @@ partagent le compte famille :
   s'ajoute à `APPS_FAMILLE` (appsFamille.ts) et à `scripts/construire-site.mjs`.
   Les clés de stockage local d'une app sont préfixées par son nom (le site
   commun partage le stockage du navigateur).
+- `packages/courses` : code commun à Courses et Recettes — normalisation
+  des produits (`cleProduit`), rayons et dictionnaire des produits,
+  envoi des ingrédients d'une recette dans une liste Courses
+  (`envoyerRecettes`), détail par recette (`courses.contributions`),
+  retrait d'une recette, rapprochements proposés.
 - `packages/theme` : thèmes de couleurs communs (Sceau, Charlotte aux fraises,
   Papier kraft…) et `creerStylesThemes`. Chaque app fixe son thème par défaut
   (`definirThemeParDefaut`) et ses polices dans son `src/theme/theme.ts`.
@@ -98,7 +105,12 @@ l'app concernée avant toute nouvelle fonctionnalité.
 Résumé des choix retenus (app Cuisine, valables aussi pour les suivantes) :
 
 - Stack : React Native + Expo (SDK 57), une seule base pour Android/iOS/Web
-- Navigation : React Navigation, bottom tabs (Recettes / Courses / Assistant)
+- Navigation : React Navigation, bottom tabs (Recettes / Congélateur / Assistant /
+  Aide-mémoire / Profil). La liste de courses a quitté Recettes pour l'app
+  Courses (Phase 3 de Courses) : « Ajouter à la liste de courses » envoie les
+  ingrédients dans une liste Courses (`src/hooks/useEnvoiCourses.tsx`), le
+  panier de l'onglet Recettes mène à `ListeDeCoursesScreen` (ouvrir Courses,
+  ajouter plusieurs recettes)
 - Backend : Supabase (base de données, authentification, stockage, temps réel) —
   un projet EXISTANT est réutilisé (limite de 2 projets sur le plan gratuit), avec les
   tables de cette app isolées dans le schéma Postgres `recettes` (voir `supabase/setup.sql`)

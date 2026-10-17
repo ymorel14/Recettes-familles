@@ -93,7 +93,6 @@ const liens: LinkingOptions<any> = {
       Onglets: {
         screens: {
           Recettes: '',
-          Courses: 'courses',
           Congelateur: 'congelateur',
           Assistant: 'assistant',
           AideMemoire: 'aide-memoire',
@@ -112,8 +111,10 @@ const liens: LinkingOptions<any> = {
       },
       ScanRecette: 'scanner',
       ImportWeb: 'importer',
+      ListeDeCourses: 'liste-de-courses',
+      // Hors de /cuisine/courses, désormais redirigé vers l'app Courses.
       SelectionRecettes: {
-        path: 'courses/ajouter',
+        path: 'ajouter-aux-courses',
         stringify: { preselection: sansURL },
       },
       AssistantRecette: {
@@ -152,7 +153,6 @@ const enTeteSansTitre = {
 type NomIcone = keyof typeof Ionicons.glyphMap;
 const ICONES_ONGLETS: Record<string, { actif: NomIcone; inactif: NomIcone }> = {
   Recettes: { actif: 'book', inactif: 'book-outline' },
-  Courses: { actif: 'basket', inactif: 'basket-outline' },
   Congelateur: { actif: 'snow', inactif: 'snow-outline' },
   Assistant: { actif: 'restaurant', inactif: 'restaurant-outline' },
   AideMemoire: { actif: 'bookmarks', inactif: 'bookmarks-outline' },
@@ -167,7 +167,7 @@ function Onglets() {
         tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
         tabBarActiveTintColor: theme.colors.accent,
         tabBarInactiveTintColor: theme.colors.textMuted,
-        // 6 onglets : libellés un peu plus petits pour tenir sans être coupés.
+        // 5 onglets : libellés un peu plus petits pour tenir sans être coupés.
         tabBarLabelStyle: { fontFamily: theme.fontBody, fontSize: 11 },
         tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarIcon: ({ focused, color, size }) => {
@@ -182,12 +182,27 @@ function Onglets() {
         headerLeft: () => <BoutonAppsFamille couleur={theme.colors.accent} police={theme.fontBodyBold} />,
       })}
     >
-      <Tab.Screen name="Recettes" component={CategoriesScreen} options={{ title: 'Recettes', ...enTeteSansTitre }} />
-      {/* Libellé d'onglet court : « Liste de courses » ne tient pas à 5 onglets. */}
+      {/* La liste de courses a quitté Recettes pour l'app Courses : le
+          panier de l'onglet Recettes y mène (et à la sélection de plusieurs
+          recettes). */}
       <Tab.Screen
-        name="Courses"
-        component={ListeDeCoursesScreen}
-        options={{ title: 'Liste de courses', tabBarLabel: 'Courses', ...enTeteSansTitre }}
+        name="Recettes"
+        component={CategoriesScreen}
+        options={({ navigation }) => ({
+          title: 'Recettes',
+          ...enTeteSansTitre,
+          headerRight: () => (
+            <Pressable
+              onPress={() => navigation.navigate('ListeDeCourses')}
+              accessibilityRole="button"
+              accessibilityLabel="Liste de courses"
+              hitSlop={8}
+              style={{ paddingHorizontal: 12, minHeight: 44, justifyContent: 'center' }}
+            >
+              <Ionicons name="cart-outline" size={24} color={theme.colors.accent} />
+            </Pressable>
+          ),
+        })}
       />
       <Tab.Screen
         name="Congelateur"
@@ -316,6 +331,11 @@ export default function AppNavigator() {
               name="ImportWeb"
               component={ImportWebScreen}
               options={{ title: 'Importer depuis le web' }}
+            />
+            <RootStack.Screen
+              name="ListeDeCourses"
+              component={ListeDeCoursesScreen}
+              options={{ title: 'Liste de courses' }}
             />
             <RootStack.Screen
               name="SelectionRecettes"

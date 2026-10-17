@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@apps-famille/courses": "*",
     "@apps-famille/famille": "*",
     "@apps-famille/theme": "*",
     "@expo-google-fonts/caveat": "^0.4.2",

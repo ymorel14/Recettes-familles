@@ -1,0 +1,8 @@
+{
+  "name": "@apps-famille/courses",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Code commun aux apps Courses et Recettes : normalisation des produits, rayons (dictionnaire), envoi des ingrédients d'une recette dans une liste de courses (schéma courses).",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

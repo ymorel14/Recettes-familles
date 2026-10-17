@@ -11,6 +11,10 @@ import { useListe } from '../hooks/useListe';
 import {
   ajouterArticle,
   ajouterAVerifier,
+  ajoutsDeRecettes,
+  fusionnerArticles,
+  retirerRecette,
+  suggestionsFusion,
   epinglerProduit,
   listerHabituels,
   masquerProduit,
@@ -42,7 +46,10 @@ const ENDROIT_PAR_RAYON: Record<string, string> = {
 export default function ListeScreen({ route, navigation }: any) {
   const listeId: string = route.params.listeId;
   const donnees = useListe(listeId);
-  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur, horsLigne, enAttente } = donnees;
+  const { liste, articles, setArticles, rayonsOrdonnes, parUtilisateur, produits, chargement, erreur, horsLigne, enAttente, contributions, rechargerArticles } = donnees;
+  const [voirRecettes, setVoirRecettes] = useState(false);
+  // Rapprochements refusés pendant cette visite (« ce n'est pas le même produit »).
+  const [refuses, setRefuses] = useState<Set<string>>(new Set());
   const { foyer } = useAuth();
   const duFoyer = !!liste && !!foyer && liste.foyer_id === foyer.id;
   const [habituels, setHabituels] = useState<Habituel[]>([]);
@@ -170,6 +177,42 @@ export default function ListeScreen({ route, navigation }: any) {
         },
       },
     ]);
+  };
+
+  // Recettes envoyées depuis l'app Recettes, retirables une par une.
+  const recettesAjoutees = useMemo(() => ajoutsDeRecettes(contributions), [contributions]);
+  const retirer = (ajoutId: string, titre: string) =>
+    alerte(`Retirer « ${titre} » de la liste ?`, 'Seuls les ingrédients apportés par cette recette sont retirés.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Retirer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await retirerRecette(listeId, ajoutId);
+            await donnees.recharger();
+          } catch {
+            setMessage('Impossible de retirer la recette (réseau ?).');
+          }
+        },
+      },
+    ]);
+
+  // Rapprochement proposé (« Oeufs » et « Oeufs entiers ») : l'utilisateur tranche.
+  const suggestion = useMemo(
+    () => suggestionsFusion(aAcheter).find((sg) => !refuses.has(sg.articles.map((a) => a.id).sort().join(','))) ?? null,
+    [aAcheter, refuses]
+  );
+  const refuserSuggestion = () =>
+    suggestion && setRefuses((r) => new Set(r).add(suggestion.articles.map((a) => a.id).sort().join(',')));
+  const accepterSuggestion = async () => {
+    if (!suggestion) return;
+    try {
+      await fusionnerArticles(listeId, suggestion.articles);
+      await rechargerArticles();
+    } catch {
+      setMessage('Fusion impossible (réseau ?).');
+    }
   };
 
   // Appui long sur un article : l'ajouter à la checklist du foyer.
@@ -339,6 +382,47 @@ export default function ListeScreen({ route, navigation }: any) {
             <Text style={styles.rayonNombre}>{section.data.length}</Text>
           </View>
         )}
+        ListHeaderComponent={
+          <View style={styles.entetesListe}>
+            {suggestion && (
+              <View style={styles.carteSuggestion}>
+                <Text style={styles.suggestionQuestion}>
+                  {suggestion.articles.map((a) => `« ${a.libelle} »`).join(' et ')} : le même produit ?
+                </Text>
+                <View style={styles.boutons}>
+                  <Bouton variante="contour" titre="Non" onPress={refuserSuggestion} style={styles.boutonPied} />
+                  <Bouton titre="Fusionner" onPress={accepterSuggestion} style={styles.boutonPied} />
+                </View>
+              </View>
+            )}
+            {recettesAjoutees.length > 0 && (
+              <View style={styles.carteRecettes}>
+                <Pressable
+                  onPress={() => setVoirRecettes((v) => !v)}
+                  style={styles.habituelsEntete}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: voirRecettes }}
+                >
+                  <Ionicons name="restaurant-outline" size={18} color={theme.colors.accent} />
+                  <Text style={styles.habituelsTitre}>Recettes ajoutées ({recettesAjoutees.length})</Text>
+                  <Ionicons name={voirRecettes ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+                </Pressable>
+                {voirRecettes &&
+                  recettesAjoutees.map((r) => (
+                    <View key={r.ajoutId} style={styles.ligneRecette}>
+                      <Text style={styles.recetteTitre} numberOfLines={1}>
+                        {r.titre}
+                        <Text style={styles.message}>{`  ${r.parts} part${r.parts > 1 ? 's' : ''}`}</Text>
+                      </Text>
+                      <Pressable onPress={() => retirer(r.ajoutId, r.titre)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Retirer ${r.titre}`}>
+                        <Text style={styles.lienRetirer}>Retirer</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+              </View>
+            )}
+          </View>
+        }
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
@@ -382,6 +466,20 @@ const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.lg, backgroundColor: theme.colors.background },
   entete: { flexDirection: 'row', alignItems: 'center' },
+  entetesListe: { gap: theme.spacing.sm },
+  carteSuggestion: {
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.selectionTransparent,
+  },
+  suggestionQuestion: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  carteRecettes: { paddingHorizontal: theme.spacing.md, paddingVertical: 4, borderRadius: theme.radii.md, backgroundColor: theme.colors.surface },
+  ligneRecette: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 40 },
+  recetteTitre: { flex: 1, fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
+  lienRetirer: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted, textDecorationLine: 'underline' },
   habituelsEntete: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36 },
   habituelsTitre: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
   epingle: { borderColor: theme.colors.accent },

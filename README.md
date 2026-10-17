@@ -6,13 +6,14 @@ familles, et une famille active commune à toutes les apps.
 
 | Dossier | Contenu |
 | --- | --- |
-| `apps/cuisine` | App Cuisine (« Recettes familiales ») : recettes, courses, assistant, congélateur |
+| `apps/cuisine` | App Cuisine (« Recettes familiales ») : recettes, assistant, congélateur ; « Ajouter à la liste de courses » envoie les ingrédients dans l'app Courses |
 | `apps/cadeaucommun` | App CadeauCommun : listes de souhaits, idées cachées, réservations anonymes |
 | `apps/voyage` | App VoyageCommun : calendrier commun des disponibilités, préparation des voyages en famille (dates, hébergement, transport, activités, budget) |
 | `apps/souvenirs` | App SouvenirsFamille : souvenirs de famille datés (voyages, naissances, premiers pas…), photos, vidéos, commentaires, recherche en français |
 | `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — covoiturage (groupes, invités sans compte, planning équitable, rappels), tâches et argent de poche branchés sur Supabase |
 | `apps/courses` | App Courses : listes de courses du foyer (plusieurs listes, partage avec des personnes choisies, rayons, mode magasin) — listes, partage, rayons, mode magasin branchés sur Supabase (Phase 1) ; remplacera l'onglet Courses de Recettes |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
+| `packages/courses` | Code commun à Courses et Recettes : produits, rayons, envoi des recettes dans une liste |
 | `packages/theme` | Thèmes de couleurs communs aux apps |
 | `supabase/` | Base de données : `setup.sql` (historique, ne plus lancer) et `migrations/` |
 

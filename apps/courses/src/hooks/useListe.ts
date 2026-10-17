@@ -3,6 +3,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import {
   listerArticles,
+  listerContributions,
+  rangerArticlesRepris,
+  suivreContributions,
   listerOrdresRayons,
   listerPersonnesAvecCompte,
   listerProduits,
@@ -10,6 +13,7 @@ import {
   obtenirListe,
   suivreArticles,
   type Article,
+  type Contribution,
   type ListeResume,
   type OrdreRayons,
   type PersonneCompte,
@@ -40,6 +44,8 @@ export function useListe(listeId: string) {
   const [ordres, setOrdres] = useState<OrdreRayons[]>([]);
   const [personnes, setPersonnes] = useState<PersonneCompte[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
+  // Détail par recette (ingrédients envoyés par l'app Recettes).
+  const [contributions, setContributions] = useState<Contribution[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   // Affichage de la version gardée sur le téléphone (pas de réseau).
@@ -74,13 +80,18 @@ export function useListe(listeId: string) {
         setErreur('Cette liste n’existe plus ou ne vous est plus partagée.');
         return;
       }
-      const [a, r, o, p, prod] = await Promise.all([
+      let [a, r, o, p, prod, contrib] = await Promise.all([
         listerArticles(listeId),
         listerRayons(),
         listerOrdresRayons(listeId).catch(() => []),
         listerPersonnesAvecCompte().catch(() => []),
         listerProduits(l.foyer_id),
+        listerContributions(listeId),
       ]);
+      // Articles repris de l'ancienne liste de Recettes : rangés dans leur
+      // rayon à la première ouverture.
+      if (await rangerArticlesRepris(a, prod).catch(() => false)) a = await listerArticles(listeId);
+      setContributions(contrib);
       setArticles(await avecAttente(a));
       setRayons(r);
       setOrdres(o);
@@ -133,8 +144,12 @@ export function useListe(listeId: string) {
       if (minuteur.current) clearTimeout(minuteur.current);
       minuteur.current = setTimeout(rechargerArticles, 250);
     });
+    const arreterContributions = suivreContributions(listeId, () => {
+      listerContributions(listeId).then(setContributions);
+    });
     return () => {
       arreter();
+      arreterContributions();
       if (minuteur.current) clearTimeout(minuteur.current);
     };
   }, [listeId, rechargerArticles]);
@@ -157,6 +172,8 @@ export function useListe(listeId: string) {
     parUtilisateur,
     produits,
     setProduits,
+    contributions,
+    setContributions,
     chargement,
     erreur,
     horsLigne,

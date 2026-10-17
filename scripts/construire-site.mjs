@@ -114,6 +114,10 @@ cpSync(join(racine, 'site', 'accueil'), sortie, { recursive: true });
 // (rechargement d'une page sans erreur 404), anciennes adresses de Cuisine
 // redirigées, le reste vers l'accueil.
 const lignes = [
+  // La liste de courses de Recettes a déménagé dans l'app Courses (règles
+  // lues dans l'ordre : avant celle de /cuisine/*).
+  '/cuisine/courses  /courses/  301',
+  '/cuisine/courses/*  /courses/  301',
   ...APPS.map((a) => `/${a.chemin}/*  /${a.chemin}/index.html  200`),
   ...ANCIENNES_ADRESSES_CUISINE.flatMap((c) => [`/${c}  /cuisine/${c}  301`, `/${c}/*  /cuisine/${c}/:splat  301`]),
   '/*  /index.html  200',

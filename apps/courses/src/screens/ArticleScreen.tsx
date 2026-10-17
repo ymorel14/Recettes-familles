@@ -9,6 +9,7 @@ import { alerte } from '../utils/alerte';
 import { formaterDateHeure } from '../utils/dates';
 import { useListe } from '../hooks/useListe';
 import {
+  cleArticle,
   listerListes,
   memoriserRayon,
   modifierArticle,
@@ -21,7 +22,7 @@ import {
 export default function ArticleScreen({ route, navigation }: any) {
   const { listeId, articleId } = route.params as { listeId: string; articleId: string };
   const { foyer } = useAuth();
-  const { liste, articles, rayonsOrdonnes, parUtilisateur, chargement } = useListe(listeId);
+  const { liste, articles, rayonsOrdonnes, parUtilisateur, chargement, contributions } = useListe(listeId);
   const article = useMemo(() => articles.find((a) => a.id === articleId) ?? null, [articles, articleId]);
   const [libelle, setLibelle] = useState('');
   const [quantite, setQuantite] = useState('');
@@ -65,6 +66,8 @@ export default function ArticleScreen({ route, navigation }: any) {
   }
 
   const auteur = article.ajoute_par ? parUtilisateur.get(article.ajoute_par) : undefined;
+  // Recettes qui citent cet article (envoyées depuis l'app Recettes).
+  const citePar = contributions.filter((c) => cleArticle(c.libelle, c.unite) === cleArticle(article.libelle, article.unite));
 
   const enregistrer = async () => {
     const q = quantite.trim() ? Number(quantite.replace(',', '.')) : null;
@@ -213,6 +216,18 @@ export default function ArticleScreen({ route, navigation }: any) {
               );
             })}
           </View>
+        </View>
+      )}
+
+      {citePar.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.titreSection}>Cité par</Text>
+          {citePar.map((c) => (
+            <Text key={c.id} style={styles.aide}>
+              {c.recette_titre} · {Number(c.parts_utilisees)} part{Number(c.parts_utilisees) > 1 ? 's' : ''}
+              {c.quantite != null ? ` · ${String(Number(c.quantite)).replace('.', ',')}${c.unite ? ` ${c.unite}` : ''}` : ''}
+            </Text>
+          ))}
         </View>
       )}
 
