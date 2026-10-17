@@ -644,6 +644,29 @@ export async function creerHabituel(foyerId: string, libelle: string, produits: 
   if (error) throw error;
 }
 
+// Renomme un produit pour tout le foyer (migration
+// 20261017140000_courses_renommer_produit.sql) : le produit, son historique
+// et ses articles sur les listes prennent le nouveau nom. Si un produit porte
+// déjà ce nom, les deux sont fusionnés. Renvoie la nouvelle clé et la photo
+// devenue inutile (à supprimer de l'espace de stockage), s'il y en a une.
+export async function renommerProduit(
+  foyerId: string,
+  ancienneCle: string,
+  nouveauNom: string
+): Promise<{ cle: string; photoInutile: string | null }> {
+  const libelle = majusculeInitiale(nouveauNom);
+  const cle = cleProduit(libelle);
+  if (!cle) throw new Error('Nom vide.');
+  const { data, error } = await supabase.rpc('renommer_produit', {
+    id_foyer: foyerId,
+    ancienne_cle: ancienneCle,
+    nouvelle_cle: cle,
+    nouveau_libelle: libelle,
+  });
+  if (error) throw error;
+  return { cle, photoInutile: (data as string | null) ?? null };
+}
+
 // Oublie complètement un produit (rayon retenu, compteur d'achats, photo).
 export async function supprimerProduit(foyerId: string, cle: string): Promise<string | null> {
   const { data } = await supabase.from('produits').select('photo').eq('foyer_id', foyerId).eq('cle', cle).maybeSingle();

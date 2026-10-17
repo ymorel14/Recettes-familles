@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -9,6 +9,7 @@ import { GrandePhoto } from '../components/Photo';
 import { alerte } from '../utils/alerte';
 import { formaterDateCourte } from '../utils/dates';
 import { RAYONS_DEPART, type Rayon } from '../services/rayons';
+import { cleProduit } from '../utils/texte';
 import { choisirPhoto, definirPhotoProduit, supprimerPhoto } from '../services/photos';
 import {
   ajouterArticle,
@@ -18,6 +19,7 @@ import {
   listerRayons,
   modifierProduit,
   obtenirProduit,
+  renommerProduit,
   supprimerProduit,
   type ListeResume,
   type ProduitGere,
@@ -25,9 +27,9 @@ import {
 
 // Fiche produit, ouverte depuis l'onglet « Habituels » : ce que le foyer
 // retient d'un produit, indépendamment des listes — photo, rayon, épingle,
-// proposé ou non, nombre d'achats. Le nom n'est pas modifiable ici : il
-// sert de clé pour relier le produit aux articles des listes et à
-// l'historique.
+// proposé ou non, nombre d'achats. Renommer reporte le nouveau nom sur
+// l'historique et les articles des listes du foyer ; si un produit porte
+// déjà ce nom, les deux sont fusionnés.
 export default function ProduitScreen({ route, navigation }: any) {
   const { cle } = route.params as { cle: string };
   const { foyer } = useAuth();
@@ -36,6 +38,7 @@ export default function ProduitScreen({ route, navigation }: any) {
   const [listes, setListes] = useState<ListeResume[]>([]);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [nom, setNom] = useState<string | null>(null); // null : pas en train de renommer
 
   const charger = useCallback(async () => {
     if (!foyer) return;
@@ -115,6 +118,46 @@ export default function ProduitScreen({ route, navigation }: any) {
     }
   };
 
+  const renommer = async () => {
+    const nouveau = (nom ?? '').trim();
+    if (!nouveau || nouveau === produit.libelle) {
+      setNom(null);
+      return;
+    }
+    const nouvelleCle = cleProduit(nouveau);
+    if (!nouvelleCle) return;
+    const executer = async (libelleFinal: string) => {
+      setEnCours('nom');
+      setMessage(null);
+      try {
+        const { cle: c, photoInutile } = await renommerProduit(foyer.id, produit.cle, libelleFinal);
+        await supprimerPhoto(photoInutile).catch(() => {});
+        setNom(null);
+        if (c !== produit.cle) navigation.setParams({ cle: c });
+        else await charger();
+        setMessage('Renommé.');
+      } catch {
+        setMessage('Renommage impossible. Vérifiez votre connexion.');
+      } finally {
+        setEnCours(null);
+      }
+    };
+    if (nouvelleCle === produit.cle) return executer(nouveau);
+    const existant = await obtenirProduit(foyer.id, nouvelleCle).catch(() => null);
+    if (existant) {
+      alerte(
+        `« ${existant.libelle} » existe déjà`,
+        `Fusionner « ${produit.libelle} » avec « ${existant.libelle} » ? Les achats sont additionnés ; l’épingle, le rayon et la photo sont gardés. Les articles des listes prennent le nom « ${existant.libelle} ».`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Fusionner', onPress: () => executer(existant.libelle) },
+        ]
+      );
+    } else {
+      executer(nouveau);
+    }
+  };
+
   const oublier = () =>
     alerte(
       `Oublier « ${produit.libelle} » ?`,
@@ -140,7 +183,33 @@ export default function ProduitScreen({ route, navigation }: any) {
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
       <View style={styles.section}>
-        <Text style={styles.nom}>{produit.libelle}</Text>
+        {nom === null ? (
+          <Pressable
+            onPress={() => setNom(produit.libelle)}
+            style={styles.ligneNom}
+            accessibilityRole="button"
+            accessibilityLabel={`Renommer ${produit.libelle}`}
+          >
+            <Text style={styles.nom}>{produit.libelle}</Text>
+            <Ionicons name="create-outline" size={20} color={theme.colors.accent} />
+          </Pressable>
+        ) : (
+          <View style={styles.renommage}>
+            <TextInput
+              style={styles.champ}
+              value={nom}
+              onChangeText={setNom}
+              onSubmitEditing={renommer}
+              autoFocus
+              accessibilityLabel="Nouveau nom du produit"
+            />
+            <View style={styles.puces}>
+              <Bouton titre="Renommer" onPress={renommer} enCours={enCours === 'nom'} />
+              <Bouton variante="discret" titre="Annuler" onPress={() => setNom(null)} />
+            </View>
+            <Text style={styles.aide}>Le nouveau nom remplace l’ancien partout : historique, habituels et articles des listes du foyer.</Text>
+          </View>
+        )}
         <Text style={styles.aide}>
           {produit.nb_achats > 0
             ? `Acheté ${produit.nb_achats} fois${produit.dernier_achat ? `, la dernière ${formaterDateCourte(produit.dernier_achat)}` : ''}.`
@@ -263,7 +332,20 @@ const styles = creerStylesThemes(() => ({
     padding: theme.spacing.md,
     gap: theme.spacing.xs,
   },
-  nom: { fontFamily: theme.fontTitle, fontSize: 22, color: theme.colors.text },
+  nom: { fontFamily: theme.fontTitle, fontSize: 22, color: theme.colors.text, flexShrink: 1 },
+  ligneNom: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 44 },
+  renommage: { gap: theme.spacing.sm },
+  champ: {
+    minHeight: 46,
+    backgroundColor: theme.colors.background,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.sm,
+    color: theme.colors.text,
+    fontFamily: theme.fontBody,
+    fontSize: 18,
+  },
   titreSection: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text, marginBottom: 4 },
   message: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
   aide: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, flexShrink: 1 },

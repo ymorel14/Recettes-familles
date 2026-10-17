@@ -77,7 +77,8 @@ partagent le compte famille :
   articles habituels (`courses.habituels`), onglet « Habituels » en bas
   (`HabituelsScreen` : épingler, ne plus proposer, ajouter à une liste,
   oublier un produit ; toucher un produit ouvre sa fiche `ProduitScreen` :
-  photo, rayon, épingle, ajout à une liste), historique (`HistoriqueScreen`),
+  photo, rayon, épingle, ajout à une liste, renommer ou fusionner — migration
+  `20261017140000_courses_renommer_produit.sql`), historique (`HistoriqueScreen`),
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".
