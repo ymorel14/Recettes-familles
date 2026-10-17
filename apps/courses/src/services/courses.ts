@@ -399,6 +399,94 @@ export const ENDROITS = ['Frigo', 'Congélateur', 'Placards', 'Salle de bain', '
 
 export type AVerifier = { id: string; foyer_id: string; libelle: string; endroit: string; ordre: number };
 
+// --- Emplacements de la checklist, propres au foyer ----------------------
+// (migration 20261017150000_courses_emplacements.sql). « Autre » existe
+// toujours : il recueille les articles d'un emplacement supprimé.
+
+export const EMPLACEMENT_AUTRE = 'Autre';
+
+// Emplacements du foyer, dans l'ordre du tour de la maison. Un foyer qui
+// n'en a pas encore reçoit les endroits de départ.
+export async function listerEmplacements(foyerId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('emplacements')
+    .select('nom, ordre')
+    .eq('foyer_id', foyerId)
+    .order('ordre')
+    .order('nom');
+  if (error) return [...ENDROITS];
+  let noms = (data ?? []).map((e: any) => e.nom as string);
+  if (noms.length === 0) {
+    await supabase
+      .from('emplacements')
+      .upsert(
+        ENDROITS.map((nom, i) => ({ foyer_id: foyerId, nom, ordre: nom === EMPLACEMENT_AUTRE ? 1000 : i })),
+        { onConflict: 'foyer_id,nom', ignoreDuplicates: true }
+      );
+    noms = [...ENDROITS];
+  }
+  if (!noms.includes(EMPLACEMENT_AUTRE)) noms.push(EMPLACEMENT_AUTRE);
+  return noms;
+}
+
+// Ajoute un emplacement juste avant « Autre ». Renvoie son nom (ou celui de
+// l'emplacement existant qui porte déjà ce nom, à la casse près).
+export async function ajouterEmplacement(foyerId: string, nom: string, actuels: string[]): Promise<string> {
+  const propre = majusculeInitiale(nom.trim());
+  if (!propre) throw new Error('Nom vide.');
+  const existant = actuels.find((e) => normaliserTexte(e) === normaliserTexte(propre));
+  if (existant) return existant;
+  const sansAutre = actuels.filter((e) => e !== EMPLACEMENT_AUTRE);
+  const { error } = await supabase.from('emplacements').insert({ foyer_id: foyerId, nom: propre, ordre: sansAutre.length });
+  if (error) throw error;
+  return propre;
+}
+
+// Renomme un emplacement ; les articles de la checklist suivent.
+export async function renommerEmplacement(foyerId: string, ancien: string, nouveau: string): Promise<string> {
+  const propre = majusculeInitiale(nouveau.trim());
+  if (!propre) throw new Error('Nom vide.');
+  const { error } = await supabase.from('emplacements').update({ nom: propre }).eq('foyer_id', foyerId).eq('nom', ancien);
+  if (error) throw error;
+  const { error: e2 } = await supabase.from('a_verifier').update({ endroit: propre }).eq('foyer_id', foyerId).eq('endroit', ancien);
+  if (e2) throw e2;
+  return propre;
+}
+
+// Supprime un emplacement ; ses articles passent dans « Autre ».
+export async function supprimerEmplacement(foyerId: string, nom: string): Promise<void> {
+  if (nom === EMPLACEMENT_AUTRE) return;
+  const { error } = await supabase
+    .from('a_verifier')
+    .update({ endroit: EMPLACEMENT_AUTRE })
+    .eq('foyer_id', foyerId)
+    .eq('endroit', nom);
+  if (error) throw error;
+  const { error: e2 } = await supabase.from('emplacements').delete().eq('foyer_id', foyerId).eq('nom', nom);
+  if (e2) throw e2;
+}
+
+// Enregistre l'ordre du tour de la maison.
+export async function ordonnerEmplacements(foyerId: string, noms: string[]): Promise<void> {
+  const { error } = await supabase
+    .from('emplacements')
+    .upsert(noms.map((nom, i) => ({ foyer_id: foyerId, nom, ordre: i })), { onConflict: 'foyer_id,nom' });
+  if (error) throw error;
+}
+
+// Range la checklist par emplacement, dans l'ordre du foyer ; un endroit
+// inconnu (ancien nom…) se place avant « Autre ».
+export function grouperParEmplacement(articles: AVerifier[], emplacements: string[]): [string, AVerifier[]][] {
+  const groupes = new Map<string, AVerifier[]>();
+  articles.forEach((a) => groupes.set(a.endroit, [...(groupes.get(a.endroit) ?? []), a]));
+  const rang = (e: string) => {
+    const i = emplacements.indexOf(e);
+    if (e === EMPLACEMENT_AUTRE) return 10000;
+    return i === -1 ? 5000 : i;
+  };
+  return Array.from(groupes.entries()).sort(([a], [b]) => rang(a) - rang(b) || a.localeCompare(b, 'fr'));
+}
+
 export async function listerChecklist(foyerId: string): Promise<AVerifier[]> {
   const { data, error } = await supabase
     .from('a_verifier')

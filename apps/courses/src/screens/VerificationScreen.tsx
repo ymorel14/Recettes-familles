@@ -7,8 +7,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { Bouton, Chargement } from '../components/ui';
 import { useListe } from '../hooks/useListe';
 import {
-  ENDROITS,
   ajouterArticle,
+  grouperParEmplacement,
+  listerEmplacements,
   annulerReponse,
   listerChecklist,
   listerVerifications,
@@ -32,6 +33,7 @@ export default function VerificationScreen({ route, navigation }: any) {
   const { liste, articles, setArticles, produits, parUtilisateur, chargement, moi } = useListe(listeId);
   const [preparation, setPreparation] = useState<string | null>(null);
   const [checklist, setChecklist] = useState<AVerifier[] | null>(null);
+  const [emplacements, setEmplacements] = useState<string[]>([]);
   const [verifications, setVerifications] = useState<Verification[]>([]);
   const [ajoutes, setAjoutes] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
@@ -52,8 +54,13 @@ export default function VerificationScreen({ route, navigation }: any) {
     let actif = true;
     (async () => {
       try {
-        const [id, c] = await Promise.all([preparationEnCours(listeId), listerChecklist(foyer.id)]);
+        const [id, c, e] = await Promise.all([
+          preparationEnCours(listeId),
+          listerChecklist(foyer.id),
+          listerEmplacements(foyer.id),
+        ]);
         if (!actif) return;
+        setEmplacements(e);
         setPreparation(id);
         setChecklist(c);
         await chargerVerifications(id);
@@ -85,14 +92,7 @@ export default function VerificationScreen({ route, navigation }: any) {
   );
   const parId = useMemo(() => new Map(verifications.map((v) => [v.a_verifier_id, v])), [verifications]);
 
-  const groupes = useMemo(() => {
-    const ordre = [...ENDROITS] as string[];
-    const map = new Map<string, AVerifier[]>();
-    (checklist ?? []).forEach((a) => map.set(a.endroit, [...(map.get(a.endroit) ?? []), a]));
-    return Array.from(map.entries()).sort(
-      ([a], [b]) => (ordre.indexOf(a) === -1 ? 99 : ordre.indexOf(a)) - (ordre.indexOf(b) === -1 ? 99 : ordre.indexOf(b))
-    );
-  }, [checklist]);
+  const groupes = useMemo(() => grouperParEmplacement(checklist ?? [], emplacements), [checklist, emplacements]);
 
   const total = checklist?.length ?? 0;
   const faits = (checklist ?? []).filter((a) => parId.has(a.id) || surLaListe.has(cleProduit(a.libelle))).length;

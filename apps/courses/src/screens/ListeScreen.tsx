@@ -19,6 +19,8 @@ import {
   epinglerProduit,
   listerHabituels,
   masquerProduit,
+  modifierArticle,
+  supprimerArticle,
   suggestions as chercherSuggestions,
   type Article,
   type Habituel,
@@ -64,6 +66,9 @@ export default function ListeScreen({ route, navigation }: any) {
   const [saisie, setSaisie] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Dernier article retiré d'un appui sur ×, qu'on peut remettre.
+  const [retire, setRetire] = useState<Article | null>(null);
+  const minuterieRetire = useRef<ReturnType<typeof setTimeout> | null>(null);
   const champ = useRef<TextInput>(null);
 
   useLayoutEffect(() => {
@@ -216,6 +221,39 @@ export default function ListeScreen({ route, navigation }: any) {
     }
   };
 
+  // × sur une ligne : retirer l'article de la liste sans ouvrir sa fiche
+  // (on peut le remettre quelques secondes avec « Annuler »).
+  const retirerArticle = async (a: Article) => {
+    setMessage(null);
+    setArticles((liste) => liste.filter((x) => x.id !== a.id));
+    if (minuterieRetire.current) clearTimeout(minuterieRetire.current);
+    setRetire(a);
+    minuterieRetire.current = setTimeout(() => setRetire(null), 8000);
+    try {
+      await supprimerArticle(a.id);
+    } catch {
+      setRetire(null);
+      setMessage('Impossible de retirer l’article. Vérifiez votre connexion.');
+      await rechargerArticles();
+    }
+  };
+
+  const annulerRetrait = async () => {
+    const a = retire;
+    if (!a) return;
+    setRetire(null);
+    if (minuterieRetire.current) clearTimeout(minuterieRetire.current);
+    try {
+      const { article } = await ajouterArticle(listeId, { libelle: a.libelle, quantite: a.quantite, unite: a.unite }, produits, articles);
+      if (a.note || article.rayon_id !== a.rayon_id) {
+        await modifierArticle(article.id, { note: a.note, rayon_id: a.rayon_id });
+      }
+      await rechargerArticles();
+    } catch {
+      setMessage('Impossible de remettre l’article.');
+    }
+  };
+
   // Appui long sur un article : l'ajouter à la checklist du foyer.
   const versChecklist = (a: Article) => {
     if (!foyer || !duFoyer) return;
@@ -282,6 +320,15 @@ export default function ListeScreen({ route, navigation }: any) {
             </View>
           </View>
         )}
+        <Pressable
+          onPress={() => retirerArticle(item)}
+          hitSlop={6}
+          style={({ pressed }) => [styles.retirer, pressed && styles.appuye]}
+          accessibilityRole="button"
+          accessibilityLabel={`Retirer ${item.libelle} de la liste`}
+        >
+          <Ionicons name="close" size={20} color={theme.colors.textMuted} />
+        </Pressable>
       </Pressable>
     );
   };
@@ -369,6 +416,16 @@ export default function ListeScreen({ route, navigation }: any) {
           <Text style={styles.horsLigne}>Pas de réseau : version gardée sur le téléphone.</Text>
         )}
         {message && <Text style={styles.message}>{message}</Text>}
+        {retire && (
+          <View style={styles.bandeauRetire}>
+            <Text style={[styles.message, styles.texteBandeau]} numberOfLines={1}>
+              « {retire.libelle} » retiré de la liste.
+            </Text>
+            <Pressable onPress={annulerRetrait} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Remettre ${retire.libelle} sur la liste`}>
+              <Text style={styles.annuler}>Annuler</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       <SectionList
@@ -548,6 +605,10 @@ const styles = creerStylesThemes(() => ({
     minHeight: 52,
   },
   appuye: { opacity: 0.6 },
+  retirer: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center', marginRight: -6 },
+  texteBandeau: { flex: 1 },
+  bandeauRetire: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 32 },
+  annuler: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent, textDecorationLine: 'underline' },
   ligneTextes: { flex: 1, gap: 2 },
   libelle: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
   quantite: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.accent },

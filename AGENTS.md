@@ -71,7 +71,8 @@ partagent le compte famille :
   (migration `20261017130000_courses_photos.sql`, `src/services/photos.ts`,
   `src/components/Photo.tsx`) : gardée avec le produit du foyer, pas avec
   l'article. Phase 2 (migration `20261017110000_courses_avant_de_partir.sql`) :
-  checklist du foyer, une seule pour toutes ses listes (`ChecklistScreen`),
+  checklist du foyer, une seule pour toutes ses listes (`ChecklistScreen`,
+  emplacements propres au foyer : migration `20261017150000_courses_emplacements.sql`),
   bouton « À la maison » : vérification partagée en direct
   (`VerificationScreen`), bouton « Je suis au magasin » (`MagasinScreen`),
   articles habituels (`courses.habituels`), onglet « Habituels » en bas
@@ -79,6 +80,7 @@ partagent le compte famille :
   oublier un produit ; toucher un produit ouvre sa fiche `ProduitScreen` :
   photo, rayon, épingle, ajout à une liste, renommer ou fusionner — migration
   `20261017140000_courses_renommer_produit.sql`), historique (`HistoriqueScreen`),
+  × sur une ligne de liste pour retirer un article (avec « Annuler »),
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".
