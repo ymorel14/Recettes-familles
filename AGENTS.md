@@ -52,6 +52,12 @@ partagent le compte famille :
   domaine, lieux et contenants de rangement, objets avec photo, prêts ;
   réservés au foyer (règles RLS), photos dans l'espace privé
   `quotidien-inventaires`, envoyées seulement à « Enregistrer » (`avecPhoto`).
+  Tâches datées et domaines (migration
+  `20261019100000_quotidien_taches_calendrier.sql`) : une tâche peut être
+  « à une date », « sur une période » ou « avant une date », éventuellement
+  chaque année, et appartenir à un domaine (`DomainesScreen`) ; l'écran
+  Tâches a deux vues, Jour et Calendrier (`components/CalendrierTaches.tsx`,
+  `taches_calendrier`), et un filtre par domaine.
 - `apps/courses` : app Courses (listes de courses du foyer : plusieurs
   listes, partage avec des personnes choisies une par une — jamais toute la
   famille —, rayons rangés automatiquement avec un ordre propre à chacun,

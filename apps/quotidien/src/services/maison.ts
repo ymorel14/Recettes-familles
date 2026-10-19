@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formaterDate, MOIS } from './personnes';
 
 // Tâches de la maison et argent de poche virtuel (schéma "quotidien",
 // supabase/migrations/20261008110000_quotidien_taches_argent.sql).
@@ -6,7 +7,13 @@ import { supabase } from './supabase';
 // Argent de poche en POINTS, affiché avec l'équivalent en euros entre
 // parenthèses ; aucun argent réel.
 
-export type Recurrence = 'aucune' | 'quotidienne' | 'hebdomadaire';
+export type Recurrence = 'aucune' | 'quotidienne' | 'hebdomadaire' | 'annuelle';
+
+// Place sur le calendrier (migration 20261019100000_quotidien_taches_calendrier) :
+// sans date, à une date, sur une période, ou à faire avant une date.
+export type Planif = 'libre' | 'le' | 'entre' | 'avant';
+
+export type Domaine = { id: string; nom: string; icone: string | null };
 
 export type Tache = {
   id: string;
@@ -17,6 +24,10 @@ export type Tache = {
   personnes: string[]; // famille.personnes, à tour de rôle ; vide = « qui veut »
   date_debut: string;
   active: boolean;
+  domaine_id: string | null;
+  planif: Planif;
+  periode_debut: string | null;
+  periode_fin: string | null;
 };
 
 export type TacheDuJour = {
@@ -27,6 +38,14 @@ export type TacheDuJour = {
   pour: string | null;
   pour_prenom: string | null;
   candidats: string[];
+  domaine_id: string | null;
+  domaine: string | null;
+  domaine_icone: string | null;
+  planif: Planif;
+  // Occurrence en cours (tâche datée).
+  debut: string | null;
+  fin: string | null;
+  en_retard: boolean;
   realisation: { id: string; etat: 'faite' | 'validee'; personne_id: string | null; prenom: string | null } | null;
 };
 
@@ -93,13 +112,16 @@ export async function tachesDuJour(jour: string): Promise<TacheDuJour[]> {
 export async function listerTaches(): Promise<Tache[]> {
   const { data, error } = await supabase
     .from('taches')
-    .select('id, libelle, points, recurrence, jours, personnes, date_debut, active')
+    .select('id, libelle, points, recurrence, jours, personnes, date_debut, active, domaine_id, planif, periode_debut, periode_fin')
     .order('libelle');
   if (error) throw error;
   return (data as Tache[]) ?? [];
 }
 
-export type TacheSaisie = Pick<Tache, 'libelle' | 'points' | 'recurrence' | 'jours' | 'personnes'>;
+export type TacheSaisie = Pick<
+  Tache,
+  'libelle' | 'points' | 'recurrence' | 'jours' | 'personnes' | 'domaine_id' | 'planif' | 'periode_debut' | 'periode_fin'
+>;
 
 export async function creerTache(foyerId: string, t: TacheSaisie): Promise<void> {
   const { error } = await supabase.from('taches').insert({ ...t, foyer_id: foyerId, libelle: t.libelle.trim() });
@@ -123,6 +145,116 @@ export async function marquerFaite(idTache: string, jour: string, idPersonne: st
 
 export async function annulerRealisation(id: string): Promise<void> {
   const { error } = await supabase.rpc('annuler_realisation', { id_realisation: id });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Calendrier des tâches datées
+// ---------------------------------------------------------------------------
+
+export type OccurrenceTache = {
+  tache_id: string;
+  libelle: string;
+  points: number;
+  recurrence: Recurrence;
+  planif: Exclude<Planif, 'libre'>;
+  debut: string;
+  fin: string;
+  domaine_id: string | null;
+  domaine: string | null;
+  domaine_icone: string | null;
+  pour: string | null;
+  candidats: string[];
+  fait_le: string | null;
+  fait_par: string | null;
+  en_retard: boolean;
+};
+
+// Occurrences qui touchent [du, au], plus les tâches en retard.
+export async function tachesCalendrier(du: string, au: string): Promise<OccurrenceTache[]> {
+  const { data, error } = await supabase.rpc('taches_calendrier', { du, au });
+  if (error) throw error;
+  return (data as OccurrenceTache[]) ?? [];
+}
+
+// "2026-03-15" → "15 mars" (sans l'année, pour une tâche de chaque année).
+function jourMois(iso: string): string {
+  const [, m, j] = iso.split('-').map(Number);
+  return `${j === 1 ? '1er' : j} ${MOIS[m - 1]}`;
+}
+
+// « Le 15 mars 2027 », « Du 1er au 15 avril », « Avant le 30 mai · chaque année »…
+export function libellePlanif(t: { planif: Planif; recurrence: Recurrence; debut: string | null; fin: string | null }): string {
+  if (t.planif === 'libre' || !t.debut || !t.fin) return '';
+  const annuelle = t.recurrence === 'annuelle';
+  const date = (iso: string) => (annuelle ? jourMois(iso) : formaterDate(iso).replace(/^1 /, '1er '));
+  let texte: string;
+  if (t.planif === 'le') texte = `Le ${date(t.debut)}`;
+  else if (t.planif === 'avant') texte = `Avant le ${date(t.fin)}`;
+  else {
+    const [a1, m1] = t.debut.split('-');
+    const [a2, m2] = t.fin.split('-');
+    const j1 = Number(t.debut.slice(8)) === 1 ? '1er' : String(Number(t.debut.slice(8)));
+    texte =
+      a1 === a2 && m1 === m2 ? `Du ${j1} au ${date(t.fin)}` : `Du ${date(t.debut)} au ${date(t.fin)}`;
+  }
+  return annuelle ? `${texte} · chaque année` : texte;
+}
+
+// ---------------------------------------------------------------------------
+// Domaines (Potager, Entretien maison, Voiture…)
+// ---------------------------------------------------------------------------
+
+export const SUGGESTIONS_DOMAINES: { nom: string; icone: string }[] = [
+  { nom: 'Potager', icone: 'leaf-outline' },
+  { nom: 'Jardin', icone: 'flower-outline' },
+  { nom: 'Entretien maison', icone: 'home-outline' },
+  { nom: 'Ménage', icone: 'sparkles-outline' },
+  { nom: 'Voiture', icone: 'car-outline' },
+  { nom: 'Bricolage', icone: 'hammer-outline' },
+  { nom: 'Papiers', icone: 'document-text-outline' },
+  { nom: 'Animaux', icone: 'paw-outline' },
+];
+
+export const ICONE_DOMAINE_PAR_DEFAUT = 'pricetag-outline';
+
+// Icône proposée d'après le nom (« potager » → feuille).
+export function iconePourDomaine(nom: string): string {
+  const n = nom.trim().toLowerCase();
+  return SUGGESTIONS_DOMAINES.find((s) => s.nom.toLowerCase() === n)?.icone ?? ICONE_DOMAINE_PAR_DEFAUT;
+}
+
+export async function listerDomaines(): Promise<Domaine[]> {
+  const { data, error } = await supabase.from('domaines').select('id, nom, icone').order('nom');
+  if (error) throw error;
+  return (data as Domaine[]) ?? [];
+}
+
+export async function creerDomaine(foyerId: string, nom: string, icone: string | null = null): Promise<Domaine> {
+  const propre = nom.trim();
+  const { data, error } = await supabase
+    .from('domaines')
+    .insert({ foyer_id: foyerId, nom: propre, icone: icone ?? iconePourDomaine(propre) })
+    .select('id, nom, icone')
+    .single();
+  if (error) {
+    if ((error as any).code === '23505') throw new Error(`Le domaine « ${propre} » existe déjà.`);
+    throw error;
+  }
+  return data as Domaine;
+}
+
+export async function modifierDomaine(id: string, nom: string, icone: string | null): Promise<void> {
+  const { error } = await supabase.from('domaines').update({ nom: nom.trim(), icone }).eq('id', id);
+  if (error) {
+    if ((error as any).code === '23505') throw new Error(`Le domaine « ${nom.trim()} » existe déjà.`);
+    throw error;
+  }
+}
+
+// Les tâches du domaine restent, sans domaine.
+export async function supprimerDomaine(id: string): Promise<void> {
+  const { error } = await supabase.from('domaines').delete().eq('id', id);
   if (error) throw error;
 }
 

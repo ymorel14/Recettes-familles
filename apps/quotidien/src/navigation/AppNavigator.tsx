@@ -21,6 +21,7 @@ import GroupeScreen from '../screens/GroupeScreen';
 import GroupeFormScreen from '../screens/GroupeFormScreen';
 import ActiviteFormScreen from '../screens/ActiviteFormScreen';
 import TacheFormScreen from '../screens/TacheFormScreen';
+import DomainesScreen from '../screens/DomainesScreen';
 import TirelireScreen from '../screens/TirelireScreen';
 import InventairesScreen from '../screens/InventairesScreen';
 import InventaireScreen from '../screens/InventaireScreen';
@@ -219,6 +220,7 @@ export default function AppNavigator() {
             <Pile.Screen name="GroupeForm" component={GroupeFormScreen} options={{ title: 'Créer ou rejoindre un groupe' }} />
             <Pile.Screen name="ActiviteForm" component={ActiviteFormScreen} options={{ title: 'Nouvelle activité' }} />
             <Pile.Screen name="TacheForm" component={TacheFormScreen} options={{ title: 'Tâche' }} />
+            <Pile.Screen name="Domaines" component={DomainesScreen} options={{ title: 'Domaines des tâches' }} />
             <Pile.Screen name="Tirelire" component={TirelireScreen} options={{ title: 'Tirelire' }} />
             <Pile.Screen name="Inventaire" component={InventaireScreen} options={{ title: 'Inventaire' }} />
             <Pile.Screen name="InventaireForm" component={InventaireFormScreen} options={{ title: 'Inventaire' }} />
