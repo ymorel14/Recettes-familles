@@ -24,6 +24,19 @@ export type RecetteLue = {
   a_verifier: string[];
 };
 
+// Recette lue depuis un lien (route ia/recette-lien) : page web ou vidéo.
+export type RecetteLueLien = RecetteLue & { image: string | null; lien: string | null; source: 'web' | 'video' };
+
+// Lien d'une vidéo (le texte public est lu par le serveur).
+export function estLienVideo(lien: string): boolean {
+  try {
+    const h = new URL(lien.trim()).hostname.replace(/^www\.|^m\./, '');
+    return h === 'youtu.be' || h.endsWith('youtube.com') || h.endsWith('tiktok.com') || h === 'instagram.com' || h.endsWith('.instagram.com');
+  } catch {
+    return false;
+  }
+}
+
 // Ce que le formulaire doit marquer « À vérifier » (§ 7.3 de la charte).
 export type VerificationRecette = { champs: string[]; ingredients: string[] };
 
@@ -37,7 +50,8 @@ const propre = (s: string | null | undefined) => (s ?? '').normalize('NFD').repl
 
 export function recetteLueVersFormulaire(
   r: RecetteLue,
-  photoCouverture: string | null
+  photoCouverture: string | null,
+  origine: { source: RecetteFormulaire['source']; sourceUrl: string | null } = { source: 'scan', sourceUrl: null }
 ): { formulaire: RecetteFormulaire; verification: VerificationRecette } {
   const vide = formulaireVide();
   const blocs = r.elements.length ? r.elements : [{ nom: null, variante_de: null, ingredients: [], etapes: [] }];
@@ -77,7 +91,8 @@ export function recetteLueVersFormulaire(
     elements: elements.map((e) => e.brouillon),
     ingredients: ingredients.length ? ingredients : [nouvelIngredientBrouillon()],
     etapes: etapes.length ? etapes : [nouvelleEtapeBrouillon()],
-    source: 'scan',
+    source: origine.source,
+    sourceUrl: origine.sourceUrl,
   };
   const champs = new Set(r.a_verifier);
   if (r.parts == null) champs.add('parts');

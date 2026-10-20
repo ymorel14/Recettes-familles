@@ -105,9 +105,21 @@ export default function HebergementsScreen({ route, navigation }: any) {
   const proposes = hebergements.filter((h) => h.statut === 'propose');
   const ecartes = hebergements.filter((h) => h.statut === 'ecarte');
 
+  // Comparaison (§ 4.5.2) : le moins cher par personne et par nuit, parmi
+  // les hébergements non écartés assez grands pour tout le monde.
+  const coutParPersonne = (h: Hebergement) => {
+    const p = prixSejour(h, nuits);
+    return p !== null && nuits && attendus ? p / nuits / attendus : null;
+  };
+  const comparables = hebergements.filter(
+    (h) => h.statut !== 'ecarte' && coutParPersonne(h) !== null && (h.capacite == null || h.capacite >= attendus)
+  );
+  const moinsCher =
+    comparables.length > 1 ? comparables.reduce((a, b) => (coutParPersonne(b)! < coutParPersonne(a)! ? b : a)).id : null;
+
   const carte = (h: Hebergement) => {
     const prix = prixSejour(h, nuits);
-    const parPersonneNuit = prix !== null && nuits && attendus ? prix / nuits / attendus : null;
+    const parPersonneNuit = coutParPersonne(h);
     const monAvis = h.avis.find((a) => a.utilisateur_id === moiId);
     const compte = AVIS.map((a) => ({ ...a, n: h.avis.filter((x) => x.avis === a.id).length })).filter((a) => a.n > 0);
     const peutModifier = h.propose_par === moiId || organisateur;
@@ -121,6 +133,7 @@ export default function HebergementsScreen({ route, navigation }: any) {
           <Text style={styles.type}>{libelle(TYPES_HEBERGEMENT, h.type)}</Text>
           {h.statut === 'retenu' && <Pastille texte="Retenu" ton="succes" />}
           {h.statut === 'ecarte' && <Pastille texte="Écarté" ton="neutre" />}
+          {h.id === moinsCher && <Pastille texte="Le moins cher / pers." ton="succes" />}
         </View>
         <Text style={styles.nom}>{h.nom}</Text>
         {h.ville || h.adresse ? <Text style={styles.detail}>{[h.adresse, h.ville].filter(Boolean).join(', ')}</Text> : null}
@@ -143,7 +156,7 @@ export default function HebergementsScreen({ route, navigation }: any) {
           <Text style={[styles.detail, h.capacite < attendus && styles.alerte]}>
             {h.capacite} couchage{h.capacite > 1 ? 's' : ''}
             {h.nb_chambres != null ? ` · ${h.nb_chambres} chambre${h.nb_chambres > 1 ? 's' : ''}` : ''}
-            {h.capacite < attendus ? ` · trop petit pour ${attendus} personnes` : ''}
+            {h.capacite < attendus ? ` · trop petit pour ${attendus} personnes` : attendus ? ` · pour ${attendus} invité${attendus > 1 ? 's' : ''}` : ''}
           </Text>
         )}
         {h.description ? <Text style={styles.description}>{h.description}</Text> : null}

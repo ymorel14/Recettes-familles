@@ -1,0 +1,5 @@
+{
+  "description": "Annonce Gîtes de France / Abritel : couchages, chambres et prix. Remplacez l'adresse par une annonce réelle.",
+  "entree": { "lien": "https://www.gites-de-france.com/fr/..." },
+  "attendu": { "couchages": "*", "chambres": "*" }
+}

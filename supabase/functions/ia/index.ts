@@ -20,6 +20,8 @@
 //   objet-photo     photo d'un objet → envie (§ 4.4.2)
 //   lettre-noel     lettre au Père Noël → envies de l'enfant (§ 4.4.3)
 //   photo-classer   ⊕ photo : de quoi s'agit-il ? (§ 4.6.1)
+//   annonce-hebergement  annonce de location → fiche d'hébergement (§ 4.5.2)
+//   recette-lien    page web sans fiche recette, vidéo, ou texte collé → recette (§ 4.1.2, § 4.1.3)
 import { servirIA } from '../_partage/ia.ts';
 import { essai } from './routes/essai.ts';
 import { plus } from './routes/plus.ts';
@@ -31,6 +33,8 @@ import { planningPhoto } from './routes/planning-photo.ts';
 import { objetPhoto } from './routes/objet-photo.ts';
 import { lettreNoel } from './routes/lettre-noel.ts';
 import { photoClasser } from './routes/photo-classer.ts';
+import { recetteLien } from './routes/recette-lien.ts';
+import { annonceHebergement } from './routes/annonce-hebergement.ts';
 
 servirIA({
   essai,
@@ -43,4 +47,6 @@ servirIA({
   'objet-photo': objetPhoto,
   'lettre-noel': lettreNoel,
   'photo-classer': photoClasser,
+  'recette-lien': recetteLien,
+  'annonce-hebergement': annonceHebergement,
 });

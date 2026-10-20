@@ -24,6 +24,8 @@ Routes disponibles :
 | `objet-photo` | Photo d'un objet → envie (nom, marque, catégorie, mots de recherche) | Sonnet, ~0,02 $ |
 | `lettre-noel` | Photo ou dictée de la lettre au Père Noël → envies de l'enfant (prénom seul envoyé) | Sonnet, ~0,02 $ |
 | `photo-classer` | ⊕ photo : de quoi s'agit-il ? (image réduite à 512 px) | Haiku, ~0,0003 $ |
+| `recette-lien` | Page web SANS fiche recette structurée (l'app essaie d'abord `importer-recette`, gratuit), vidéo YouTube / TikTok / Instagram (texte public seulement : description, légende ; jamais la vidéo ni les sous-titres), ou texte collé (description, sous-titres) → recette | Sonnet, ~0,02 à 0,035 $ |
+| `annonce-hebergement` | Annonce de location quand `lire-annonce` n'a pas trouvé le prix, les couchages ou les chambres → champs manquants | Sonnet, ~0,02 $ |
 
 Photos et PDF (`_partage/images.ts`) : réduits par l'app avant l'envoi (1 568 px, JPEG 0,8),
 3 photos au plus, 5 Mo par fichier, 8 Mo en tout ; jamais enregistrés, ils ne font que passer.

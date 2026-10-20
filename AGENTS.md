@@ -104,7 +104,8 @@ partagent le compte famille :
   `20261020110000_famille_ia.sql`), appelée par `apps/famille/src/services/assistant.ts` ;
   jeux de tests `tests/ia/`. Fonctions de l'assistant : textes courts (Haiku : ⊕, courses en
   phrase, tâche dictée, lien collé) et photos (Sonnet : recette, planning, objet, lettre au
-  Père Noël ; ⊕ photo classée par Haiku) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  Père Noël ; ⊕ photo classée par Haiku), pages et vidéos (Sonnet : recette d'une page sans
+  fiche structurée ou d'une vidéo par son texte public, annonce de location incomplète) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

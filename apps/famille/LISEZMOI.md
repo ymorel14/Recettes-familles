@@ -83,3 +83,14 @@ choix des photos : `src/composants/PanneauPhotos.tsx`, appel : `src/composants/u
   cocher et corriger.
 - **⊕ › Photo ou Galerie** : classement (route `photo-classer`), puis ouverture de l'écran qui lit
   ce type de photo ; si l'assistant ne sait pas, la personne choisit.
+
+## Assistant (chantier C, étape 6 : pages, vidéos, annonces)
+
+- **Recettes › Importer depuis le web** (`ImportWebScreen`) : la lecture classique (`importer-recette`, gratuite)
+  reste la première ; si la page n'a pas de fiche recette structurée, l'assistant lit son texte (route
+  `recette-lien`). Un lien YouTube, TikTok ou Instagram est lu par sa description ou sa légende publiques. Si la
+  vidéo ne donne pas la recette par écrit : champ « Coller le texte de la recette » (description, sous-titres).
+- **Voyages › Proposer un hébergement › Remplir depuis le lien** : si `lire-annonce` n'a pas trouvé le prix, les
+  couchages ou les chambres (ou si le site bloque), l'assistant lit l'annonce (route `annonce-hebergement`) et
+  complète les champs vides. La liste des hébergements montre « Le moins cher / pers. » et les couchages par
+  rapport au nombre d'invités.

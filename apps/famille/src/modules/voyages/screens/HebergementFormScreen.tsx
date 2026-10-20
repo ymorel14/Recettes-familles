@@ -19,6 +19,29 @@ import { lireAnnonce } from '../services/annonces';
 import { formaterEuros } from '../services/hebergements';
 import { Aide, CaseACocher, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton } from '../components/ui';
+import { BandeauBrouillon, ChargementAssistant, MessageAssistant, PastilleAVerifier } from '../../../composants/assistant';
+import { useAppelAssistant } from '../../../composants/useAppelAssistant';
+
+// Annonce lue par l'assistant (route ia/annonce-hebergement, § 4.5.2).
+type AnnonceLue = {
+  nom: string | null;
+  ville: string | null;
+  adresse: string | null;
+  couchages: number | null;
+  chambres: number | null;
+  prix_total: number | null;
+  prix_nuit: number | null;
+  prix_semaine: number | null;
+  frais: number | null;
+  detail_frais: string | null;
+  description: string | null;
+  image: string | null;
+  a_verifier: string[];
+};
+const NOMS_CHAMPS: Record<string, string> = {
+  nom: 'nom', ville: 'ville', adresse: 'adresse', couchages: 'couchages', chambres: 'chambres',
+  prix_total: 'prix', prix_nuit: 'prix', prix_semaine: 'prix', frais: 'frais',
+};
 
 const texte = (n: number | null | undefined) => (n == null ? '' : String(n).replace('.', ','));
 
@@ -41,6 +64,8 @@ export default function HebergementFormScreen({ route, navigation }: any) {
   const [image, setImage] = useState<string | null>(existant?.image ?? null);
   const [lecture, setLecture] = useState(false);
   const [trouve, setTrouve] = useState<string | null>(null);
+  const assistant = useAppelAssistant();
+  const [parAssistant, setParAssistant] = useState<string[] | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   // Qui paie : vide = frais communs ; sinon les foyers cochés.
@@ -70,12 +95,40 @@ export default function HebergementFormScreen({ route, navigation }: any) {
     if (t) setType(t);
   };
 
+  // Lecture incomplète (prix, couchages ou chambres manquants, ou site qui
+  // bloque) : l'assistant lit le texte de l'annonce et complète les champs
+  // encore vides (§ 4.5.2). Les valeurs déjà là ne sont jamais écrasées.
+  const completerAvecAssistant = async (deja: { prix: boolean; capacite: boolean; chambres: boolean }) => {
+    const a = await assistant.lancer<AnnonceLue>('annonce-hebergement', () => ({ lien: lien.trim() }), 60000);
+    if (!a) return;
+    if (a.nom) setNom((v) => v.trim() || a.nom!.slice(0, 120));
+    if (a.ville) setVille((v) => v.trim() || a.ville!);
+    if (a.adresse) setAdresse((v) => v.trim() || a.adresse!);
+    if (a.couchages && !deja.capacite) setCapacite((v) => v.trim() || String(a.couchages));
+    if (a.chambres && !deja.chambres) setChambres((v) => v.trim() || String(a.chambres));
+    if (!deja.prix && (a.prix_total || a.prix_nuit)) {
+      setModePrix(a.prix_total ? 'total' : 'nuit');
+      setPrix(texte(a.prix_total ?? a.prix_nuit));
+    }
+    if (a.frais) setFrais((v) => v.trim() || texte(a.frais));
+    if (a.description) setDescription((v) => v.trim() || a.description!);
+    if (a.image) setImage((v) => v ?? a.image);
+    const notes = [
+      a.prix_semaine && !a.prix_total && !a.prix_nuit ? `prix à la semaine : ${formaterEuros(a.prix_semaine)}` : '',
+      a.detail_frais ? `frais : ${a.detail_frais}` : '',
+    ].filter(Boolean);
+    setTrouve((t) => [t, notes.length ? `Lu par l’assistant · ${notes.join(' · ')}.` : ''].filter(Boolean).join(' '));
+    setParAssistant(a.a_verifier.map((c) => NOMS_CHAMPS[c] ?? c).filter((c, i, l) => l.indexOf(c) === i));
+  };
+
   // Remplit les champs encore vides à partir de la page de l'annonce.
   const remplirDepuisLien = async () => {
     setErreur(null);
     setTrouve(null);
+    setParAssistant(null);
     if (!/^https?:\/\//i.test(lien.trim())) return setErreur('Collez d’abord le lien de l’annonce.');
     setLecture(true);
+    let deja = { prix: !!prix.trim(), capacite: !!capacite.trim(), chambres: !!chambres.trim() };
     try {
       const a = await lireAnnonce(lien.trim());
       if (a.titre && !nom.trim()) setNom(a.titre.slice(0, 120));
@@ -88,11 +141,13 @@ export default function HebergementFormScreen({ route, navigation }: any) {
       const infos = [a.site ? `Lu sur ${a.site}` : 'Annonce lue'];
       if (a.prix) infos.push(`prix affiché : ${formaterEuros(a.prix)} (à reporter selon qu’il s’agit du séjour ou d’une nuit)`);
       setTrouve(infos.join(' · ') + '. Vérifiez et complétez.');
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : 'Lecture impossible.');
+      deja = { prix: deja.prix || !!a.prix, capacite: deja.capacite || !!a.capacite, chambres: deja.chambres || !!a.chambres };
+    } catch {
+      // Site bloqué ou page illisible : l'assistant tente sa chance.
     } finally {
       setLecture(false);
     }
+    if (!deja.prix || !deja.capacite || !deja.chambres) await completerAvecAssistant(deja);
   };
 
   const valider = async () => {
@@ -168,8 +223,23 @@ export default function HebergementFormScreen({ route, navigation }: any) {
         accessibilityLabelledBy="libelle-lien"
       />
 
-      <Bouton titre="Remplir depuis le lien" variante="contour" onPress={remplirDepuisLien} enCours={lecture} desactive={!lien.trim()} />
+      {assistant.lecture ? (
+        <ChargementAssistant
+          couleur={theme.colors.accent}
+          etapes={['J’ouvre l’annonce…', 'Je cherche le prix et les couchages…', 'Presque fini…']}
+          onAnnuler={assistant.annuler}
+        />
+      ) : (
+        <Bouton titre="Remplir depuis le lien" variante="contour" onPress={remplirDepuisLien} enCours={lecture} desactive={!lien.trim()} />
+      )}
       {trouve && <Aide>{trouve}</Aide>}
+      {parAssistant ? (
+        <View style={{ gap: theme.spacing.xs }}>
+          <BandeauBrouillon couleur={theme.colors.accent} />
+          {parAssistant.length ? <PastilleAVerifier raison={parAssistant.join(', ')} /> : null}
+        </View>
+      ) : null}
+      {assistant.message && !trouve ? <MessageAssistant message={assistant.message.texte} pause={assistant.message.pause} /> : null}
       {image ? <Image source={{ uri: image }} style={styles.photo} accessibilityLabel="Photo de l’annonce" /> : null}
 
       <Libelle nativeID="libelle-nom">Nom</Libelle>

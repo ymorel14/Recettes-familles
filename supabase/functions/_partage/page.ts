@@ -28,7 +28,7 @@ export function adresseAutorisee(brut: string): URL | null {
   }
 }
 
-function decoder(t: string): string {
+export function decoder(t: string): string {
   return t
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
@@ -40,7 +40,7 @@ function decoder(t: string): string {
     .replace(/&euro;/g, '€');
 }
 
-function meta(html: string, ...noms: string[]): string | null {
+export function meta(html: string, ...noms: string[]): string | null {
   for (const nom of noms) {
     const motifs = [
       new RegExp(`<meta[^>]+(?:property|name|itemprop)=["']${nom}["'][^>]*content=["']([^"']+)["']`, 'i'),
@@ -109,7 +109,10 @@ function texteVisible(html: string, max: number): string {
     .slice(0, max);
 }
 
-export async function lirePage(brut: string, options: { maxOctets?: number; maxTexte?: number } = {}): Promise<LecturePage | null> {
+export async function lirePage(
+  brut: string,
+  options: { maxOctets?: number; maxTexte?: number; entetes?: Record<string, string> } = {}
+): Promise<LecturePage | null> {
   const u = adresseAutorisee(brut);
   if (!u) return null;
   const controle = new AbortController();
@@ -122,6 +125,7 @@ export async function lirePage(brut: string, options: { maxOctets?: number; maxT
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
         'Accept-Language': 'fr-FR,fr;q=0.9',
         Accept: 'text/html,application/xhtml+xml',
+        ...(options.entetes ?? {}),
       },
     });
     if (!reponse.ok || !(reponse.headers.get('content-type') ?? '').includes('html')) return null;
