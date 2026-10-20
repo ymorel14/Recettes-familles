@@ -35,6 +35,7 @@ import {
 import VehiculesFoyer from '../modules/voyages/components/VehiculesFoyer';
 import { alerte } from '../modules/cadeaux/utils/alerte';
 import { usePreferences, type Apparence } from '../contexts/PreferencesContext';
+import { JaugeAssistant } from './JaugeAssistant';
 import { useToast } from '../composants/Toast';
 import { nomFamille } from '../composants/ChoixFamille';
 import {
@@ -421,6 +422,8 @@ export default function MoiScreen({ navigation }: any) {
         </Carte>
       </View>
 
+      <JaugeSection />
+
       <LibelleSection>Préférences</LibelleSection>
       <View style={styles.colonne}>
         <Carte style={styles.carte}>
@@ -469,6 +472,17 @@ export default function MoiScreen({ navigation }: any) {
         <Bouton variante="danger" titre="Se déconnecter" onPress={seDeconnecter} />
       </View>
     </ScrollView>
+  );
+}
+
+// Section « Assistant » : n'apparaît que si la jauge est lisible (migration
+// famille_ia passée).
+function JaugeSection() {
+  return (
+    <View style={styles.colonne}>
+      <View style={{ height: espaces.xxl }} />
+      <JaugeAssistant />
+    </View>
   );
 }
 

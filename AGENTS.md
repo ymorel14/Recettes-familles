@@ -96,6 +96,12 @@ partagent le compte famille :
   `src/modules/<module>` (les apps actuelles restent intactes), un seul client Supabase
   (`clientPourSchema`), thème « Famille » clair/sombre (`src/theme`), barre du bas commune et onglets
   du haut par module (`src/navigation`). Même base que les autres apps. Adresse `/famille/` du site commun.
+  Assistant (chantier B) : fonction Edge `ia` (`supabase/functions/ia`, une route par
+  fonctionnalité, socle commun `supabase/functions/_partage/ia.ts` : lectures au jeton de
+  l'utilisateur, brouillons seulement, plafond et comptage `famille.ia_usage`, migration
+  `20261020110000_famille_ia.sql`), appelée par `apps/famille/src/services/assistant.ts` ;
+  jeux de tests `tests/ia/`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants
   famille par famille : `<VisibiliteEnfants>` dans le Profil de chaque app,

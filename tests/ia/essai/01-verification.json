@@ -1,0 +1,5 @@
+{
+  "description": "Vérification simple : l'assistant répond par une phrase en français.",
+  "entree": {},
+  "attendu": { "message": "*", "reformulation": "" }
+}

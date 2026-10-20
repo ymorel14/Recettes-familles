@@ -29,8 +29,19 @@ Sur le site commun : `/famille/` (construit par `scripts/construire-site.mjs`).
 | `src/modules/<module>/` | Code repris des six apps (écrans, services, composants), **copié** : les apps actuelles ne sont pas modifiées |
 | `src/compte/` | Connexion, bienvenue, prénom, mot de passe |
 
+## Assistant (chantier B : socle)
+
+Fonction Edge `ia` (`supabase/functions/ia`, mise en service : `supabase/functions/ia/LISEZMOI.md`).
+Côté app : `src/services/assistant.ts` (`appelerAssistant(route, corps)`, messages d'erreur
+de la charte), jauge du foyer dans Moi (`src/ecrans/JaugeAssistant.tsx`), composants de la
+charte § 7 dans `src/composants/assistant.tsx` (étincelle ✦, chargement en mots avec
+« Annuler », bandeau « Proposé par l'assistant », pastille « À vérifier », messages d'erreur).
+Jeux de tests : `tests/ia/`, rejoués par `node scripts/rejouer-tests-ia.mjs`.
+
 ## Base de données
 
 Aucune migration n'est obligatoire. `supabase/migrations/20261020100000_famille_notifications.sql`
 (ajout seulement) crée `famille.notifications` pour l'écran Activité ; sans elle,
 l'app lit les notifications de VoyageCommun.
+`20261020110000_famille_ia.sql` (ajout seulement) installe le suivi des coûts et le plafond de
+l'assistant ; sans elle, la jauge ne s'affiche pas et l'assistant répond « pas encore installé ».
