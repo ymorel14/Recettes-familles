@@ -1,0 +1,5 @@
+{
+  "description": "Page de livre de recettes : classée « recette ».",
+  "entree": { "fichiers": [{ "type": "image", "media_type": "image/jpeg", "donnees": "@photos/page-livre.jpg" }] },
+  "attendu": { "type": "recette" }
+}

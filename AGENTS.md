@@ -100,7 +100,9 @@ partagent le compte famille :
   fonctionnalité, socle commun `supabase/functions/_partage/ia.ts` : lectures au jeton de
   l'utilisateur, brouillons seulement, plafond et comptage `famille.ia_usage`, migration
   `20261020110000_famille_ia.sql`), appelée par `apps/famille/src/services/assistant.ts` ;
-  jeux de tests `tests/ia/`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  jeux de tests `tests/ia/`. Fonctions de l'assistant : textes courts (Haiku : ⊕, courses en
+  phrase, tâche dictée, lien collé) et photos (Sonnet : recette, planning, objet, lettre au
+  Père Noël ; ⊕ photo classée par Haiku) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

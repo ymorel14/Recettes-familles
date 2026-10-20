@@ -6,6 +6,14 @@ import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import { lireDateSaisie } from '../services/personnes';
 import { creerActivite, JOURS, lireHeureSaisie } from '../services/quotidien';
+import { BandeauBrouillon } from '../../../composants/assistant';
+import { ajouterHeures, type ActiviteLue } from '../../../services/planningAssistant';
+
+function isoVersFr(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const [a, m, j] = iso.split('-');
+  return `${j}/${m}/${a}`;
+}
 
 function dateFr(d: Date): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
@@ -21,14 +29,16 @@ function finAnneeScolaire(): Date {
 // séances et leurs trajets aller et retour sont créés aussitôt, vacances
 // scolaires de la zone du groupe sautées.
 export default function ActiviteFormScreen({ route, navigation }: any) {
-  const { groupeId, zone } = route.params as { groupeId: string; zone: string | null };
-  const [nom, setNom] = useState('');
-  const [lieu, setLieu] = useState('');
-  const [jour, setJour] = useState<number>(3);
-  const [debut, setDebut] = useState('14:00');
-  const [fin, setFin] = useState('16:00');
-  const [du, setDu] = useState(dateFr(new Date()));
-  const [au, setAu] = useState(dateFr(finAnneeScolaire()));
+  const { groupeId, zone, brouillon } = route.params as { groupeId: string; zone: string | null; brouillon?: ActiviteLue };
+  // Brouillon lu par l'assistant sur un planning (ImportPlanning) : tout
+  // reste modifiable avant « Ajouter l'activité ».
+  const [nom, setNom] = useState(brouillon?.nom ?? '');
+  const [lieu, setLieu] = useState(brouillon?.lieu ?? '');
+  const [jour, setJour] = useState<number>(brouillon?.jour ?? 3);
+  const [debut, setDebut] = useState(brouillon?.heure_debut ?? '14:00');
+  const [fin, setFin] = useState(brouillon?.heure_fin ?? (brouillon ? ajouterHeures(brouillon.heure_debut, 1) : '16:00'));
+  const [du, setDu] = useState(isoVersFr(brouillon?.date_debut) ?? dateFr(new Date()));
+  const [au, setAu] = useState(isoVersFr(brouillon?.date_fin) ?? dateFr(finAnneeScolaire()));
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -66,6 +76,7 @@ export default function ActiviteFormScreen({ route, navigation }: any) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
+      {brouillon ? <BandeauBrouillon /> : null}
       <Text style={styles.libelle}>Activité</Text>
       <TextInput
         style={styles.champ}

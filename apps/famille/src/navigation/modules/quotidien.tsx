@@ -17,6 +17,7 @@ import ObjetFormScreen from '../../modules/quotidien/screens/ObjetFormScreen';
 import RangementsScreen from '../../modules/quotidien/screens/RangementsScreen';
 import RangementScreen from '../../modules/quotidien/screens/RangementScreen';
 import RangementFormScreen from '../../modules/quotidien/screens/RangementFormScreen';
+import ImportPlanning from '../../ecrans/ImportPlanning';
 
 // Module Quotidien (ancienne app apps/quotidien).
 export default creerModule({
@@ -32,6 +33,7 @@ export default creerModule({
     { nom: 'Groupe', composant: GroupeScreen, options: { title: 'Groupe' } },
     { nom: 'GroupeForm', composant: GroupeFormScreen, options: { title: 'Créer ou rejoindre un groupe' } },
     { nom: 'ActiviteForm', composant: ActiviteFormScreen, options: { title: 'Nouvelle activité' } },
+    { nom: 'ImportPlanning', composant: ImportPlanning, options: { title: 'Importer un planning' } },
     { nom: 'TacheForm', composant: TacheFormScreen, options: { title: 'Tâche' } },
     { nom: 'Domaines', composant: DomainesScreen, options: { title: 'Domaines des tâches' } },
     { nom: 'Tirelire', composant: TirelireScreen, options: { title: 'Tirelire' } },

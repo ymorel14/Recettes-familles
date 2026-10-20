@@ -25,6 +25,8 @@ import {
 import { listerListes, type ListeResume } from '../modules/courses/services/courses';
 import { listerPersonnes } from '../modules/quotidien/services/personnes';
 import { libellePlanif } from '../modules/quotidien/services/maison';
+import { listeDe, listerPersonnes as personnesCadeaux, obtenirMaPersonne } from '../modules/cadeaux/services/wishlist';
+import { choisirPhotos, COTE_CLASSEMENT, ErreurPhoto, photoPourAssistant, type PhotoChoisie } from '../services/photosAssistant';
 
 // Feuille « ⊕ Ajouter » (spécification § 4.6.1, charte § 7.1 et § 7.4) :
 // on dit ou écrit ce qu'on veut ajouter ; l'assistant propose une carte par
@@ -68,7 +70,17 @@ type Carte = {
   probleme: string | null; // tâche qui ne peut pas être créée telle quelle
 };
 
-type Etape = 'saisie' | 'lecture' | 'confirmation';
+type Etape = 'saisie' | 'lecture' | 'confirmation' | 'photo';
+
+// ⊕ avec une photo (§ 4.6.1) : Haiku dit de quoi il s'agit, puis l'écran qui
+// sait la lire s'ouvre avec la photo (lecture par Sonnet, brouillon à vérifier).
+type TypePhoto = 'recette' | 'planning' | 'objet' | 'lettre' | 'autre';
+const CHOIX_PHOTO: { type: Exclude<TypePhoto, 'autre'>; titre: string; module: IdModule; icone: string }[] = [
+  { type: 'recette', titre: 'Une recette', module: 'recettes', icone: 'restaurant-outline' },
+  { type: 'planning', titre: 'Un planning', module: 'quotidien', icone: 'calendar-outline' },
+  { type: 'objet', titre: 'Un objet à offrir', module: 'cadeaux', icone: 'gift-outline' },
+  { type: 'lettre', titre: 'Une lettre au Père Noël', module: 'cadeaux', icone: 'mail-outline' },
+];
 
 function dateCourte(iso: string | null): string {
   if (!iso) return '';
@@ -88,6 +100,9 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
   const [personnes, setPersonnes] = useState<{ id: string; prenom: string }[]>([]);
   const [enCours, setEnCours] = useState(false);
   const annulation = useRef<AbortController | null>(null);
+  const [photo, setPhoto] = useState<PhotoChoisie | null>(null);
+  const [classement, setClassement] = useState<{ type: TypePhoto; explication: string } | null>(null);
+  const [enfants, setEnfants] = useState<{ id: string; prenom: string }[] | null>(null);
 
   useEffect(() => {
     if (!visible || !foyer) return;
@@ -102,6 +117,80 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     setCartes([]);
     setQuestion(null);
     setErreur(null);
+    setPhoto(null);
+    setClassement(null);
+    setEnfants(null);
+  };
+
+  const ouvrirLettre = async (enfant: { id: string; prenom: string }, p: PhotoChoisie) => {
+    const listeId = await listeDe(enfant.id);
+    fermer();
+    ouvrirModule('cadeaux', 'ImportLettre', { listeId, prenom: enfant.prenom, photos: [p] });
+  };
+
+  // Ouvre l'écran qui sait lire ce type de photo.
+  const aiguiller = async (type: Exclude<TypePhoto, 'autre'>, p: PhotoChoisie) => {
+    setErreur(null);
+    try {
+      if (type === 'recette') {
+        fermer();
+        ouvrirModule('recettes', 'ScanRecette', { photos: [p] });
+      } else if (type === 'planning') {
+        fermer();
+        ouvrirModule('quotidien', 'ImportPlanning', { photos: [p] });
+      } else if (type === 'objet') {
+        if (!session) return;
+        const moi = await obtenirMaPersonne(session.user.id);
+        if (!moi) throw new Error('Fiche personne introuvable.');
+        const listeId = await listeDe(moi.id);
+        fermer();
+        ouvrirModule('cadeaux', 'Souhait', { listeId, photo: p.uri });
+      } else {
+        // Lettre : la liste d'un enfant sans compte du foyer, gérée par le parent.
+        const ps = foyer ? await personnesCadeaux([foyer.id]) : [];
+        const sansCompte = ps.filter((x) => !x.utilisateur_id).map((x) => ({ id: x.id, prenom: x.prenom }));
+        if (sansCompte.length === 1) return ouvrirLettre(sansCompte[0], p);
+        setEnfants(sansCompte);
+        setClassement({ type: 'lettre', explication: '' });
+        setEtape('photo');
+      }
+    } catch {
+      setErreur(new ErreurAssistant('indisponible', 'Impossible d’ouvrir l’écran. Réessayez dans un instant.'));
+      setEtape('saisie');
+    }
+  };
+
+  const envoyerPhoto = async (source: 'camera' | 'galerie') => {
+    setErreur(null);
+    setQuestion(null);
+    let p: PhotoChoisie | undefined;
+    try {
+      [p] = await choisirPhotos(source, 1);
+    } catch (e) {
+      setErreur(new ErreurAssistant('entree', e instanceof ErreurPhoto ? e.message : 'Impossible d’ouvrir les photos.'));
+      return;
+    }
+    if (!p) return;
+    setPhoto(p);
+    setEtape('lecture');
+    const controle = new AbortController();
+    annulation.current = controle;
+    try {
+      const petite = await photoPourAssistant(p, COTE_CLASSEMENT);
+      const r = await appelerAssistant<{ type: TypePhoto; explication: string }>('photo-classer', { fichiers: [petite] }, { signal: controle.signal });
+      if (controle.signal.aborted) return;
+      if (r.type === 'autre') {
+        setClassement(r);
+        setEtape('photo');
+        return;
+      }
+      await aiguiller(r.type, p);
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      if (e instanceof ErreurPhoto) setErreur(new ErreurAssistant('entree', e.message));
+      else setErreur(e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)));
+      setEtape('saisie');
+    }
   };
 
   const fermer = () => {
@@ -118,6 +207,7 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     if (!texteSaisi) return;
     setErreur(null);
     setQuestion(null);
+    setPhoto(null);
     setEtape('lecture');
     const controle = new AbortController();
     annulation.current = controle;
@@ -236,7 +326,7 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     <FeuilleBas visible={visible} titre={etape === 'confirmation' ? 'Vérifiez avant d’ajouter' : 'Ajouter'} onFermer={fermer}>
       {etape === 'lecture' ? (
         <ChargementAssistant
-          etapes={['Je lis votre demande…', 'Je range par module…', 'Presque fini…']}
+          etapes={photo ? ['Je regarde la photo…', 'Je cherche où la ranger…'] : ['Je lis votre demande…', 'Je range par module…', 'Presque fini…']}
           onAnnuler={() => {
             annulation.current?.abort();
             setEtape('saisie');
@@ -275,6 +365,10 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
             onPress={envoyer}
             desactive={!saisie.trim()}
           />
+          <View style={styles.lignePhoto}>
+            <Bouton variante="secondaire" petit icone="camera-outline" titre="Photo" onPress={() => envoyerPhoto('camera')} style={{ flex: 1 }} />
+            <Bouton variante="secondaire" petit icone="images-outline" titre="Galerie" onPress={() => envoyerPhoto('galerie')} style={{ flex: 1 }} />
+          </View>
 
           <Text style={styles.sousTitre}>Créer</Text>
           <View style={styles.grille}>
@@ -295,6 +389,50 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
               </Pressable>
             ))}
           </View>
+        </>
+      ) : null}
+
+      {etape === 'photo' && photo ? (
+        <>
+          {classement?.type === 'lettre' ? (
+            enfants && enfants.length ? (
+              <>
+                <Text style={styles.questionTexte}>La lettre de qui ?</Text>
+                <View style={styles.choixPhoto}>
+                  {enfants.map((e) => (
+                    <PuceFiltre key={e.id} libelle={e.prenom} actif={false} onPress={() => ouvrirLettre(e, photo)} />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <MessageAssistant message="Aucun enfant sans compte dans votre foyer. Ajoutez-le dans Moi › Famille, puis ouvrez sa liste dans Cadeaux." />
+            )
+          ) : (
+            <>
+              <View style={styles.question}>
+                <Etincelle />
+                <Text style={styles.questionTexte}>
+                  {`Je ne sais pas quoi faire de cette photo${classement?.explication ? ` (${classement.explication.replace(/\.$/, '')})` : ''}. Qu’est-ce que c’est ?`}
+                </Text>
+              </View>
+              <View style={styles.grille}>
+                {CHOIX_PHOTO.map((ch) => (
+                  <Pressable
+                    key={ch.type}
+                    onPress={() => aiguiller(ch.type, photo)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.raccourci, pressed && { opacity: 0.8 }]}
+                  >
+                    <PastilleModule module={ch.module} icone={ch.icone} taille={40} />
+                    <Text style={styles.raccourciTexte} numberOfLines={2}>
+                      {ch.titre}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+          <Bouton variante="secondaire" titre="Annuler" onPress={recommencer} />
         </>
       ) : null}
 
@@ -448,6 +586,8 @@ function CarteAction({
 
 const styles = creerStyles(() => ({
   sousTitre: { ...texte.libelleSection(), marginTop: espaces.s },
+  lignePhoto: { flexDirection: 'row', gap: espaces.s },
+  choixPhoto: { flexDirection: 'row', flexWrap: 'wrap', gap: espaces.s },
   grille: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   raccourci: {
     flexBasis: '47%',

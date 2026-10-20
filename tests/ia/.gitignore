@@ -1,0 +1,3 @@
+# Photos et PDF des jeux de tests : gardés sur l'ordinateur, jamais sur GitHub.
+*/photos/*
+!*/photos/.gitkeep

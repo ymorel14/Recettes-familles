@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, ScrollView, Pressable, Platform, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import { BandeauBrouillon, BoutonAssistant, ChargementAssistant, MessageAssistant, PastilleAVerifier } from '../../../composants/assistant';
 import { appelerAssistant, messageErreurAssistant } from '../../../services/assistant';
+import { useAppelAssistant } from '../../../composants/useAppelAssistant';
+import { photoPourAssistant } from '../../../services/photosAssistant';
 import {
   creerSouhait,
   extraireLien,
@@ -54,16 +56,36 @@ type FicheEnvie = {
   source: 'page' | 'assistant';
 };
 
-const NOMS_CHAMPS: Record<string, string> = { titre: 'nom', prix: 'prix', taille: 'taille', options: 'modèles' };
+const NOMS_CHAMPS: Record<string, string> = {
+  titre: 'nom',
+  nom: 'nom',
+  prix: 'prix',
+  taille: 'taille',
+  options: 'modèles',
+  marque: 'marque',
+  categorie: 'catégorie',
+};
+
+// Objet reconnu sur une photo (route ia/objet-photo, § 4.4.2).
+type ObjetLu = {
+  nom: string;
+  marque: string | null;
+  categorie: string | null;
+  prix_estime: number | null;
+  description: string | null;
+  mots_cles: string;
+  a_verifier: string[];
+};
 
 // Ajout ou modification d'un souhait (par le destinataire ou son
 // gestionnaire) ou d'une idée cachée (par un proche : `idee` vrai).
 export default function SouhaitFormScreen({ route, navigation }: any) {
-  const { listeId, souhaitId, idee, prenom } = route.params as {
+  const { listeId, souhaitId, idee, prenom, photo } = route.params as {
     listeId: string;
     souhaitId?: string;
     idee?: boolean;
     prenom?: string;
+    photo?: string; // photo prise depuis le ⊕ : l'objet est reconnu aussitôt
   };
   const { session } = useAuth();
   const [form, setForm] = useState<FormulaireSouhait | null>(souhaitId ? null : VIDE);
@@ -73,6 +95,38 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
   const [lecturePage, setLecturePage] = useState(false);
   const [proposition, setProposition] = useState<{ aVerifier: string[] } | null>(null);
   const [messagePage, setMessagePage] = useState<string | null>(null);
+  // Photo d'un objet → fiche (§ 4.4.2) : lien de recherche à ouvrir soi-même.
+  const objet = useAppelAssistant();
+  const [rechercheObjet, setRechercheObjet] = useState<string | null>(null);
+  const photoDuPlus = useRef(false);
+
+  const reconnaitreObjet = async (uri: string) => {
+    const o = await objet.lancer<ObjetLu>('objet-photo', async () => ({ fichiers: [await photoPourAssistant({ uri })] }));
+    if (!o) return;
+    const nom = o.marque && !o.nom.toLowerCase().includes(o.marque.toLowerCase()) ? `${o.nom} ${o.marque}` : o.nom;
+    const description = [o.description, o.categorie && !o.description ? o.categorie : null].filter(Boolean).join(' · ');
+    setForm((actuel) =>
+      actuel
+        ? {
+            ...actuel,
+            titre: actuel.titre.trim() || nom,
+            description: actuel.description.trim() || description,
+            prix: actuel.prix.trim() || (o.prix_estime != null ? String(o.prix_estime).replace('.', ',') : ''),
+          }
+        : actuel
+    );
+    setRechercheObjet(o.mots_cles);
+    setProposition({ aVerifier: o.a_verifier });
+  };
+
+  // Arrivée depuis le ⊕ avec une photo : elle devient la photo de l'envie.
+  useEffect(() => {
+    if (!photo || photoDuPlus.current || souhaitId) return;
+    photoDuPlus.current = true;
+    setForm((f) => (f ? { ...f, photoLocale: photo } : f));
+    reconnaitreObjet(photo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photo]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -214,7 +268,11 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) return setErreur("Autorisez l'appareil photo dans les réglages du téléphone.");
       const resultat = await ImagePicker.launchCameraAsync(options);
-      if (!resultat.canceled && resultat.assets[0]) changer({ photoLocale: resultat.assets[0].uri });
+      if (!resultat.canceled && resultat.assets[0]) {
+        changer({ photoLocale: resultat.assets[0].uri });
+        // Photo prise sur le vif (en magasin) : l'assistant reconnaît l'objet.
+        if (!form.titre.trim()) reconnaitreObjet(resultat.assets[0].uri);
+      }
     } else {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) return setErreur('Autorisez l’accès aux photos dans les réglages du téléphone.');
@@ -273,6 +331,24 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
           {apercu && <Bouton variante="discret" titre="Retirer la photo" onPress={() => changer({ photoLocale: null, image: null })} />}
         </View>
       </View>
+      {objet.lecture ? (
+        <ChargementAssistant
+          etapes={['Je regarde l’objet…', 'Je cherche la marque…', 'Presque fini…']}
+          couleur={theme.colors.accent}
+          onAnnuler={objet.annuler}
+        />
+      ) : form.photoLocale && !rechercheObjet ? (
+        <BoutonAssistant titre="Reconnaître l’objet" couleur={theme.colors.accent} onPress={() => reconnaitreObjet(form.photoLocale!)} />
+      ) : null}
+      {objet.message ? <MessageAssistant message={objet.message.texte} pause={objet.message.pause} /> : null}
+      {rechercheObjet ? (
+        <Bouton
+          variante="contour"
+          titre="Chercher en ligne"
+          onPress={() => Linking.openURL(`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(rechercheObjet)}`)}
+          accessibilityLabel={`Chercher en ligne : ${rechercheObjet}`}
+        />
+      ) : null}
 
       <View style={styles.bloc}>
         <Text style={styles.libelle} nativeID="libelle-lien">

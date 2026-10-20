@@ -19,7 +19,14 @@ Routes disponibles :
 | `courses-phrase` | Une phrase dans une liste Courses → articles (suggestions décochées) | Haiku, ~0,0003 $ |
 | `tache-dictee` | Tâche dictée → brouillon du formulaire de tâche | Haiku, ~0,0003 $ |
 | `lien-envie` | Lien collé dans une envie → titre, prix, image, options. Sans assistant (0 $) quand la page donne déjà titre et prix | Haiku si besoin, ~0,001 $ |
+| `recette-photo` | 1 à 3 photos d'une recette (livre, fiche manuscrite) → fiche recette pré-remplie | Sonnet, ~0,03 $ |
+| `planning-photo` | Photo(s) ou PDF d'un planning → activités de chaque semaine et séances datées | Sonnet, ~0,03 $ |
+| `objet-photo` | Photo d'un objet → envie (nom, marque, catégorie, mots de recherche) | Sonnet, ~0,02 $ |
+| `lettre-noel` | Photo ou dictée de la lettre au Père Noël → envies de l'enfant (prénom seul envoyé) | Sonnet, ~0,02 $ |
+| `photo-classer` | ⊕ photo : de quoi s'agit-il ? (image réduite à 512 px) | Haiku, ~0,0003 $ |
 
+Photos et PDF (`_partage/images.ts`) : réduits par l'app avant l'envoi (1 568 px, JPEG 0,8),
+3 photos au plus, 5 Mo par fichier, 8 Mo en tout ; jamais enregistrés, ils ne font que passer.
 Contexte commun (`_partage/contexte.ts`) : date de Paris, noms des listes et prénoms du foyer,
 lus au jeton de l'utilisateur. Lecture de page (`_partage/page.ts`) : adresses publiques seulement,
 10 s et 1,5 Mo au plus. Les autres fonctions du chantier C s'ajouteront ici, une route chacune,

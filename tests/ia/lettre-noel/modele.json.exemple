@@ -1,0 +1,5 @@
+{
+  "description": "Photo d'une lettre manuscrite d'enfant.",
+  "entree": { "fichiers": [{ "type": "image", "media_type": "image/jpeg", "donnees": "@photos/lettre.jpg" }], "prenom": "Léo" },
+  "attendu": { "souhaits": [2] }
+}

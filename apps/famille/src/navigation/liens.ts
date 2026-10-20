@@ -95,6 +95,7 @@ export const liens: LinkingOptions<any> = {
               Groupe: 'groupe/:id',
               GroupeForm: 'groupe-nouveau',
               ActiviteForm: 'activite',
+              ImportPlanning: 'importer-planning',
               TacheForm: 'tache',
               Domaines: 'domaines',
               Tirelire: 'tirelire/:personneId',
@@ -113,6 +114,7 @@ export const liens: LinkingOptions<any> = {
               ListeCommune: 'liste-commune',
               Souhait: 'souhait',
               Participation: 'pot-commun',
+              ImportLettre: 'lettre-pere-noel',
             },
           },
           Voyages: {

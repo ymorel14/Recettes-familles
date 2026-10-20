@@ -59,3 +59,24 @@ Aucune migration n'est obligatoire. `supabase/migrations/20261020100000_famille_
 l'app lit les notifications de VoyageCommun.
 `20261020110000_famille_ia.sql` (ajout seulement) installe le suivi des coûts et le plafond de
 l'assistant ; sans elle, la jauge ne s'affiche pas et l'assistant répond « pas encore installé ».
+
+## Assistant (chantier C, étape 5 : photos)
+
+Photos réduites sur le téléphone puis envoyées à l'assistant (`src/services/photosAssistant.ts`,
+choix des photos : `src/composants/PanneauPhotos.tsx`, appel : `src/composants/useAppelAssistant.ts`).
+
+- **Recettes › Scanner une photo** (`LecturePhotoRecette`, route `recette-photo`) : 1 à 3 pages →
+  fiche recette pré-remplie (éléments, ingrédients, étapes, catégories), bandeau « Proposé par
+  l'assistant » et champs « À vérifier » dans `RecetteFormScreen`. « Entourer les zones moi-même »
+  garde l'ancien tracé.
+- **Quotidien › Groupe › Importer un planning** (`src/ecrans/ImportPlanning.tsx`, route
+  `planning-photo`) : photo ou PDF. Activités de chaque semaine → `ActiviteFormScreen` pré-rempli ;
+  dates précises (matchs) → liste à cocher, « Ajouter » crée une activité, ses séances et leurs
+  trajets (`src/services/planningAssistant.ts`).
+- **Cadeaux › Nouveau souhait** : photo prise → objet reconnu (route `objet-photo`), « Chercher en
+  ligne » ouvre une recherche que la personne fait elle-même.
+- **Cadeaux › liste d'un enfant gérée › Importer une lettre au Père Noël**
+  (`src/ecrans/ImportLettre.tsx`, route `lettre-noel`) : photo ou dictée, une ligne par cadeau à
+  cocher et corriger.
+- **⊕ › Photo ou Galerie** : classement (route `photo-classer`), puis ouverture de l'écran qui lit
+  ce type de photo ; si l'assistant ne sait pas, la personne choisit.

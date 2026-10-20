@@ -25,6 +25,7 @@ import {
 import type { RecetteFormulaire } from '../../services/recettes';
 import { reconnaitreTexteZone, decouperIngredients, decouperEtapes, extrairePremierNombre } from '../../services/ocr';
 import ZoneClavier from '../../components/ZoneClavier';
+import { LecturePhotoRecette } from '../../../../composants/LecturePhotoRecette';
 
 // Écran de numérisation d'une recette existante (cahier des charges §5,
 // feuille de route §7 — Phase 2).
@@ -109,7 +110,10 @@ function aplatirEnPhrase(texte: string): string {
   return texte.replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
-export default function ScanRecetteScreen({ navigation }: any) {
+export default function ScanRecetteScreen({ navigation, route }: any) {
+  // App Famille : l'assistant lit d'abord la recette (spécification
+  // § 4.1.1) ; le tracé des zones ci-dessous reste disponible à la main.
+  const [modeZones, setModeZones] = useState(false);
   const { width: largeurFenetre, height: hauteurFenetre } = useLargeurContenu();
   const largeurMaxImage = largeurFenetre - 2 * theme.spacing.md;
   // Fenêtre de zonage agrandie vers le bas : on lui laisse jusqu'à ~60 % de
@@ -450,6 +454,21 @@ export default function ScanRecetteScreen({ navigation }: any) {
   const libelleChampModale = modaleEdition ? CHAMPS.find((c) => c.cle === modaleEdition.champ)?.libelle : '';
   const zoneActive = zonesEnAttente.find((z) => z.id === zoneEnEtiquetage) ?? null;
   const zonesEtiquetees = zonesEnAttente.filter((z) => z.champ !== null);
+
+  if (!modeZones) {
+    return (
+      <LecturePhotoRecette
+        photosInitiales={route?.params?.photos}
+        onBrouillon={(formulaire, verification) =>
+          navigation.navigate('CreationRecette', { formulaireInitial: formulaire, assistant: verification })
+        }
+        onALaMain={(photo) => {
+          setModeZones(true);
+          if (photo) choisirPhoto(photo.uri, photo.largeur ?? 0, photo.hauteur ?? 0);
+        }}
+      />
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contenu} scrollEnabled={!scrollVerrouille}>

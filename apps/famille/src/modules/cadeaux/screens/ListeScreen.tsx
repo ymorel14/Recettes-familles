@@ -522,6 +522,13 @@ export default function ListeScreen({ route, navigation }: any) {
           onPress={() => navigation.navigate('Souhait', { listeId, idee: false, prenom })}
         />
       )}
+      {mode === 'gestionnaire' && !commune && (
+        <Bouton
+          variante="pointille"
+          titre="✦ Importer une lettre au Père Noël"
+          onPress={() => navigation.navigate('ImportLettre', { listeId, prenom })}
+        />
+      )}
 
       {mode !== 'destinataire' && (
         <>

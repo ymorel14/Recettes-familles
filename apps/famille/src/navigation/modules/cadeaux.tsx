@@ -6,6 +6,7 @@ import ListeScreen from '../../modules/cadeaux/screens/ListeScreen';
 import ListeCommuneFormScreen from '../../modules/cadeaux/screens/ListeCommuneFormScreen';
 import SouhaitFormScreen from '../../modules/cadeaux/screens/SouhaitFormScreen';
 import ParticipationScreen from '../../modules/cadeaux/screens/ParticipationScreen';
+import ImportLettre from '../../ecrans/ImportLettre';
 
 // Module Cadeaux (ancienne app CadeauCommun, apps/cadeaucommun). La surprise
 // reste garantie par les règles RLS du schéma wishlist.
@@ -21,5 +22,6 @@ export default creerModule({
     { nom: 'ListeCommune', composant: ListeCommuneFormScreen, options: { title: 'Liste commune' } },
     { nom: 'Souhait', composant: SouhaitFormScreen, options: { title: 'Souhait' } },
     { nom: 'Participation', composant: ParticipationScreen, options: { title: 'Pot commun' } },
+    { nom: 'ImportLettre', composant: ImportLettre, options: { title: 'Lettre au Père Noël' } },
   ],
 });

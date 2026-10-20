@@ -38,6 +38,8 @@ import ZoneClavier from '../../components/ZoneClavier';
 import ChampExtensible from '../../components/ChampExtensible';
 import ReglageSurprise from '../../components/ReglageSurprise';
 import { decouperIngredients, reconnaitreTexteZone, texteScanneEnEtape } from '../../services/ocr';
+import { BandeauBrouillon, PastilleAVerifier, styleChampAVerifier } from '../../../../composants/assistant';
+import type { VerificationRecette } from '../../../../services/recetteAssistant';
 
 // Formulaire de création ET de modification d'une recette (cahier des
 // charges §4) : titre, photo, catégories, parts, ingrédients, étapes — avec
@@ -54,6 +56,9 @@ export default function RecetteFormScreen({ navigation, route }: any) {
   // (vignette "Ajouter" — voir RecettesCategorieScreen) : on la pré-remplit
   // pour éviter à l'utilisateur de la resaisir.
   const categoriePreselectionnee: string | undefined = route?.params?.categoriePreselectionnee;
+  // Recette lue par l'assistant (photo) : bandeau et champs « À vérifier ».
+  const verification: VerificationRecette | undefined = route?.params?.assistant;
+  const champAVerifier = (champ: string) => !!verification?.champs.includes(champ);
 
   const [form, setForm] = useState<RecetteFormulaire>(() => {
     const initial: RecetteFormulaire = normaliserElements(route?.params?.formulaireInitial ?? formulaireVide());
@@ -628,7 +633,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
       {form.ingredients.filter((i) => i.elementClef === clefElement).map((ingredient) => (
         <View key={ingredient.clefId} style={styles.ligneIngredient}>
           <TextInput
-            style={[styles.champ, styles.champQuantite]}
+            style={[styles.champ, styles.champQuantite, verification?.ingredients.includes(ingredient.clefId) && styleChampAVerifier()]}
             placeholder="Qté"
             placeholderTextColor={theme.colors.textMuted}
             keyboardType="numeric"
@@ -643,7 +648,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
             onChangeText={(v) => majIngredient(ingredient.clefId, 'unite', v)}
           />
           <TextInput
-            style={[styles.champ, styles.champLibelle]}
+            style={[styles.champ, styles.champLibelle, verification?.ingredients.includes(ingredient.clefId) && styleChampAVerifier()]}
             placeholder="Ingrédient"
             placeholderTextColor={theme.colors.textMuted}
             value={ingredient.libelle}
@@ -827,6 +832,17 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           )}
         </View>
       )}
+      {verification && !modeEdition ? <BandeauBrouillon style={{ marginBottom: 4 }} /> : null}
+      {verification && !modeEdition && (verification.ingredients.length > 0 || champAVerifier('ingredients') || champAVerifier('etapes')) ? (
+        <PastilleAVerifier
+          raison={[
+            verification.ingredients.length || champAVerifier('ingredients') ? 'ingrédients surlignés' : '',
+            champAVerifier('etapes') ? 'étapes' : '',
+          ]
+            .filter(Boolean)
+            .join(', ')}
+        />
+      ) : null}
       <Text style={styles.label}>Photos</Text>
       {form.photos.length > 0 && (
         <Text style={styles.aide}>La première photo sert de couverture. Appuyez sur ★ pour en changer.</Text>
@@ -862,8 +878,9 @@ export default function RecetteFormScreen({ navigation, route }: any) {
       </ScrollView>
 
       <Text style={styles.label}>Titre</Text>
+      {champAVerifier('titre') && <PastilleAVerifier />}
       <TextInput
-        style={styles.champ}
+        style={[styles.champ, champAVerifier('titre') && styleChampAVerifier()]}
         placeholder="Ex. Tarte aux pommes de grand-mère"
         placeholderTextColor={theme.colors.textMuted}
         value={form.titre}
@@ -874,7 +891,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         <View style={styles.colonne}>
           <Text style={styles.label}>Parts</Text>
           <TextInput
-            style={styles.champ}
+            style={[styles.champ, champAVerifier('parts') && styleChampAVerifier()]}
             keyboardType="number-pad"
             value={String(form.partsDefaut)}
             onChangeText={(v) => setForm((f) => ({ ...f, partsDefaut: Number(v) || 1 }))}
@@ -883,7 +900,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         <View style={styles.colonne}>
           <Text style={styles.label}>Préparation (min)</Text>
           <TextInput
-            style={styles.champ}
+            style={[styles.champ, champAVerifier('prepa_min') && styleChampAVerifier()]}
             keyboardType="number-pad"
             value={form.tempsPreparationMinutes ? String(form.tempsPreparationMinutes) : ''}
             onChangeText={(v) => setForm((f) => ({ ...f, tempsPreparationMinutes: v ? Number(v) : null }))}
@@ -892,7 +909,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         <View style={styles.colonne}>
           <Text style={styles.label}>Cuisson (min)</Text>
           <TextInput
-            style={styles.champ}
+            style={[styles.champ, champAVerifier('cuisson_min') && styleChampAVerifier()]}
             keyboardType="number-pad"
             value={form.tempsCuissonMinutes ? String(form.tempsCuissonMinutes) : ''}
             onChangeText={(v) => setForm((f) => ({ ...f, tempsCuissonMinutes: v ? Number(v) : null }))}

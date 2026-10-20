@@ -265,6 +265,11 @@ export default function GroupeScreen({ route, navigation }: any) {
         titre="Ajouter une activité"
         onPress={() => navigation.navigate('ActiviteForm', { groupeId: id, zone: groupe.zone_vacances })}
       />
+      <Bouton
+        variante="pointille"
+        titre="✦ Importer un planning (photo ou PDF)"
+        onPress={() => navigation.navigate('ImportPlanning', { groupeId: id })}
+      />
 
       <TitreSection titre="Planning" detail="4 prochaines semaines" />
       <Carte>

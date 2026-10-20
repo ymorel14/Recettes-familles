@@ -1,0 +1,5 @@
+{
+  "description": "Page de livre imprimée nette : recette complète (renommez en 10-<nom>.json et mettez la photo dans photos/).",
+  "entree": { "fichiers": [{ "type": "image", "media_type": "image/jpeg", "donnees": "@photos/tarte-pommes.jpg" }] },
+  "attendu": { "titre": "~tarte", "elements": [1] }
+}

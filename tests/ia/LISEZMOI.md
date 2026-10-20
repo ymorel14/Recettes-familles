@@ -43,3 +43,18 @@ TEST_EMAIL=test@exemple.fr TEST_MOT_DE_PASSE=... \
 node scripts/rejouer-tests-ia.mjs            # toutes les routes
 node scripts/rejouer-tests-ia.mjs essai      # une seule
 ```
+
+## Fonctions avec photos (étape 5)
+
+`recette-photo`, `planning-photo`, `objet-photo`, `lettre-noel`, `photo-classer` : chaque
+dossier contient un cas sans photo (vérifie le message d'erreur) et un **modèle**
+(`modele.json.exemple`). Pour ajouter un vrai cas :
+
+1. mettez la photo (ou le PDF) dans `tests/ia/<route>/photos/` ;
+2. copiez le modèle en `NN-<nom>.json`, mettez le bon nom de fichier après `@photos/` et le
+   résultat attendu.
+
+Les fichiers de `photos/` **ne sont pas envoyés sur GitHub** (`.gitignore`) : lettres
+d'enfants, plannings et pages de livres restent sur votre ordinateur. Seuls les `.json` le
+sont. Visez 20 cas par fonction (spécification § 5.4) ; une photo coûte environ 0,03 $ par
+passage.
