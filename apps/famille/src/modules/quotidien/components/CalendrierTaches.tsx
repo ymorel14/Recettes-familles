@@ -145,19 +145,22 @@ export function CalendrierTaches({
               {o.libelle}
             </Text>
             {o.en_retard && <Pastille texte="En retard" />}
-            <Pressable
-              onPress={() => onModifier(o.tache_id)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Modifier ${o.libelle}`}
-            >
-              <Ionicons name="create-outline" size={20} color={theme.colors.textMuted} />
-            </Pressable>
+            {o.confiee ? null : (
+              <Pressable
+                onPress={() => onModifier(o.tache_id)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Modifier ${o.libelle}`}
+              >
+                <Ionicons name="create-outline" size={20} color={theme.colors.textMuted} />
+              </Pressable>
+            )}
           </View>
           <Text style={styles.detail}>
             {libellePlanif(o)}
             {o.domaine ? ` · ${o.domaine}` : ''}
             {qui ? ` · ${qui}` : ''}
+            {o.confiee ? ` · confiée par ${o.foyer_nom ?? 'un autre foyer'}` : ''}
           </Text>
           {o.fait_le && (
             <Text style={styles.detail}>

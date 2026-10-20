@@ -12,7 +12,7 @@ import { extraireMessageErreur } from '@apps-famille/famille';
 import { BoutonAssistant } from '../../../composants/assistant';
 import { FeuilleDictee } from '../../../composants/FeuilleDictee';
 import type { TacheProposee } from '../../../services/actionsAssistant';
-import { listerPersonnes, type Personne } from '../services/personnes';
+import { listerPersonnesFamille, type Personne } from '../services/personnes';
 import { aujourdHuiIso, JOURS, libelleJour } from '../services/quotidien';
 import {
   annulerRealisation,
@@ -70,7 +70,7 @@ export default function TachesScreen({ navigation }: any) {
       const [td, tt, ps, tx, ds] = await Promise.all([
         tachesDuJour(jour),
         listerTaches(),
-        listerPersonnes([foyer.id]),
+        listerPersonnesFamille(foyer.id),
         pointsParEuro(),
         listerDomaines(),
       ]);
@@ -107,28 +107,42 @@ export default function TachesScreen({ navigation }: any) {
   if (!taches) return <Chargement />;
 
   const futur = jour > aujourdHuiIso();
-  const enfants = personnes.filter((p) => !p.utilisateur_id);
+  // personnes : toute la famille active (une tâche peut être confiée à un
+  // autre foyer) ; miennes : mon foyer seulement.
+  const miennes = personnes.filter((p) => p.foyer_id === foyer?.id);
+  const enfants = miennes.filter((p) => !p.utilisateur_id);
   const prenom = (id: string) => personnes.find((p) => p.id === id)?.prenom ?? '…';
+  const deMonFoyer = (id: string | null) => !!id && miennes.some((p) => p.id === id);
   const duFiltre = taches.filter((t) => !filtre || t.domaine_id === filtre);
   const aFaire = duFiltre.filter((t) => !t.realisation);
   const aValider = duFiltre.filter((t) => t.realisation?.etat === 'faite');
   const faites = duFiltre.filter((t) => t.realisation?.etat === 'validee');
-  const toutesFiltrees = toutes.filter((t) => !filtre || t.domaine_id === filtre);
+  // Les tâches confiées par un autre foyer apparaissent dans le jour et le
+  // calendrier, pas dans la liste des tâches à modifier.
+  const toutesFiltrees = toutes.filter((t) => (!t.foyer_id || t.foyer_id === foyer?.id) && (!filtre || t.domaine_id === filtre));
   const domaine = (id: string | null) => domaines.find((d) => d.id === id);
 
   const carte = (t: TacheDuJour) => {
     // « Qui veut » : les personnes prévues, sinon les enfants du foyer pour
     // une tâche à points, ou tout le foyer pour une tâche sans points.
-    const candidats = t.candidats.length ? t.candidats : (t.points > 0 ? enfants : personnes).map((e) => e.id);
+    // Tâche confiée par un autre foyer : seules les personnes de mon foyer la
+    // cochent, et elle ne rapporte pas de points chez nous.
+    const candidats = t.confiee
+      ? t.candidats.filter(deMonFoyer)
+      : t.candidats.length
+        ? t.candidats
+        : (t.points > 0 ? enfants : miennes).map((e) => e.id);
     const planif = libellePlanif({ planif: t.planif, recurrence: t.recurrence, debut: t.debut, fin: t.fin });
+    const points = t.confiee || (t.pour && !deMonFoyer(t.pour)) ? 0 : t.points;
     return (
       <Carte key={t.id} accent={t.en_retard}>
         <View style={styles.ligne}>
           {t.domaine_icone ? <Ionicons name={t.domaine_icone as any} size={18} color={theme.colors.accent} /> : null}
           <Text style={[styles.libelle, t.realisation?.etat === 'validee' && styles.barre]}>{t.libelle}</Text>
           {t.en_retard && <Pastille texte="En retard" />}
-          {t.points > 0 && <Text style={styles.points}>+{t.points}</Text>}
+          {points > 0 && <Text style={styles.points}>+{points}</Text>}
         </View>
+        {t.confiee ? <Text style={styles.detail}>Confiée par {t.foyer_nom ?? 'un autre foyer'}</Text> : null}
         <Text style={styles.detail}>
           {t.pour ? `Pour ${t.pour_prenom ?? prenom(t.pour)}` : 'Qui veut'}
           {planif
@@ -139,7 +153,7 @@ export default function TachesScreen({ navigation }: any) {
                 ? ' · une fois'
                 : ''}
           {t.domaine ? ` · ${t.domaine}` : ''}
-          {t.points > 0 ? ` · ${formaterPoints(t.points, taux)}` : ''}
+          {points > 0 ? ` · ${formaterPoints(points, taux)}` : ''}
         </Text>
         {t.realisation?.etat === 'faite' ? (
           <>
@@ -158,7 +172,7 @@ export default function TachesScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <Bouton
-                  titre={t.points > 0 ? `Valider (+${t.points})` : 'Valider'}
+                  titre={points > 0 && deMonFoyer(t.realisation.personne_id) ? `Valider (+${points})` : 'Valider'}
                   onPress={() => agir(t.id, () => validerRealisation(t.realisation!.id))}
                   enCours={enCours === t.id}
                 />
@@ -275,7 +289,7 @@ export default function TachesScreen({ navigation }: any) {
         </Pressable>
       </View>
 
-      {toutes.length === 0 ? (
+      {toutesFiltrees.length === 0 && duFiltre.length === 0 && !filtre ? (
         <MessageVide
           titre="Pas encore de tâche"
           texte="Ajoutez les tâches de la maison : mettre la table, ranger sa chambre… avec des points pour l’argent de poche."

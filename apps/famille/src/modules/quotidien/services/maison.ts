@@ -17,6 +17,10 @@ export type Domaine = { id: string; nom: string; icone: string | null };
 
 export type Tache = {
   id: string;
+  // Foyer propriétaire. Une tâche peut être confiée à une personne d'un autre
+  // foyer de la famille (migration 20261020120000) : ce foyer la voit et la
+  // coche, mais ne la modifie pas.
+  foyer_id?: string;
   libelle: string;
   points: number;
   recurrence: Recurrence;
@@ -47,6 +51,10 @@ export type TacheDuJour = {
   fin: string | null;
   en_retard: boolean;
   realisation: { id: string; etat: 'faite' | 'validee'; personne_id: string | null; prenom: string | null } | null;
+  // Tâche d'un autre foyer confiée à une personne de mon foyer.
+  foyer_id?: string;
+  confiee?: boolean;
+  foyer_nom?: string | null;
 };
 
 export type Tirelire = {
@@ -112,7 +120,7 @@ export async function tachesDuJour(jour: string): Promise<TacheDuJour[]> {
 export async function listerTaches(): Promise<Tache[]> {
   const { data, error } = await supabase
     .from('taches')
-    .select('id, libelle, points, recurrence, jours, personnes, date_debut, active, domaine_id, planif, periode_debut, periode_fin')
+    .select('id, foyer_id, libelle, points, recurrence, jours, personnes, date_debut, active, domaine_id, planif, periode_debut, periode_fin')
     .order('libelle');
   if (error) throw error;
   return (data as Tache[]) ?? [];
@@ -168,6 +176,9 @@ export type OccurrenceTache = {
   fait_le: string | null;
   fait_par: string | null;
   en_retard: boolean;
+  foyer_id?: string;
+  confiee?: boolean;
+  foyer_nom?: string | null;
 };
 
 // Occurrences qui touchent [du, au], plus les tâches en retard.

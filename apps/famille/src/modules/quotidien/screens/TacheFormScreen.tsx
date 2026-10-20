@@ -9,7 +9,7 @@ import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
 import { BandeauBrouillon, PastilleAVerifier } from '../../../composants/assistant';
 import type { TacheProposee } from '../../../services/actionsAssistant';
-import { lireDateSaisie, listerPersonnes, type Personne } from '../services/personnes';
+import { lireDateSaisie, listerPersonnesFamille, type Personne } from '../services/personnes';
 import { aujourdHuiIso, JOURS } from '../services/quotidien';
 import {
   creerDomaine,
@@ -92,7 +92,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
   useEffect(() => {
     navigation.setOptions({ title: id ? 'Modifier la tâche' : 'Nouvelle tâche' });
     if (!foyer) return;
-    Promise.all([listerPersonnes([foyer.id]), pointsParEuro(), id ? listerTaches() : Promise.resolve([])])
+    Promise.all([listerPersonnesFamille(foyer.id), pointsParEuro(), id ? listerTaches() : Promise.resolve([])])
       .then(([ps, tx, taches]) => {
         setPersonnes(ps);
         setTaux(tx);
@@ -138,6 +138,15 @@ export default function TacheFormScreen({ route, navigation }: any) {
   );
 
   if (!pret) return <Chargement />;
+
+  // Personnes regroupées : mon foyer (sans titre), puis chaque autre foyer.
+  const groupesPersonnes: [string | null, Personne[]][] = [];
+  for (const p of personnes) {
+    const nom = p.foyer_id === foyer?.id ? null : p.foyer_nom ?? 'Autre foyer';
+    const g = groupesPersonnes.find(([n]) => n === nom);
+    if (g) g[1].push(p);
+    else groupesPersonnes.push([nom, [p]]);
+  }
 
   const nbPoints = Number(points.trim() || '0');
   const basculer = <T,>(liste: T[], v: T) => (liste.includes(v) ? liste.filter((x) => x !== v) : [...liste, v]);
@@ -434,25 +443,40 @@ export default function TacheFormScreen({ route, navigation }: any) {
         Plusieurs personnes : à tour de rôle (
         {quand === 'quotidienne' ? 'un jour chacun' : datee && annuelle ? 'une année chacun' : 'une semaine chacun'}). Personne : « qui veut ».
       </Text>
-      <View style={styles.puces}>
-        {personnes.map((p) => {
-          const rang = choisies.indexOf(p.id);
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => setChoisies(basculer(choisies, p.id))}
-              style={[styles.puce, rang >= 0 && styles.puceActive]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: rang >= 0 }}
-            >
-              <Text style={[styles.puceTexte, rang >= 0 && { color: theme.colors.background }]}>
-                {choisies.length > 1 && rang >= 0 ? `${rang + 1}. ` : ''}
-                {p.prenom}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* Mon foyer, puis les autres foyers de la famille : une tâche peut être
+          confiée à quelqu'un d'un autre foyer (il la voit et la coche chez lui,
+          sans points). */}
+      {groupesPersonnes.map(([nomFoyer, ps]) => (
+        <View key={nomFoyer ?? 'moi'} style={{ gap: theme.spacing.xs }}>
+          {nomFoyer ? <Text style={styles.aide}>{nomFoyer}</Text> : null}
+          <View style={styles.puces}>
+            {ps.map((p) => {
+              const rang = choisies.indexOf(p.id);
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => setChoisies(basculer(choisies, p.id))}
+                  style={[styles.puce, rang >= 0 && styles.puceActive]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: rang >= 0 }}
+                  accessibilityLabel={nomFoyer ? `${p.prenom} (${nomFoyer})` : p.prenom}
+                >
+                  <Text style={[styles.puceTexte, rang >= 0 && { color: theme.colors.background }]}>
+                    {choisies.length > 1 && rang >= 0 ? `${rang + 1}. ` : ''}
+                    {p.prenom}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ))}
+      {choisies.some((c) => personnes.find((p) => p.id === c)?.foyer_id !== foyer?.id) ? (
+        <Text style={styles.aide}>
+          Quelqu’un d’un autre foyer : il verra la tâche chez lui et pourra la cocher. Pas de points pour lui (chaque foyer
+          gère ses tirelires).
+        </Text>
+      ) : null}
       {personnes.length === 0 && (
         <Text style={styles.aide}>Ajoutez vos enfants dans Moi (« Mon foyer ») pour leur confier des tâches.</Text>
       )}

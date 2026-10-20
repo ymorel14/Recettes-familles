@@ -1,4 +1,5 @@
 import { supabase, schemaFamille } from './supabase';
+import { listerFoyersFamilleActive, personnesMasqueesFamilleActive } from '@apps-famille/famille';
 
 // Personnes de la famille (schéma "famille", commun aux apps) : membres avec
 // compte et personnes sans compte (enfants, bébés) gérées par leur foyer.
@@ -43,6 +44,20 @@ export async function listerPersonnes(foyers: string[]): Promise<Personne[]> {
     .order('prenom');
   if (error) throw error;
   return (data ?? []).map(versPersonne);
+}
+
+// Personnes de toute la famille active (pour confier une tâche à quelqu'un
+// d'un autre foyer) : mon foyer d'abord, puis les autres foyers, sans les
+// enfants masqués à la famille active.
+export async function listerPersonnesFamille(monFoyerId: string): Promise<Personne[]> {
+  const [foyers, masquees] = await Promise.all([
+    listerFoyersFamilleActive().catch(() => [monFoyerId]),
+    personnesMasqueesFamilleActive().catch(() => new Set<string>()),
+  ]);
+  const ps = await listerPersonnes([...new Set([monFoyerId, ...foyers])]);
+  return ps
+    .filter((p) => p.foyer_id === monFoyerId || !masquees.has(p.id))
+    .sort((a, b) => Number(b.foyer_id === monFoyerId) - Number(a.foyer_id === monFoyerId) || (a.foyer_nom ?? '').localeCompare(b.foyer_nom ?? ''));
 }
 
 // Personnes par identifiant (invités d'un voyage, qui peuvent venir d'autres

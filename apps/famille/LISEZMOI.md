@@ -57,6 +57,9 @@ Jeux de tests : `tests/ia/`, rejoués par `node scripts/rejouer-tests-ia.mjs`.
 Aucune migration n'est obligatoire. `supabase/migrations/20261020100000_famille_notifications.sql`
 (ajout seulement) crée `famille.notifications` pour l'écran Activité ; sans elle,
 l'app lit les notifications de VoyageCommun.
+`20261020120000_quotidien_taches_autres_foyers.sql` (élargissement seulement) permet de confier une tâche à
+une personne d'un autre foyer de la famille (Quotidien › Tâches › « Pour qui ») ; sans elle, ces personnes ne
+peuvent pas être choisies (la base refuse l'enregistrement).
 `20261020110000_famille_ia.sql` (ajout seulement) installe le suivi des coûts et le plafond de
 l'assistant ; sans elle, la jauge ne s'affiche pas et l'assistant répond « pas encore installé ».
 

@@ -35,7 +35,9 @@ partagent le compte famille :
   poche virtuel affiché en points avec l'équivalent en euros entre
   parenthèses, sans aucun flux d'argent réel), données dans le schéma
   `quotidien`. Tâches et tirelires (`src/services/maison.ts`) restent dans
-  le foyer (règles RLS) ; tâches et argent de poche branchés depuis les
+  le foyer (règles RLS), sauf une tâche confiée à une personne d'un autre foyer de la famille
+  (migration `20261020120000_quotidien_taches_autres_foyers.sql` : ce foyer la voit et la coche,
+  sans points, sans pouvoir la modifier) ; tâches et argent de poche branchés depuis les
   Phases 3 et 4 (migration `20261008110000_quotidien_taches_argent.sql`).
   Espace enfant (Phase 5) : lien `/quotidien/enfant/<jeton>`, `EnfantScreen`,
   fonctions `*_enfant` ; « J'ai fini » attend la validation d'un parent. Cahier des charges : document Claude "Cahier des charges —
