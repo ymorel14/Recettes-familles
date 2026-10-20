@@ -13,8 +13,9 @@ import ZoneClavier from '../../components/ZoneClavier';
 // avant enregistrement, comme pour le scan (§5). Un site sans données
 // structurées "Recipe" ne renvoie que le titre et la photo : le reste se
 // complète à la main, sans que ce soit un échec (repli assumé, §6/§11).
-export default function ImportWebScreen({ navigation }: any) {
-  const [url, setUrl] = useState('');
+export default function ImportWebScreen({ navigation, route }: any) {
+  // Adresse déjà connue (lien donné à l'assistant depuis le bouton ⊕).
+  const [url, setUrl] = useState<string>(route?.params?.url ?? '');
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 

@@ -7,6 +7,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { Bouton, Chargement } from '../components/ui';
 import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
+import { BandeauBrouillon, PastilleAVerifier } from '../../../composants/assistant';
+import type { TacheProposee } from '../../../services/actionsAssistant';
 import { lireDateSaisie, listerPersonnes, type Personne } from '../services/personnes';
 import { aujourdHuiIso, JOURS } from '../services/quotidien';
 import {
@@ -63,15 +65,21 @@ function plusUnAn(iso: string): string {
 // tour de rôle ; personne = « qui veut »).
 export default function TacheFormScreen({ route, navigation }: any) {
   const id: string | undefined = route.params?.id;
+  // Brouillon proposé par l'assistant (tâche dictée, bouton ⊕) : le
+  // formulaire arrive pré-rempli, à vérifier avant d'enregistrer.
+  const brouillon: TacheProposee | undefined = route.params?.brouillon;
   const { foyer } = useAuth();
   const [pret, setPret] = useState(!id);
-  const [libelle, setLibelle] = useState('');
-  const [points, setPoints] = useState('10');
-  const [quand, setQuand] = useState<Quand>(route.params?.quand ?? 'quotidienne');
-  const [annuelle, setAnnuelle] = useState(false);
-  const [date1, setDate1] = useState(versSaisie(route.params?.date ?? null));
-  const [date2, setDate2] = useState('');
-  const [jours, setJours] = useState<number[]>([]);
+  const [libelle, setLibelle] = useState(brouillon?.libelle ?? '');
+  const [points, setPoints] = useState(brouillon?.points != null ? String(brouillon.points) : '10');
+  const [quand, setQuand] = useState<Quand>(brouillon?.quand ?? route.params?.quand ?? 'quotidienne');
+  const [annuelle, setAnnuelle] = useState(brouillon?.annuelle ?? false);
+  const [date1, setDate1] = useState(
+    versSaisie(brouillon ? (brouillon.quand === 'avant' ? brouillon.date_debut : brouillon.date_debut) : route.params?.date ?? null)
+  );
+  const [date2, setDate2] = useState(brouillon ? versSaisie(brouillon.quand === 'le' ? null : brouillon.date_fin) : '');
+  const [jours, setJours] = useState<number[]>(brouillon?.jours ?? []);
+  const aVerifier = new Set(brouillon?.a_verifier ?? []);
   const [choisies, setChoisies] = useState<string[]>([]);
   const [active, setActive] = useState(true);
   const [domaineId, setDomaineId] = useState<string | null>(route.params?.domaineId ?? null);
@@ -88,6 +96,12 @@ export default function TacheFormScreen({ route, navigation }: any) {
       .then(([ps, tx, taches]) => {
         setPersonnes(ps);
         setTaux(tx);
+        if (brouillon?.pour.length) {
+          const ids = brouillon.pour
+            .map((p) => ps.find((x) => x.prenom.toLowerCase() === p.toLowerCase())?.id)
+            .filter((x): x is string => !!x);
+          if (ids.length) setChoisies(ids);
+        }
         const t = taches.find((x) => x.id === id);
         if (t) {
           setLibelle(t.libelle);
@@ -248,6 +262,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.contenu} keyboardShouldPersistTaps="handled">
+      {brouillon ? <BandeauBrouillon couleur={theme.colors.accent} /> : null}
       <Text style={styles.libelle}>Tâche</Text>
       <TextInput
         style={styles.champ}
@@ -405,6 +420,9 @@ export default function TacheFormScreen({ route, navigation }: any) {
             <Text style={styles.caseTexte}>Chaque année, aux mêmes dates</Text>
           </Pressable>
           {apercu ? <Text style={styles.apercu}>{apercu}</Text> : null}
+          {aVerifier.has('date_debut') || aVerifier.has('date_fin') || aVerifier.has('quand') ? (
+            <PastilleAVerifier raison="date comprise par l’assistant" />
+          ) : null}
           <Text style={styles.aide}>
             Elle apparaît dans les tâches du jour dès le début, puis « en retard » tant qu’elle n’est pas faite.
           </Text>

@@ -9,6 +9,9 @@ import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
 import { CalendrierTaches } from '../components/CalendrierTaches';
 import { alerte } from '../utils/alerte';
 import { extraireMessageErreur } from '@apps-famille/famille';
+import { BoutonAssistant } from '../../../composants/assistant';
+import { FeuilleDictee } from '../../../composants/FeuilleDictee';
+import type { TacheProposee } from '../../../services/actionsAssistant';
 import { listerPersonnes, type Personne } from '../services/personnes';
 import { aujourdHuiIso, JOURS, libelleJour } from '../services/quotidien';
 import {
@@ -52,6 +55,7 @@ export default function TachesScreen({ navigation }: any) {
   const { foyer } = useAuth();
   const [jour, setJour] = useState(aujourdHuiIso());
   const [vue, setVue] = useState<'jour' | 'calendrier'>('jour');
+  const [dictee, setDictee] = useState(false);
   const [domaines, setDomaines] = useState<Domaine[]>([]);
   const [filtre, setFiltre] = useState<string | null>(null);
   const [taches, setTaches] = useState<TacheDuJour[] | null>(null);
@@ -315,10 +319,31 @@ export default function TachesScreen({ navigation }: any) {
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </Pressable>
       ))}
-      <Bouton
-        variante="pointille"
-        titre="Nouvelle tâche"
-        onPress={() => navigation.navigate('TacheForm', vue === 'calendrier' ? { domaineId: filtre, quand: 'le' } : { domaineId: filtre })}
+      <View style={styles.nouvelle}>
+        <Bouton
+          variante="pointille"
+          titre="Nouvelle tâche"
+          style={{ flex: 1 }}
+          onPress={() => navigation.navigate('TacheForm', vue === 'calendrier' ? { domaineId: filtre, quand: 'le' } : { domaineId: filtre })}
+        />
+        {/* Tâche dictée (spécification § 4.3.2) */}
+        <BoutonAssistant titre="Dicter" couleur={theme.colors.accent} onPress={() => setDictee(true)} />
+      </View>
+      <FeuilleDictee<{ tache: TacheProposee; question: string | null }>
+        visible={dictee}
+        titre="Dicter une tâche"
+        placeholder="Dites ou écrivez la tâche"
+        exemples={['Le contrôle technique avant fin octobre, et chaque année', 'Léo sort les poubelles le mardi']}
+        route="tache-dictee"
+        couleur={theme.colors.accent}
+        etapes={['J’écoute la tâche…', 'Je place la date…', 'Presque fini…']}
+        onFermer={() => setDictee(false)}
+        remplirALaMain={() => navigation.navigate('TacheForm', { domaineId: filtre })}
+        onResultat={(r) => {
+          if (!r.tache.libelle) return r.question ?? 'Je n’ai pas compris la tâche. Pouvez-vous reformuler ?';
+          navigation.navigate('TacheForm', { brouillon: r.tache });
+          return null;
+        }}
       />
     </ScrollView>
   );
@@ -326,6 +351,7 @@ export default function TachesScreen({ navigation }: any) {
 
 const styles = creerStylesThemes(() => ({
   flex: { flex: 1, backgroundColor: theme.colors.background },
+  nouvelle: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   contenu: { padding: theme.spacing.md, gap: theme.spacing.sm, paddingBottom: theme.spacing.xl },
   navigation: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
   onglets: {

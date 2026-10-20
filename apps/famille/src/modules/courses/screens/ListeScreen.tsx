@@ -31,6 +31,10 @@ import {
 import { formaterQuantite, lireSaisie } from '../services/saisie';
 import { cleProduit } from '../utils/texte';
 import { formaterDateCourte } from '../utils/dates';
+import { FeuilleBas } from '../../../composants/FeuilleBas';
+import { BandeauBrouillon, ChargementAssistant, Etincelle, MessageAssistant } from '../../../composants/assistant';
+import { appelerAssistant, ErreurAssistant, messageErreurAssistant } from '../../../services/assistant';
+import { phraseDeCourses, type ArticlePropose } from '../../../services/actionsAssistant';
 
 // Une liste : ajout rapide en haut (« 2 lait », « pain »…), articles rangés
 // par rayon dans MON ordre des rayons, prénom de qui a ajouté chaque
@@ -57,6 +61,16 @@ export default function ListeScreen({ route, navigation }: any) {
   const [saisie, setSaisie] = useState('');
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Ajout en phrase avec l'assistant (spécification § 4.2.1).
+  const [phrase, setPhrase] = useState<{
+    texte: string;
+    lecture: boolean;
+    articles: ArticlePropose[];
+    coches: boolean[];
+    question: string | null;
+    erreur: ErreurAssistant | null;
+  } | null>(null);
+  const annulationPhrase = useRef<AbortController | null>(null);
   // Dernier article retiré d'un appui sur ×, qu'on peut remettre.
   const [retire, setRetire] = useState<Article | null>(null);
   const minuterieRetire = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,7 +128,58 @@ export default function ListeScreen({ route, navigation }: any) {
     [produits, saisie, clesSurLaListe]
   );
 
+  // « Du lait, des œufs pour la tarte et de quoi faire un apéro » : plusieurs
+  // articles ou mots de liaison → l'assistant lit la phrase et propose les
+  // articles, cochés (les suggestions vagues décochées). Sinon, ajout rapide
+  // habituel, sans IA.
+  const lirePhrase = async (texte: string) => {
+    const controle = new AbortController();
+    annulationPhrase.current = controle;
+    setPhrase({ texte, lecture: true, articles: [], coches: [], question: null, erreur: null });
+    try {
+      const r = await appelerAssistant<{ articles: ArticlePropose[]; question: string | null }>(
+        'courses-phrase',
+        { texte },
+        { signal: controle.signal }
+      );
+      if (controle.signal.aborted) return;
+      setPhrase({ texte, lecture: false, articles: r.articles, coches: r.articles.map((a) => !a.suggestion), question: r.question, erreur: null });
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      setPhrase({
+        texte,
+        lecture: false,
+        articles: [],
+        coches: [],
+        question: null,
+        erreur: e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)),
+      });
+    }
+  };
+
+  const ajouterPlusieurs = async (liste: { libelle: string; quantite: number | null; unite: string | null }[]) => {
+    setEnCours(true);
+    setMessage(null);
+    try {
+      let actuels = articles;
+      for (const a of liste) {
+        const saisieArticle = a.quantite == null && a.unite == null ? lireSaisie(a.libelle) : a;
+        if (!saisieArticle.libelle) continue;
+        const { article, fusionne } = await ajouterArticle(listeId, saisieArticle, produits, actuels);
+        actuels = fusionne ? actuels.map((x) => (x.id === article.id ? article : x)) : [...actuels, article];
+      }
+      setArticles(actuels);
+      setSaisie('');
+      setPhrase(null);
+    } catch {
+      setMessage('Ajout impossible. Vérifiez votre connexion.');
+    } finally {
+      setEnCours(false);
+    }
+  };
+
   const ajouter = async (texte: string) => {
+    if (phraseDeCourses(texte) && texte.trim()) return lirePhrase(texte.trim());
     const lu = lireSaisie(texte);
     if (!lu.libelle || enCours) return;
     setEnCours(true);
@@ -509,11 +574,104 @@ export default function ListeScreen({ route, navigation }: any) {
           />
         </View>
       </View>
+
+      <FeuilleBas
+        visible={!!phrase}
+        titre="Ajouter à la liste"
+        onFermer={() => {
+          annulationPhrase.current?.abort();
+          setPhrase(null);
+        }}
+      >
+        {phrase?.lecture ? (
+          <ChargementAssistant
+            etapes={['Je lis votre phrase…', 'Je range les articles…', 'Presque fini…']}
+            couleur={theme.colors.accent}
+            onAnnuler={() => {
+              annulationPhrase.current?.abort();
+              setPhrase(null);
+            }}
+          />
+        ) : phrase?.erreur ? (
+          <>
+            <MessageAssistant message={phrase.erreur.message} pause={phrase.erreur.code === 'plafond'} />
+            <Bouton
+              variante="contour"
+              titre="Ajouter tel quel"
+              enCours={enCours}
+              onPress={() =>
+                ajouterPlusieurs(
+                  phrase.texte
+                    .split(/,(?!\d)|;| et /)
+                    .map((m) => m.trim())
+                    .filter(Boolean)
+                    .map((m) => ({ libelle: m, quantite: null, unite: null }))
+                )
+              }
+            />
+          </>
+        ) : phrase ? (
+          <>
+            <BandeauBrouillon couleur={theme.colors.accent} />
+            <Text style={styles.phraseRappel}>« {phrase.texte} »</Text>
+            {phrase.articles.map((a, i) => {
+              const coche = phrase.coches[i];
+              const quantite = a.quantite != null ? formaterQuantite(a.quantite, a.unite) : '';
+              return (
+                <Pressable
+                  key={`${a.libelle}-${i}`}
+                  onPress={() => setPhrase({ ...phrase, coches: phrase.coches.map((v, j) => (j === i ? !v : v)) })}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: coche }}
+                  style={styles.phraseLigne}
+                >
+                  <Ionicons
+                    name={coche ? 'checkbox' : 'square-outline'}
+                    size={26}
+                    color={coche ? theme.colors.accent : theme.colors.textMuted}
+                  />
+                  <Text style={[styles.phraseLibelle, !coche && { color: theme.colors.textMuted }]}>
+                    {quantite ? `${quantite} ` : ''}
+                    {a.libelle}
+                  </Text>
+                  {a.suggestion ? <Text style={styles.phraseSuggestion}>suggestion</Text> : null}
+                </Pressable>
+              );
+            })}
+            {phrase.question ? (
+              <View style={styles.phraseQuestion}>
+                <Etincelle couleur={theme.colors.accent} />
+                <Text style={styles.phraseLibelle}>{phrase.question}</Text>
+              </View>
+            ) : null}
+            {phrase.articles.length ? (
+              <Bouton
+                titre={`Tout ajouter (${phrase.coches.filter(Boolean).length})`}
+                enCours={enCours}
+                desactive={!phrase.coches.some(Boolean)}
+                onPress={() => ajouterPlusieurs(phrase.articles.filter((_a, i) => phrase.coches[i]))}
+              />
+            ) : null}
+          </>
+        ) : null}
+      </FeuilleBas>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = creerStylesThemes(() => ({
+  phraseRappel: { fontFamily: theme.fontBody, fontSize: 14, fontStyle: 'italic', color: theme.colors.textMuted },
+  phraseLigne: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    minHeight: 52,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  phraseLibelle: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
+  phraseSuggestion: { fontFamily: theme.fontBodyBold, fontSize: 12, color: theme.colors.textMuted },
+  phraseQuestion: { flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' },
   flex: { flex: 1, backgroundColor: theme.colors.background },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.lg, backgroundColor: theme.colors.background },
   entete: { flexDirection: 'row', alignItems: 'center' },

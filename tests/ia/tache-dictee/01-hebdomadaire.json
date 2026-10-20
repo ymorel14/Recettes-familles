@@ -1,0 +1,5 @@
+{
+  "description": "Tâche chaque semaine, certains jours, pour une personne, avec des points.",
+  "entree": { "texte": "Sortir les poubelles le lundi et le jeudi, 5 points" },
+  "attendu": { "tache": { "libelle": "~poubelle", "quand": "hebdomadaire", "jours": [2], "points": 5 } }
+}

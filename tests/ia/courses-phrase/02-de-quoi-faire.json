@@ -1,0 +1,5 @@
+{
+  "description": "« De quoi faire » : ingrédients proposés (les moins sûrs en suggestion).",
+  "entree": { "texte": "de quoi faire des crêpes" },
+  "attendu": { "articles": [3] }
+}

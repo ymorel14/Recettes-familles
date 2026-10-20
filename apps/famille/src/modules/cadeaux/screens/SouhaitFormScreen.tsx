@@ -6,6 +6,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { extraireMessageErreur } from '@apps-famille/famille';
+import { BandeauBrouillon, BoutonAssistant, ChargementAssistant, MessageAssistant, PastilleAVerifier } from '../../../composants/assistant';
+import { appelerAssistant, messageErreurAssistant } from '../../../services/assistant';
 import {
   creerSouhait,
   extraireLien,
@@ -39,6 +41,21 @@ const VIDE: FormulaireSouhait = {
 
 const OPTION_VIDE: FormulaireOption = { titre: '', lien: '', prix: '' };
 
+// Fiche lue par l'assistant depuis la page du lien (route « lien-envie »).
+type FicheEnvie = {
+  lien: string;
+  titre: string | null;
+  prix: number | null;
+  image: string | null;
+  taille: string | null;
+  options: string[];
+  description: string | null;
+  a_verifier: string[];
+  source: 'page' | 'assistant';
+};
+
+const NOMS_CHAMPS: Record<string, string> = { titre: 'nom', prix: 'prix', taille: 'taille', options: 'modèles' };
+
 // Ajout ou modification d'un souhait (par le destinataire ou son
 // gestionnaire) ou d'une idée cachée (par un proche : `idee` vrai).
 export default function SouhaitFormScreen({ route, navigation }: any) {
@@ -52,6 +69,10 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
   const [form, setForm] = useState<FormulaireSouhait | null>(souhaitId ? null : VIDE);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  // Lien collé → fiche complète (spécification § 4.4.1).
+  const [lecturePage, setLecturePage] = useState(false);
+  const [proposition, setProposition] = useState<{ aVerifier: string[] } | null>(null);
+  const [messagePage, setMessagePage] = useState<string | null>(null);
 
   useEffect(() => {
     navigation.setOptions({
@@ -114,6 +135,40 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
     changer({ lien, ...(titre && !form.titre.trim() ? { titre } : {}) });
   };
 
+  // Lit la page du lien et complète les champs encore vides (rien n'est
+  // enregistré : la personne vérifie puis touche « Enregistrer »).
+  const remplirDepuisLaPage = async (lienBrut: string) => {
+    const lien = extraireLien(lienBrut).lien;
+    if (!/^https?:\/\//i.test(lien)) return;
+    setMessagePage(null);
+    setLecturePage(true);
+    try {
+      const f = await appelerAssistant<FicheEnvie>('lien-envie', { lien });
+      setForm((actuel) => {
+        if (!actuel) return actuel;
+        const options = f.options.filter(Boolean);
+        const avecOptions = options.length > 1 && actuel.options.every((o) => !o.titre.trim());
+        return {
+          ...actuel,
+          lien: actuel.lien || f.lien,
+          titre: actuel.titre.trim() || f.titre || '',
+          prix: actuel.prix.trim() || (f.prix != null ? String(f.prix).replace('.', ',') : ''),
+          image: actuel.image || actuel.photoLocale ? actuel.image : f.image,
+          taille: actuel.taille.trim() || f.taille || '',
+          description: actuel.description.trim() || f.description || '',
+          ...(avecOptions
+            ? { modeOptions: 'un_au_choix' as ModeOptions, options: options.map((titre) => ({ titre, lien: '', prix: '' })) }
+            : {}),
+        };
+      });
+      setProposition({ aVerifier: f.a_verifier });
+    } catch (e) {
+      setMessagePage(messageErreurAssistant(e));
+    } finally {
+      setLecturePage(false);
+    }
+  };
+
   const collerLien = async () => {
     setErreur(null);
     try {
@@ -121,6 +176,8 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
       if (!texte) return setErreur('Rien à coller : copiez d’abord le lien depuis le site ou l’appli.');
       if (!/https?:\/\/|www\./i.test(texte)) return setErreur('Le texte copié ne contient pas de lien.');
       recevoirLien(texte);
+      // Lien collé : l'app va chercher le nom, le prix et la photo.
+      if (!form.titre.trim()) remplirDepuisLaPage(texte);
     } catch {
       setErreur('Impossible de lire le presse-papiers : collez le lien dans le champ (appui long > Coller).');
     }
@@ -238,6 +295,23 @@ export default function SouhaitFormScreen({ route, navigation }: any) {
         <Text style={styles.aideLien}>
           Sur Amazon ou un autre site : Partager › Copier le lien, puis « Coller ».
         </Text>
+        {lecturePage ? (
+          <ChargementAssistant
+            etapes={['J’ouvre la page…', 'Je cherche le nom et le prix…', 'Presque fini…']}
+            couleur={theme.colors.accent}
+          />
+        ) : /^https?:\/\//i.test(extraireLien(form.lien).lien) && !proposition ? (
+          <BoutonAssistant titre="Remplir avec la page" couleur={theme.colors.accent} onPress={() => remplirDepuisLaPage(form.lien)} />
+        ) : null}
+        {messagePage ? <MessageAssistant message={messagePage} /> : null}
+        {proposition ? (
+          <View style={{ gap: theme.spacing.xs }}>
+            <BandeauBrouillon couleur={theme.colors.accent} />
+            {proposition.aVerifier.length ? (
+              <PastilleAVerifier raison={proposition.aVerifier.map((c) => NOMS_CHAMPS[c] ?? c).join(', ')} />
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       <Text style={styles.libelle}>Plusieurs modèles ou articles ?</Text>

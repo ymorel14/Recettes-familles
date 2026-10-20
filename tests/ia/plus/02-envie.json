@@ -1,0 +1,5 @@
+{
+  "description": "Une envie personnelle part dans Cadeaux.",
+  "entree": { "texte": "J'aimerais bien un pull marin pour Noël" },
+  "attendu": { "actions": [1] }
+}

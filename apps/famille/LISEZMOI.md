@@ -2,7 +2,7 @@
 
 Les six apps réunies dans une seule app, avec l'interface de la charte V1
 (`V1-charte-graphique.md`) et la navigation de la spécification V1
-(`V1-specification-dev.md`, chantier A). Pas encore d'assistant (chantiers B et C).
+(`V1-specification-dev.md`, chantier A), avec l'assistant (chantiers B et C).
 
 **Même base Supabase que les six apps actuelles**, mêmes schémas, mêmes règles RLS :
 les deux versions lisent et écrivent les mêmes données et fonctionnent côte à côte.
@@ -37,6 +37,20 @@ de la charte), jauge du foyer dans Moi (`src/ecrans/JaugeAssistant.tsx`), compos
 charte § 7 dans `src/composants/assistant.tsx` (étincelle ✦, chargement en mots avec
 « Annuler », bandeau « Proposé par l'assistant », pastille « À vérifier », messages d'erreur).
 Jeux de tests : `tests/ia/`, rejoués par `node scripts/rejouer-tests-ia.mjs`.
+
+## Assistant (chantier C, étape 4 : saisie en langage naturel)
+
+- **⊕ Ajouter** (`src/ecrans/FeuilleAjouter.tsx`, route `plus`) : « Dites ou écrivez… » avec micro,
+  une carte par action proposée (cases à cocher, modification sur place ou dans le formulaire),
+  « Tout ajouter » puis « Annuler » dans le message de confirmation. Les six raccourcis restent.
+- **Courses** (`ListeScreen`) : une phrase (« de quoi faire des crêpes », « lait, œufs et beurre »)
+  passe par `courses-phrase` ; les suggestions arrivent décochées. Un mot seul reste ajouté directement.
+- **Tâches** : bouton « ✦ Dicter » (`FeuilleDictee`, route `tache-dictee`) → formulaire pré-rempli
+  avec le bandeau « Proposé par l'assistant » et les dates « À vérifier ».
+- **Cadeaux** : « Coller » un lien ou « ✦ Remplir avec la page » (route `lien-envie`) remplit les
+  champs vides de l'envie.
+- Création après validation : `src/services/actionsAssistant.ts`. Dictée : `src/composants/useDictee.ts`
+  (reconnaissance vocale du téléphone, absente d'Expo Go : le micro est alors masqué).
 
 ## Base de données
 

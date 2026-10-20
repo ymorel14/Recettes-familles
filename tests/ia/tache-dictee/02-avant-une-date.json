@@ -1,0 +1,5 @@
+{
+  "description": "Tâche à faire avant une date, chaque année.",
+  "entree": { "texte": "Vaccin du chat avant le 15 novembre, tous les ans" },
+  "attendu": { "tache": { "libelle": "~vaccin", "quand": "avant", "annuelle": true, "date_fin": "*" } }
+}

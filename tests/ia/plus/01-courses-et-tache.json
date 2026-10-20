@@ -1,0 +1,5 @@
+{
+  "description": "Une phrase avec des courses et une tâche datée : deux actions.",
+  "entree": { "texte": "Il faut du lait et des œufs, et penser au vaccin du chat avant le 15 novembre" },
+  "attendu": { "actions": [2] }
+}

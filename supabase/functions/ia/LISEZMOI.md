@@ -10,10 +10,20 @@ Socle de l'assistant (spécification V1, chantier B). Une seule fonction Edge,
 | `routes/<route>.ts` | Une fonctionnalité : schéma de sortie, contenu envoyé, brouillon renvoyé |
 | `index.ts` | Liste des routes |
 
-Route disponible : **`essai`** (vérifie toute la chaîne, moins de 0,0002 $), appelée
-par le bouton « Vérifier l'assistant » de Moi (administrateur du foyer).
-Les 16 fonctions du chantier C s'ajouteront ici, une route chacune, sans
-toucher au socle.
+Routes disponibles :
+
+| Route | Rôle | Modèle, coût indicatif |
+| --- | --- | --- |
+| `essai` | Vérifie toute la chaîne (bouton « Vérifier l'assistant » de Moi, administrateur) | Haiku, < 0,0002 $ |
+| `plus` | ⊕ universel : une phrase → actions proposées (courses, tâche, envie, souvenir, recette) | Haiku, ~0,0005 $ |
+| `courses-phrase` | Une phrase dans une liste Courses → articles (suggestions décochées) | Haiku, ~0,0003 $ |
+| `tache-dictee` | Tâche dictée → brouillon du formulaire de tâche | Haiku, ~0,0003 $ |
+| `lien-envie` | Lien collé dans une envie → titre, prix, image, options. Sans assistant (0 $) quand la page donne déjà titre et prix | Haiku si besoin, ~0,001 $ |
+
+Contexte commun (`_partage/contexte.ts`) : date de Paris, noms des listes et prénoms du foyer,
+lus au jeton de l'utilisateur. Lecture de page (`_partage/page.ts`) : adresses publiques seulement,
+10 s et 1,5 Mo au plus. Les autres fonctions du chantier C s'ajouteront ici, une route chacune,
+sans toucher au socle.
 
 ## Mettre en service (une fois)
 

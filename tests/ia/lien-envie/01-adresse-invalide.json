@@ -1,0 +1,5 @@
+{
+  "description": "Adresse non web : refusée sans appel.",
+  "entree": { "lien": "ftp://exemple.fr/fichier" },
+  "erreurAttendue": "entree"
+}
