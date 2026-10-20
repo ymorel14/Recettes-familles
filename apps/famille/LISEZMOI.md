@@ -1,0 +1,61 @@
+# App Famille (nouvelle version)
+
+Les six apps réunies dans une seule app, avec l'interface de la charte V1
+(`V1-charte-graphique.md`) et la navigation de la spécification V1
+(`V1-specification-dev.md`, chantier A), avec l'assistant (chantiers B et C).
+
+**Même base Supabase que les six apps actuelles**, mêmes schémas, mêmes règles RLS :
+les deux versions lisent et écrivent les mêmes données et fonctionnent côte à côte.
+
+## Lancer
+
+```bash
+npm install            # à la racine du dépôt
+npm run famille        # téléphone (Expo)
+npm run famille:web    # navigateur
+```
+
+`.env` dans ce dossier (modèle : `.env.example`), mêmes valeurs que les autres apps.
+Sur le site commun : `/famille/` (construit par `scripts/construire-site.mjs`).
+
+## Organisation
+
+| Dossier | Contenu |
+| --- | --- |
+| `src/theme/` | Jetons de la charte (`jetons.ts`), thème clair/sombre (`theme.ts`), thème vu par le code des modules (`modules.ts` : palette « Famille » + encre du module) |
+| `src/navigation/` | Barre du bas (Accueil · Agenda · ⊕ · Activité · Moi), onglets du haut des modules (`OngletsModule.tsx`), pile de chaque module (`modules/*.tsx`), adresses web (`liens.ts`) |
+| `src/ecrans/` | Accueil, Agenda, Activité, Moi, feuille ⊕ Ajouter |
+| `src/services/` | Client Supabase unique (`clientPourSchema` pour chaque module), lectures de l'accueil et de l'Agenda (`journee.ts`), notifications |
+| `src/modules/<module>/` | Code repris des six apps (écrans, services, composants), **copié** : les apps actuelles ne sont pas modifiées |
+| `src/compte/` | Connexion, bienvenue, prénom, mot de passe |
+
+## Assistant (chantier B : socle)
+
+Fonction Edge `ia` (`supabase/functions/ia`, mise en service : `supabase/functions/ia/LISEZMOI.md`).
+Côté app : `src/services/assistant.ts` (`appelerAssistant(route, corps)`, messages d'erreur
+de la charte), jauge du foyer dans Moi (`src/ecrans/JaugeAssistant.tsx`), composants de la
+charte § 7 dans `src/composants/assistant.tsx` (étincelle ✦, chargement en mots avec
+« Annuler », bandeau « Proposé par l'assistant », pastille « À vérifier », messages d'erreur).
+Jeux de tests : `tests/ia/`, rejoués par `node scripts/rejouer-tests-ia.mjs`.
+
+## Assistant (chantier C, étape 4 : saisie en langage naturel)
+
+- **⊕ Ajouter** (`src/ecrans/FeuilleAjouter.tsx`, route `plus`) : « Dites ou écrivez… » avec micro,
+  une carte par action proposée (cases à cocher, modification sur place ou dans le formulaire),
+  « Tout ajouter » puis « Annuler » dans le message de confirmation. Les six raccourcis restent.
+- **Courses** (`ListeScreen`) : une phrase (« de quoi faire des crêpes », « lait, œufs et beurre »)
+  passe par `courses-phrase` ; les suggestions arrivent décochées. Un mot seul reste ajouté directement.
+- **Tâches** : bouton « ✦ Dicter » (`FeuilleDictee`, route `tache-dictee`) → formulaire pré-rempli
+  avec le bandeau « Proposé par l'assistant » et les dates « À vérifier ».
+- **Cadeaux** : « Coller » un lien ou « ✦ Remplir avec la page » (route `lien-envie`) remplit les
+  champs vides de l'envie.
+- Création après validation : `src/services/actionsAssistant.ts`. Dictée : `src/composants/useDictee.ts`
+  (reconnaissance vocale du téléphone, absente d'Expo Go : le micro est alors masqué).
+
+## Base de données
+
+Aucune migration n'est obligatoire. `supabase/migrations/20261020100000_famille_notifications.sql`
+(ajout seulement) crée `famille.notifications` pour l'écran Activité ; sans elle,
+l'app lit les notifications de VoyageCommun.
+`20261020110000_famille_ia.sql` (ajout seulement) installe le suivi des coûts et le plafond de
+l'assistant ; sans elle, la jauge ne s'affiche pas et l'assistant répond « pas encore installé ».

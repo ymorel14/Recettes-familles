@@ -12,6 +12,7 @@ familles, et une famille active commune à toutes les apps.
 | `apps/souvenirs` | App SouvenirsFamille : souvenirs de famille datés (voyages, naissances, premiers pas…), photos, vidéos, commentaires, recherche en français |
 | `apps/quotidien` | App Quotidien : trajets et activités des enfants (covoiturage entre familles par groupes), tâches de la maison, argent de poche virtuel en points — covoiturage (groupes, invités sans compte, planning équitable, rappels), tâches et argent de poche branchés sur Supabase |
 | `apps/courses` | App Courses : listes de courses du foyer (plusieurs listes, partage avec des personnes choisies, rayons, mode magasin) — listes, partage, rayons, mode magasin branchés sur Supabase (Phase 1) ; remplacera l'onglet Courses de Recettes |
+| `apps/famille` | **Nouvelle version** : les six apps réunies dans une seule app « Famille » (barre du bas, accueil, Agenda, Activité, Moi, charte V1), même base Supabase ; voir `apps/famille/LISEZMOI.md` |
 | `packages/famille` | Code commun : compte famille, foyers, profils, famille active, codes d'invitation |
 | `packages/courses` | Code commun à Courses et Recettes : produits, rayons, envoi des recettes dans une liste |
 | `packages/theme` | Thèmes de couleurs communs aux apps |
@@ -37,6 +38,8 @@ npm run quotidien        # lance l'app Quotidien
 npm run quotidien:web    # version navigateur
 npm run courses          # lance l'app Courses
 npm run courses:web      # version navigateur
+npm run famille          # lance la nouvelle app Famille (les six réunies)
+npm run famille:web      # version navigateur
 ```
 
 Ou depuis le dossier de l'app : `cd apps/cuisine` puis `npx expo start`.

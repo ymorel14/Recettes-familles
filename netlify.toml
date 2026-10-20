@@ -7,6 +7,7 @@
 #   /souvenirs/  SouvenirsFamille
 #   /quotidien/  Quotidien
 #   /courses/    Courses
+#   /famille/    Famille (nouvelle version : les six apps réunies)
 # Les anciennes adresses de Cuisine (ex. /recette/123) sont redirigées vers
 # /cuisine/… (règles écrites par scripts/construire-site.mjs dans
 # site/dist/_redirects).

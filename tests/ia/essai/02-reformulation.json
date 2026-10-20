@@ -1,0 +1,5 @@
+{
+  "description": "Avec un texte : il est reformulé, sans émoji.",
+  "entree": { "texte": "demain on va chez mamie a midi" },
+  "attendu": { "message": "*", "reformulation": "~mamie" }
+}

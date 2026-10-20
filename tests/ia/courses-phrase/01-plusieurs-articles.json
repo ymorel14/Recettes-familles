@@ -1,0 +1,5 @@
+{
+  "description": "Plusieurs articles avec quantités.",
+  "entree": { "texte": "2 litres de lait, 6 œufs et du beurre" },
+  "attendu": { "articles": [3] }
+}
