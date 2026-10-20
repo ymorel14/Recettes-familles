@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Famille",
+    "slug": "famille",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "famille",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "fr.morel.famille"
+    },
+    "android": {
+      "package": "fr.morel.famille",
+      "adaptiveIcon": {
+        "backgroundColor": "#F4F3EF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Famille"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F4F3EF",
+      "dark": { "backgroundColor": "#15161A" }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permet d'ajouter des photos à vos recettes, souvenirs, cadeaux, objets rangés et à votre profil.",
+          "cameraPermission": "Permet de photographier une recette, un cadeau, un objet ou un moment de famille."
+        }
+      ],
+      "expo-image",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permet de piloter le mode assistant des recettes à la voix (« suivant », « répète », « minuteur 10 minutes »…).",
+          "speechRecognitionPermission": "Permet de comprendre les commandes vocales du mode assistant.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      ["expo-notifications", { "color": "#17181C" }]
+    ],
+    "owner": "ymorel76"
+  }
+}

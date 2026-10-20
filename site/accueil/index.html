@@ -102,6 +102,7 @@
     a.app.voyages   { --c-fond: #DDF3F1; --c-texte: #16373A; --c-accent: #0B7A7A; --c-doux: #3F6467; }
     a.app.souvenirs { --c-fond: #F3E3B8; --c-texte: #3B2A1A; --c-accent: #7A4A21; --c-doux: #6B5640; }
     a.app.quotidien { --c-fond: #E8EFF3; --c-texte: #1D2B36; --c-accent: #1F5F8B; --c-doux: #566A79; }
+    a.app.famille   { --c-fond: #17181C; --c-texte: #F4F3EF; --c-accent: #F0715A; --c-doux: #C9CBD0; grid-column: 1 / -1; }
     a.app.courses   { --c-fond: #E6DDCF; --c-texte: #2A2622; --c-accent: #2F5D3A; --c-doux: #5E554B; }
     @media (prefers-color-scheme: dark) {
       a.app.cadeaux { --c-fond: #2E1F18; --c-texte: #F1E6D6; --c-accent: #E08A6D; --c-doux: #C2B09A; }
@@ -124,6 +125,12 @@
     </div>
 
     <nav class="apps" aria-label="Les apps">
+      <a class="app famille" href="/famille/">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M8 22L24 9l16 13v17a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z"/><path d="M19 41V29h10v12"/>
+        </svg>
+        <div class="bas"><div class="nom">Famille · nouvelle version</div><div class="quoi">Les six apps réunies, un seul accueil, la même famille et les mêmes données</div></div>
+      </a>
       <a class="app cuisine" href="/cuisine/">
         <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M15 6v13a5 5 0 0 0 10 0V6M20 6v36"/><path d="M35 42V6c-4 2-6 8-6 14 0 4 2 6 6 6"/>

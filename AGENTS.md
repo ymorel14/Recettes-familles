@@ -91,6 +91,11 @@ partagent le compte famille :
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".
+- `apps/famille` : **nouvelle version** (V1 de l'app unique, documents « V1-specification-dev.md » et
+  « V1-charte-graphique.md » du projet Claude) : les six apps réunies, code des apps COPIÉ dans
+  `src/modules/<module>` (les apps actuelles restent intactes), un seul client Supabase
+  (`clientPourSchema`), thème « Famille » clair/sombre (`src/theme`), barre du bas commune et onglets
+  du haut par module (`src/navigation`). Même base que les autres apps. Adresse `/famille/` du site commun.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants
   famille par famille : `<VisibiliteEnfants>` dans le Profil de chaque app,
