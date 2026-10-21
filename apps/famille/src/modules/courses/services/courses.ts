@@ -6,6 +6,7 @@ import {
   ajoutsDeRecettes,
   detecterSuggestionsFusion,
   fusionnerArticles as fusionnerArticlesCommun,
+  type ResultatFusion,
   listerContributions as listerContributionsCommun,
   retirerAjout as retirerAjoutCommun,
   type Contribution,
@@ -680,8 +681,64 @@ export function retirerRecette(listeId: string, ajoutId: string): Promise<void> 
 
 export const suggestionsFusion = (articles: Article[]) => detecterSuggestionsFusion(articles);
 
-export function fusionnerArticles(listeId: string, articles: Article[]): Promise<void> {
-  return fusionnerArticlesCommun(supabase, listeId, articles);
+export function fusionnerArticles(listeId: string, articles: Article[], resultat?: ResultatFusion): Promise<void> {
+  return fusionnerArticlesCommun(supabase, listeId, articles, resultat);
+}
+
+// « Ce n'est pas le même produit », mémorisé par le foyer (migration
+// 20261021100000_famille_nuit.sql) : paires de clés « a|b » (a < b).
+export async function listerNonDoublons(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('non_doublons').select('cle_a, cle_b');
+  if (error) return new Set();
+  return new Set(((data ?? []) as any[]).map((d) => `${d.cle_a}|${d.cle_b}`));
+}
+
+export function pairesDeCles(cles: string[]): string[] {
+  const uniques = [...new Set(cles)].sort();
+  const paires: string[] = [];
+  uniques.forEach((a, i) => uniques.slice(i + 1).forEach((b) => paires.push(`${a}|${b}`)));
+  return paires;
+}
+
+export async function noterNonDoublon(foyerId: string, cles: string[]): Promise<void> {
+  const lignes = pairesDeCles(cles).map((p) => {
+    const [cle_a, cle_b] = p.split('|');
+    return { foyer_id: foyerId, cle_a, cle_b };
+  });
+  if (!lignes.length) return;
+  const { error } = await supabase.from('non_doublons').upsert(lignes, { onConflict: 'foyer_id,cle_a,cle_b', ignoreDuplicates: true });
+  if (error) throw error;
+}
+
+// Produits sans doute à racheter (spécification § 4.2.2) : intervalle moyen
+// entre deux achats sur les listes du foyer, affiné chaque semaine par
+// l'assistant (phrase). Vide sans la migration famille_nuit.
+export type ARacheter = {
+  foyer_id: string;
+  cle: string;
+  libelle: string;
+  nb_achats: number;
+  dernier_achat: string;
+  intervalle_jours: number;
+  prevu_le: string;
+  quantite: number | null;
+  unite: string | null;
+  rayon_id: string | null;
+  phrase: string | null;
+};
+
+export async function listerARacheter(): Promise<ARacheter[]> {
+  const { data, error } = await supabase.rpc('a_racheter', {});
+  if (error) return [];
+  return ((data ?? []) as any[]).map((r) => ({ ...r, quantite: r.quantite == null ? null : Number(r.quantite) }));
+}
+
+// « toutes les 2 semaines environ », « tous les 10 jours environ »
+export function rythmeAchat(r: Pick<ARacheter, 'intervalle_jours' | 'phrase'>): string {
+  if (r.phrase) return r.phrase;
+  const j = r.intervalle_jours;
+  if (j % 7 === 0 && j <= 56) return j === 7 ? 'chaque semaine environ' : `toutes les ${j / 7} semaines environ`;
+  return `tous les ${j} jours environ`;
 }
 
 // Articles repris de Recettes : rangés dans leur rayon (dictionnaire ou

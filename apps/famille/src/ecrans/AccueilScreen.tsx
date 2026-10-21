@@ -21,6 +21,8 @@ import {
 import { ilYA } from '../services/notifications';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { ChoixFamille } from '../composants/ChoixFamille';
+import { ResumeMatin } from '../composants/ResumeMatin';
+import { resumeDuJour, type PhraseResume } from '../services/resumeMatin';
 import { useToast } from '../composants/Toast';
 import {
   BoutonPilule,
@@ -39,9 +41,8 @@ import type { TacheDuJour } from '../modules/quotidien/services/maison';
 import type { Souvenir } from '../modules/souvenirs/services/souvenirs';
 
 // Accueil (spécification § 2.4, charte § 8.1) : la journée d'un coup d'œil.
-// Ordre : bonjour, À faire pour vous, Aujourd'hui, modules, Bientôt,
-// Nouveautés de la famille, Il y a un an. Le résumé du matin (assistant)
-// viendra avec le socle IA.
+// Ordre : bonjour, résumé du matin (assistant), À faire pour vous,
+// Aujourd'hui, modules, Bientôt, Nouveautés de la famille, Il y a un an.
 
 export function ouvrirElement(module: IdModule, cible: ElementAgenda['cible']) {
   if (cible.onglet) ouvrirOngletModule(module, cible.onglet);
@@ -61,6 +62,7 @@ export default function AccueilScreen({ navigation }: any) {
   const [taches, setTaches] = useState<TacheDuJour[]>([]);
   const [bientot, setBientot] = useState<ElementAgenda[]>([]);
   const [souvenirs, setSouvenirs] = useState<Souvenir[]>([]);
+  const [resume, setResume] = useState<PhraseResume[]>([]);
   const [chargement, setChargement] = useState(true);
   const [actualisation, setActualisation] = useState(false);
 
@@ -82,6 +84,8 @@ export default function AccueilScreen({ navigation }: any) {
     setTaches(t);
     setSouvenirs(s);
     setChargement(false);
+    // Résumé du matin : à part, il ne retarde pas le reste de l'accueil.
+    resumeDuJour().then(setResume).catch(() => {});
   }, [session, famille?.id, foyer?.id, foyersFamille]);
 
   useFocusEffect(
@@ -107,7 +111,13 @@ export default function AccueilScreen({ navigation }: any) {
       await a.executer();
       setFaites((f) => new Set(f).add(a.cle));
       afficher(
-        a.bouton === 'Je conduis' ? 'C’est noté : vous conduisez.' : a.bouton === 'Valider' ? 'Tâche validée, points versés.' : 'C’est noté.'
+        a.bouton === 'Je conduis'
+          ? 'C’est noté : vous conduisez.'
+          : a.bouton === 'Valider'
+            ? 'Tâche validée, points versés.'
+            : a.bouton === 'Ajouter'
+              ? 'Ajouté à la liste de courses.'
+              : 'C’est noté.'
       );
     } catch {
       afficher('Impossible pour le moment. Réessayez.');
@@ -132,6 +142,12 @@ export default function AccueilScreen({ navigation }: any) {
         </Text>
         <Text style={styles.date}>{aujourdHuiTexte}</Text>
       </View>
+
+      {resume.length > 0 ? (
+        <View style={[styles.colonne, { marginTop: espaces.xl }]}>
+          <ResumeMatin phrases={resume} />
+        </View>
+      ) : null}
 
       {aFaireNotifs.length + actions.length > 0 ? (
         <Section titre="À faire pour vous">

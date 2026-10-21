@@ -58,3 +58,9 @@ Les fichiers de `photos/` **ne sont pas envoyés sur GitHub** (`.gitignore`) : l
 d'enfants, plannings et pages de livres restent sur votre ordinateur. Seuls les `.json` le
 sont. Visez 20 cas par fonction (spécification § 5.4) ; une photo coûte environ 0,03 $ par
 passage.
+
+## Traitement de nuit et doublons (étape 7)
+
+`doublons` : groupes d'articles comparés (même produit ou non, quantité totale). `resume-matin` :
+résumé du compte de test (dépend de ses données du jour ; une seule rédaction par jour). Le
+traitement de nuit lui-même (`ia-nuit`) utilise les mêmes consignes que `resume-matin`.

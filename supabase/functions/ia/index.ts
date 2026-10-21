@@ -22,6 +22,8 @@
 //   photo-classer   ⊕ photo : de quoi s'agit-il ? (§ 4.6.1)
 //   annonce-hebergement  annonce de location → fiche d'hébergement (§ 4.5.2)
 //   recette-lien    page web sans fiche recette, vidéo, ou texte collé → recette (§ 4.1.2, § 4.1.3)
+//   resume-matin    résumé du matin quand rien n'a été préparé cette nuit (§ 4.6.2)
+//   doublons        articles de courses ambigus : même produit ? (§ 4.2.3)
 import { servirIA } from '../_partage/ia.ts';
 import { essai } from './routes/essai.ts';
 import { plus } from './routes/plus.ts';
@@ -35,6 +37,8 @@ import { lettreNoel } from './routes/lettre-noel.ts';
 import { photoClasser } from './routes/photo-classer.ts';
 import { recetteLien } from './routes/recette-lien.ts';
 import { annonceHebergement } from './routes/annonce-hebergement.ts';
+import { resumeMatin } from './routes/resume-matin.ts';
+import { doublons } from './routes/doublons.ts';
 
 servirIA({
   essai,
@@ -49,4 +53,6 @@ servirIA({
   'photo-classer': photoClasser,
   'recette-lien': recetteLien,
   'annonce-hebergement': annonceHebergement,
+  'resume-matin': resumeMatin,
+  doublons,
 });

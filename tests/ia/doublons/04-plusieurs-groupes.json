@@ -1,0 +1,11 @@
+{
+  "description": "Plusieurs groupes à la fois : tomates cerises et pommes de terre restent distinctes, œufs fusionnés.",
+  "entree": {
+    "groupes": [
+      { "id": "g1", "articles": [ { "libelle": "Tomates", "quantite": 6, "unite": null }, { "libelle": "Tomates cerises", "quantite": 250, "unite": "g" } ] },
+      { "id": "g2", "articles": [ { "libelle": "Pommes", "quantite": 6, "unite": null }, { "libelle": "Pommes de terre", "quantite": 1, "unite": "kg" } ] },
+      { "id": "g3", "articles": [ { "libelle": "Oeufs", "quantite": 6, "unite": null }, { "libelle": "Oeufs entiers", "quantite": 3, "unite": null } ] }
+    ]
+  },
+  "attendu": { "groupes": [ { "id": "g1", "meme_produit": false }, { "id": "g2", "meme_produit": false }, { "id": "g3", "meme_produit": true, "quantite": 9 } ] }
+}

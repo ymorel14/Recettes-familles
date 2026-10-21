@@ -94,3 +94,20 @@ choix des photos : `src/composants/PanneauPhotos.tsx`, appel : `src/composants/u
   couchages ou les chambres (ou si le site bloque), l'assistant lit l'annonce (route `annonce-hebergement`) et
   complète les champs vides. La liste des hébergements montre « Le moins cher / pers. » et les couchages par
   rapport au nombre d'invités.
+
+## Assistant (chantier C, étape 7 : traitement de nuit et doublons)
+
+- **Résumé du matin** (`src/composants/ResumeMatin.tsx`, `src/services/resumeMatin.ts`) : en tête de
+  l'accueil, 2 ou 3 phrases rédigées la nuit (fonction `ia-nuit`) à partir des faits du jour déjà
+  filtrés (`famille.faits_du_jour`) ; chaque élément souligné ouvre l'écran concerné. Sans résumé
+  préparé (première visite), l'accueil le demande une fois dans la journée (route `resume-matin`).
+- **Sans doute à racheter** (`courses.a_racheter`) : puces en haut d'une liste du foyer (appui long :
+  « Ne plus proposer ») et « Café à racheter ? » dans « À faire pour vous » (bouton « Ajouter », vers la
+  liste principale). Pas avant 3 achats ; jamais à partir des listes « moi ».
+- **Doublons** (`ListeScreen`, `src/services/doublonsAssistant.ts`, route `doublons`) : pour deux articles
+  qui ont un mot en commun, l'assistant dit si c'est le même produit et propose libellé et quantité
+  totale (« ✦ Fusionner en « Lait demi-écrémé 3 L » ») ; les produits différents ne sont plus proposés.
+  « Pas le même » est mémorisé par le foyer (`courses.non_doublons`). Réponses gardées sur le téléphone.
+
+Migration : `20261021100000_famille_nuit.sql` (ajout seulement). Sans elle, rien ne s'affiche et le
+reste marche comme avant.

@@ -140,6 +140,28 @@ export function coutUsd(t: Tarif, c: Consommation, differe = false): number {
   return dollarsTokens + (c.recherches_web * t.recherche_web_par_mille) / 1000;
 }
 
+// Enregistre un appel dans famille.ia_usage (clé service_role) et renvoie
+// son coût. Aussi utilisé par le traitement de nuit (ia-nuit, differe).
+export async function enregistrerConsommation(
+  admin: SupabaseClient<any, any, any>,
+  o: { foyerId: string; utilisateurId: string | null; fonction: string; modele: string; consommation: Consommation; differe?: boolean }
+): Promise<number> {
+  const differe = o.differe ?? false;
+  const tarif = (await tarifs(admin))[o.modele] ?? TARIFS_SECOURS[o.modele.startsWith('claude-haiku') ? 'claude-haiku-5-5' : 'claude-sonnet-5-5'];
+  const cout = coutUsd(tarif, o.consommation, differe);
+  const { error } = await admin.schema('famille').from('ia_usage').insert({
+    foyer_id: o.foyerId,
+    utilisateur_id: o.utilisateurId,
+    fonction: o.fonction,
+    modele: o.modele,
+    differe,
+    cout_usd: cout.toFixed(6),
+    ...o.consommation,
+  });
+  if (error) console.error('ia_usage : enregistrement impossible', error.message);
+  return cout;
+}
+
 // --- Contexte d'un appel ------------------------------------------------------
 
 export type OptionsExtraction<T> = {
@@ -179,7 +201,7 @@ export type Contexte = {
 export type Route = (corps: any, ctx: Contexte) => Promise<unknown>;
 
 let anthropic: Anthropic | null = null;
-function clientAnthropic(): Anthropic {
+export function clientAnthropic(): Anthropic {
   if (!Deno.env.get('ANTHROPIC_API_KEY')) {
     throw new ErreurIA('configuration', 'L’assistant n’est pas encore configuré sur ce projet (clé ANTHROPIC_API_KEY absente).');
   }
@@ -194,16 +216,8 @@ function creerContexte(
   client: SupabaseClient<any, any, any>,
   admin: SupabaseClient<any, any, any>
 ): Contexte {
-  const enregistrer = async (modele: string, c: Consommation, differe = false): Promise<number> => {
-    const tarif = (await tarifs(admin))[modele] ?? TARIFS_SECOURS['claude-sonnet-5-5'];
-    const cout = coutUsd(tarif, c, differe);
-    const { error } = await admin
-      .schema('famille')
-      .from('ia_usage')
-      .insert({ foyer_id: foyerId, utilisateur_id: utilisateurId, fonction, modele, differe, cout_usd: cout.toFixed(6), ...c });
-    if (error) console.error('ia_usage : enregistrement impossible', error.message);
-    return cout;
-  };
+  const enregistrer = (modele: string, c: Consommation, differe = false): Promise<number> =>
+    enregistrerConsommation(admin, { foyerId, utilisateurId, fonction, modele, consommation: c, differe });
 
   const extraire = async <T>(o: OptionsExtraction<T>): Promise<ResultatExtraction<T>> => {
     // Sortie structurée : le schéma part dans output_config.format ; on lit

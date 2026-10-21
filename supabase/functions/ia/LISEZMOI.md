@@ -26,6 +26,8 @@ Routes disponibles :
 | `photo-classer` | ⊕ photo : de quoi s'agit-il ? (image réduite à 512 px) | Haiku, ~0,0003 $ |
 | `recette-lien` | Page web SANS fiche recette structurée (l'app essaie d'abord `importer-recette`, gratuit), vidéo YouTube / TikTok / Instagram (texte public seulement : description, légende ; jamais la vidéo ni les sous-titres), ou texte collé (description, sous-titres) → recette | Sonnet, ~0,02 à 0,035 $ |
 | `annonce-hebergement` | Annonce de location quand `lire-annonce` n'a pas trouvé le prix, les couchages ou les chambres → champs manquants | Sonnet, ~0,02 $ |
+| `resume-matin` | Résumé du matin quand rien n'a été préparé cette nuit (première visite) : faits du jour lus au jeton de l'utilisateur (`famille.faits_du_jour`), une seule rédaction par jour | Haiku, ~0,0005 $ |
+| `doublons` | Articles de courses ambigus (un mot en commun) : même produit ? libellé et quantité totale proposés | Haiku, ~0,0005 $ |
 
 Photos et PDF (`_partage/images.ts`) : réduits par l'app avant l'envoi (1 568 px, JPEG 0,8),
 3 photos au plus, 5 Mo par fichier, 8 Mo en tout ; jamais enregistrés, ils ne font que passer.
@@ -74,10 +76,35 @@ sans toucher au socle.
   main si les prix changent. Suivi réel : vue `famille.ia_usage_mensuel` dans
   l'éditeur SQL.
 
-Pas encore fait (prévu avec les fonctions qui en ont besoin, chantier C,
-étape 7) : traitement de nuit à moitié prix (API Batches + `pg_cron`) pour le
-résumé du matin et la prévision des habituels ; la colonne `differe` de
-`famille.ia_usage` et la remise de `famille.ia_tarifs` sont déjà prêtes.
+## Traitement de nuit (fonction `ia-nuit`, chantier C, étape 7)
+
+À moitié prix (API Batches), pour ce qui n'est pas urgent :
+
+| Travail | Quand | Résultat | Modèle, coût indicatif |
+| --- | --- | --- | --- |
+| Résumé du matin (§ 4.6.2) | Chaque nuit, pour chaque personne venue sur l'accueil ces 7 derniers jours | `famille.resumes_matin`, affiché en tête de l'accueil | Haiku, ~0,0003 $ |
+| Affinage des habituels (§ 4.2.2) | Une fois par semaine et par foyer | `courses.previsions_ia` (date du prochain achat, phrase), utilisé par `courses.a_racheter` | Haiku, ~0,0003 $ |
+
+1. Vers 2 h, `famille.preparer_travaux_nuit()` (pg_cron) calcule les faits **sous l'identité de chaque
+   personne** (rôle `authenticated` et son identifiant, comme une requête de l'app) : les règles RLS
+   s'appliquent, rien de caché n'est lu (surprises comprises). Les faits, déjà rédigés, vont dans
+   `famille.ia_travaux`.
+2. Toutes les 15 minutes jusqu'au matin, `ia-nuit` envoie ce travail en un lot (sauf foyers au
+   plafond), relève les lots terminés, enregistre résumés, prévisions et consommation (`differe = true`).
+   Elle ne lit jamais les tables des modules. Relancée, elle ne refait rien en double.
+
+Mise en service (une fois, après la migration `20261021100000_famille_nuit.sql`) :
+
+```bash
+supabase functions deploy ia        # nouvelles routes resume-matin et doublons
+supabase functions deploy ia-nuit
+```
+
+puis exécuter `supabase/planification_nuit.sql` dans l'éditeur SQL. Pour suivre une nuit :
+`select nature, statut, count(*) from famille.ia_travaux where jour = current_date group by 1, 2;`
+
+Sans la planification, l'accueil demande lui-même le résumé une fois par jour (route `resume-matin`,
+prix normal) : tout marche, en un peu plus cher.
 
 ## Texte pour la politique de confidentialité (spécification § 3.6)
 

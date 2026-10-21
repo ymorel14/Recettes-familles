@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { KeyboardAvoidingView, Platform, Pressable, SectionList, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,11 +20,17 @@ import {
   suggestionsFusion,
   epinglerProduit,
   listerHabituels,
+  listerARacheter,
+  listerNonDoublons,
+  noterNonDoublon,
+  pairesDeCles,
+  rythmeAchat,
   masquerProduit,
   modifierArticle,
   supprimerArticle,
   suggestions as chercherSuggestions,
   type Article,
+  type ARacheter,
   type Habituel,
   type Produit,
 } from '../services/courses';
@@ -32,7 +38,8 @@ import { formaterQuantite, lireSaisie } from '../services/saisie';
 import { cleProduit } from '../utils/texte';
 import { formaterDateCourte } from '../utils/dates';
 import { FeuilleBas } from '../../../composants/FeuilleBas';
-import { BandeauBrouillon, ChargementAssistant, Etincelle, MessageAssistant } from '../../../composants/assistant';
+import { BandeauBrouillon, ChargementAssistant, Etincelle, MessageAssistant, PastilleAVerifier } from '../../../composants/assistant';
+import { signatureGroupe, verdictConnu, verdictsDoublons, type VerdictDoublon } from '../../../services/doublonsAssistant';
 import { appelerAssistant, ErreurAssistant, messageErreurAssistant } from '../../../services/assistant';
 import { phraseDeCourses, type ArticlePropose } from '../../../services/actionsAssistant';
 
@@ -52,10 +59,18 @@ export default function ListeScreen({ route, navigation }: any) {
   const duFoyer = !!liste && !!foyer && liste.foyer_id === foyer.id;
   const [habituels, setHabituels] = useState<Habituel[]>([]);
   const [voirHabituels, setVoirHabituels] = useState(false);
+  // Produits sans doute à racheter (spécification § 4.2.2).
+  const [aRacheter, setARacheter] = useState<ARacheter[]>([]);
+  // « Ce n'est pas le même produit », mémorisé par le foyer (§ 4.2.3).
+  const [nonDoublons, setNonDoublons] = useState<Set<string>>(new Set());
+  // Réponses de l'assistant sur les doublons possibles, par groupe.
+  const [verdicts, setVerdicts] = useState<Map<string, VerdictDoublon | 'erreur'>>(new Map());
 
   useFocusEffect(
     useCallback(() => {
       listerHabituels(listeId).then(setHabituels);
+      listerARacheter().then(setARacheter);
+      listerNonDoublons().then(setNonDoublons);
     }, [listeId])
   );
   const [saisie, setSaisie] = useState('');
@@ -203,6 +218,38 @@ export default function ListeScreen({ route, navigation }: any) {
 
   // Habituels pas encore sur la liste, épinglés en tête.
   const habituelsProposes = useMemo(() => habituels.filter((h) => !clesSurLaListe.has(h.cle)), [habituels, clesSurLaListe]);
+  // À racheter : seulement pour une liste de mon foyer, et pas déjà dessus.
+  const aRacheterProposes = useMemo(
+    () => (duFoyer ? aRacheter.filter((r) => r.foyer_id === liste?.foyer_id && !clesSurLaListe.has(r.cle)).slice(0, 6) : []),
+    [aRacheter, clesSurLaListe, duFoyer, liste?.foyer_id]
+  );
+
+  const ajouterARacheter = async (r: ARacheter) => {
+    setMessage(null);
+    try {
+      const { article, fusionne } = await ajouterArticle(listeId, { libelle: r.libelle, quantite: r.quantite, unite: r.unite }, produits, articles);
+      setArticles((actuels) => (fusionne ? actuels.map((a) => (a.id === article.id ? article : a)) : [...actuels, article]));
+      setARacheter((liste) => liste.filter((x) => x.cle !== r.cle));
+    } catch {
+      setMessage('Ajout impossible. Vérifiez votre connexion.');
+    }
+  };
+
+  const reglerARacheter = (r: ARacheter) => {
+    if (!foyer) return;
+    alerte(r.libelle, `Acheté ${r.nb_achats} fois, ${rythmeAchat(r)}.`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Ne plus proposer',
+        style: 'destructive',
+        onPress: async () => {
+          setARacheter((liste) => liste.filter((x) => x.cle !== r.cle));
+          setHabituels((liste) => liste.filter((x) => x.cle !== r.cle));
+          await masquerProduit(foyer.id, r).catch(() => {});
+        },
+      },
+    ]);
+  };
 
   const ajouterHabituel = async (h: Habituel) => {
     setMessage(null);
@@ -260,17 +307,91 @@ export default function ListeScreen({ route, navigation }: any) {
       },
     ]);
 
-  // Rapprochement proposé (« Oeufs » et « Oeufs entiers ») : l'utilisateur tranche.
-  const suggestion = useMemo(
-    () => suggestionsFusion(aAcheter).find((sg) => !refuses.has(sg.articles.map((a) => a.id).sort().join(','))) ?? null,
-    [aAcheter, refuses]
+  // Rapprochement proposé (« Oeufs » et « Oeufs entiers ») : le code repère
+  // les articles qui ont un mot en commun, l'assistant dit si c'est le même
+  // produit et additionne les quantités (spécification § 4.2.3). Groupes
+  // déjà refusés par le foyer (« pas le même produit ») : plus proposés.
+  // Assistant indisponible : la question simple, comme avant.
+  const candidats = useMemo(
+    () =>
+      suggestionsFusion(aAcheter).filter((sg) => {
+        if (refuses.has(sg.articles.map((a) => a.id).sort().join(','))) return false;
+        const paires = pairesDeCles(sg.articles.map((a) => cleProduit(a.libelle)));
+        return paires.length > 0 && !paires.every((p) => nonDoublons.has(p));
+      }),
+    [aAcheter, refuses, nonDoublons]
   );
-  const refuserSuggestion = () =>
-    suggestion && setRefuses((r) => new Set(r).add(suggestion.articles.map((a) => a.id).sort().join(',')));
+  // Une demande partie n'est jamais annulée (elle serait payée quand même) :
+  // on note seulement les groupes en cours pour ne pas les redemander.
+  const doublonsEnCours = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const inconnus = candidats.filter((sg) => {
+      const signature = signatureGroupe(sg.articles);
+      return !verdicts.has(signature) && !doublonsEnCours.current.has(signature);
+    });
+    if (!inconnus.length) return;
+    // Déjà connus sur ce téléphone : sans appel.
+    const connus = new Map(verdicts);
+    const manquants = inconnus
+      .filter((sg) => {
+        const signature = signatureGroupe(sg.articles);
+        const v = verdictConnu(signature);
+        if (v) connus.set(signature, v);
+        return !v;
+      })
+      .slice(0, 6); // 6 groupes par appel ; les suivants au passage d'après
+    if (connus.size !== verdicts.size) setVerdicts(connus);
+    if (!manquants.length) return;
+    const minuterie = setTimeout(() => {
+      const signatures = manquants.map((sg) => signatureGroupe(sg.articles));
+      signatures.forEach((sig) => doublonsEnCours.current.add(sig));
+      verdictsDoublons(manquants.map((sg) => sg.articles))
+        .then((lus) =>
+          setVerdicts((actuels) => {
+            const suite = new Map(actuels);
+            signatures.forEach((sig) => suite.set(sig, lus.get(sig) ?? 'erreur'));
+            return suite;
+          })
+        )
+        .catch(() =>
+          setVerdicts((actuels) => {
+            const suite = new Map(actuels);
+            signatures.forEach((sig) => suite.set(sig, 'erreur'));
+            return suite;
+          })
+        )
+        .finally(() => signatures.forEach((sig) => doublonsEnCours.current.delete(sig)));
+    }, 800);
+    return () => clearTimeout(minuterie);
+  }, [candidats, verdicts]);
+
+  const suggestion = useMemo(() => {
+    for (const sg of candidats) {
+      const v = verdicts.get(signatureGroupe(sg.articles));
+      if (v === 'erreur') return { ...sg, verdict: null as VerdictDoublon | null };
+      if (v && v.meme_produit) return { ...sg, verdict: v };
+    }
+    return null;
+  }, [candidats, verdicts]);
+
+  const refuserSuggestion = async () => {
+    if (!suggestion) return;
+    setRefuses((r) => new Set(r).add(suggestion.articles.map((a) => a.id).sort().join(',')));
+    const cles = suggestion.articles.map((a) => cleProduit(a.libelle));
+    if (foyer) {
+      setNonDoublons((n) => new Set([...n, ...pairesDeCles(cles)]));
+      await noterNonDoublon(foyer.id, cles).catch(() => {});
+    }
+  };
   const accepterSuggestion = async () => {
     if (!suggestion) return;
+    const v = suggestion.verdict;
     try {
-      await fusionnerArticles(listeId, suggestion.articles);
+      await fusionnerArticles(
+        listeId,
+        suggestion.articles,
+        v ? { libelle: v.libelle, quantite: v.quantite, unite: v.unite, note: v.quantite == null ? v.explication : null } : undefined
+      );
       await rechargerArticles();
     } catch {
       setMessage('Fusion impossible (réseau ?).');
@@ -432,6 +553,30 @@ export default function ListeScreen({ route, navigation }: any) {
             ))}
           </View>
         )}
+        {aRacheterProposes.length > 0 && (
+          <View style={styles.aRacheter}>
+            <View style={styles.habituelsEntete}>
+              <Ionicons name="time-outline" size={18} color={theme.colors.accent} />
+              <Text style={styles.habituelsTitre}>Sans doute à racheter</Text>
+            </View>
+            <View style={styles.suggestions}>
+              {aRacheterProposes.map((r) => (
+                <Pressable
+                  key={r.cle}
+                  onPress={() => ajouterARacheter(r)}
+                  onLongPress={() => reglerARacheter(r)}
+                  style={({ pressed }) => [styles.suggestion, styles.epingle, pressed && styles.appuye]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ajouter ${r.libelle}, acheté ${rythmeAchat(r)}`}
+                  accessibilityHint="Appui long : ne plus proposer"
+                >
+                  <Ionicons name="add-circle-outline" size={15} color={theme.colors.accent} />
+                  <Text style={styles.suggestionTexte}>{r.libelle}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
         {duFoyer && habituelsProposes.length > 0 && (
           <Pressable
             onPress={() => setVoirHabituels((v) => !v)}
@@ -503,10 +648,30 @@ export default function ListeScreen({ route, navigation }: any) {
             {suggestion && (
               <View style={styles.carteSuggestion}>
                 <Text style={styles.suggestionQuestion}>
-                  {suggestion.articles.map((a) => `« ${a.libelle} »`).join(' et ')} : le même produit ?
+                  {suggestion.articles
+                    .map((a) => `« ${a.libelle}${a.quantite != null ? ` ${formaterQuantite(a.quantite, a.unite)}` : ''} »`)
+                    .join(' et ')}{' '}
+                  : le même produit ?
                 </Text>
+                {suggestion.verdict ? (
+                  <View style={styles.propositionFusion}>
+                    <Etincelle couleur={theme.colors.accent} />
+                    <Text style={styles.propositionTexte}>
+                      Fusionner en « {suggestion.verdict.libelle ?? suggestion.articles[0].libelle}
+                      {suggestion.verdict.quantite != null
+                        ? ` ${formaterQuantite(suggestion.verdict.quantite, suggestion.verdict.unite)}`
+                        : ''}{' '}
+                      »
+                    </Text>
+                  </View>
+                ) : null}
+                {suggestion.verdict?.quantite == null && suggestion.verdict?.explication ? (
+                  <View style={styles.propositionFusion}>
+                    <PastilleAVerifier raison={suggestion.verdict.explication} />
+                  </View>
+                ) : null}
                 <View style={styles.boutons}>
-                  <Bouton variante="contour" titre="Non" onPress={refuserSuggestion} style={styles.boutonPied} />
+                  <Bouton variante="contour" titre="Pas le même" onPress={refuserSuggestion} style={styles.boutonPied} />
                   <Bouton titre="Fusionner" onPress={accepterSuggestion} style={styles.boutonPied} />
                 </View>
               </View>
@@ -685,6 +850,9 @@ const styles = creerStylesThemes(() => ({
     backgroundColor: theme.colors.selectionTransparent,
   },
   suggestionQuestion: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  propositionFusion: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, flexWrap: 'wrap' },
+  propositionTexte: { flex: 1, fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
+  aRacheter: { gap: theme.spacing.xs },
   carteRecettes: { paddingHorizontal: theme.spacing.md, paddingVertical: 4, borderRadius: theme.radii.md, backgroundColor: theme.colors.surface },
   ligneRecette: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: 40 },
   recetteTitre: { flex: 1, fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },

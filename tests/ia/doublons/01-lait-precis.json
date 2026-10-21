@@ -1,0 +1,9 @@
+{
+  "description": "« Lait » et « Lait demi-écrémé » : même produit, libellé le plus précis, quantités additionnées.",
+  "entree": {
+    "groupes": [
+      { "id": "g1", "articles": [ { "libelle": "Lait", "quantite": 1, "unite": "L" }, { "libelle": "Lait demi-écrémé", "quantite": 2, "unite": "L" } ] }
+    ]
+  },
+  "attendu": { "groupes": [ { "id": "g1", "meme_produit": true, "libelle": "~demi", "quantite": 3 } ] }
+}

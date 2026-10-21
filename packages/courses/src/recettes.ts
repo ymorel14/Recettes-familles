@@ -257,23 +257,46 @@ export function detecterSuggestionsFusion<A extends { id: string; libelle: strin
   return resultat.sort((a, b) => a.motCle.localeCompare(b.motCle));
 }
 
+// Résultat d'une fusion proposé par l'assistant de l'app Famille
+// (« Lait » + « Lait demi-écrémé » → « Lait demi-écrémé », 1,5 L).
+export type ResultatFusion = { libelle?: string | null; quantite?: number | null; unite?: string | null; note?: string | null };
+
 // Fusionne des articles choisis en un seul (le premier) : quantités
 // additionnées quand toutes en ont une et la même unité, contributions
-// réécrites sous le libellé retenu, autres articles supprimés.
-export async function fusionnerArticles<A extends ArticleExistant>(client: ClientCourses, listeId: string, articles: A[]): Promise<void> {
+// réécrites sous le libellé retenu, autres articles supprimés. Avec
+// « resultat », libellé, quantité et unité sont ceux proposés (et acceptés).
+export async function fusionnerArticles<A extends ArticleExistant>(
+  client: ClientCourses,
+  listeId: string,
+  articles: A[],
+  resultat?: ResultatFusion
+): Promise<void> {
   if (articles.length < 2) return;
   const [garde, ...autres] = articles;
   const memesUnites = articles.every((a) => memeUnite(a.unite, garde.unite));
-  const quantite =
+  let quantite =
     memesUnites && articles.every((a) => a.quantite != null)
       ? arrondir(articles.reduce((s, a) => s + Number(a.quantite), 0))
       : garde.quantite;
-  const { error } = await client.from('articles').update({ quantite }).eq('id', garde.id);
+  const maj: Record<string, unknown> = {};
+  let libelle = garde.libelle;
+  let unite = garde.unite;
+  if (resultat?.libelle?.trim()) libelle = majusculeInitiale(resultat.libelle.trim());
+  if (resultat && resultat.quantite != null && resultat.quantite > 0) {
+    quantite = arrondir(resultat.quantite);
+    unite = resultat.unite?.trim() || null;
+  }
+  maj.quantite = quantite;
+  if (libelle !== garde.libelle) maj.libelle = libelle;
+  if (unite !== garde.unite) maj.unite = unite;
+  if (resultat?.note?.trim()) maj.note = resultat.note.trim();
+  const { error } = await client.from('articles').update(maj).eq('id', garde.id);
   if (error) throw error;
-  const cles = new Set(autres.map((a) => cleArticle(a.libelle, a.unite)));
+  const cles = new Set(articles.map((a) => cleArticle(a.libelle, a.unite)));
+  if (libelle === garde.libelle && unite === garde.unite) cles.delete(cleArticle(garde.libelle, garde.unite));
   const contributions = await listerContributions(client, listeId);
   for (const c of contributions.filter((c) => cles.has(cleArticle(c.libelle, c.unite)))) {
-    await client.from('contributions').update({ libelle: garde.libelle, unite: garde.unite }).eq('id', c.id);
+    await client.from('contributions').update({ libelle, unite }).eq('id', c.id);
   }
   const { error: erreurSuppression } = await client
     .from('articles')

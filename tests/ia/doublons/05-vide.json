@@ -1,0 +1,5 @@
+{
+  "description": "Rien à comparer : message d'erreur lisible.",
+  "entree": { "groupes": [] },
+  "erreurAttendue": "entree"
+}

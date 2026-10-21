@@ -105,7 +105,11 @@ partagent le compte famille :
   jeux de tests `tests/ia/`. Fonctions de l'assistant : textes courts (Haiku : ⊕, courses en
   phrase, tâche dictée, lien collé) et photos (Sonnet : recette, planning, objet, lettre au
   Père Noël ; ⊕ photo classée par Haiku), pages et vidéos (Sonnet : recette d'une page sans
-  fiche structurée ou d'une vidéo par son texte public, annonce de location incomplète) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  fiche structurée ou d'une vidéo par son texte public, annonce de location incomplète), traitement
+  de nuit à moitié prix (fonction Edge `ia-nuit`, API Batches : résumé du matin à partir de
+  `famille.faits_du_jour`, calculés sous l'identité de chaque personne par
+  `famille.preparer_travaux_nuit` ; affinage des habituels de Courses) et doublons de Courses (route
+  `doublons`, `courses.non_doublons`), migration `20261021100000_famille_nuit.sql` ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

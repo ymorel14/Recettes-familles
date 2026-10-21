@@ -57,5 +57,7 @@ export function ouvrirCible(cible: string): void {
   if (id === 'quotidien' && type === 'groupe' && ident) return ouvrirModule('quotidien', 'Groupe', { id: ident });
   if (id === 'quotidien' && type === 'taches') return ouvrirOngletModule('quotidien', 'Taches');
   if (id === 'quotidien' && type === 'trajets') return ouvrirOngletModule('quotidien', 'Trajets');
+  if (id === 'recettes' && type === 'congelateur') return ouvrirOngletModule('recettes', 'Congelateur');
+  if (id === 'courses' && type === 'habituels') return ouvrirOngletModule('courses', 'Habituels');
   ouvrirModule(id);
 }

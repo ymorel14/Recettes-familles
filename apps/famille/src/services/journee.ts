@@ -11,6 +11,8 @@ import { tachesCalendrier, tachesDuJour, type TacheDuJour } from '../modules/quo
 import { listerVoyages } from '../modules/voyages/services/voyage';
 import { listerPersonnes } from '../modules/cadeaux/services/wishlist';
 import { ceJourLa, type Souvenir } from '../modules/souvenirs/services/souvenirs';
+import { listerARacheter, rythmeAchat, type ARacheter } from '../modules/courses/services/courses';
+import { clientPourSchema } from './supabase';
 import type { IdModule } from '../theme/jetons';
 
 // Lectures communes de l'accueil et de l'Agenda, tous modules confondus
@@ -219,9 +221,10 @@ export async function actionsAFaire(
   }
 ): Promise<ActionAFaire[]> {
   const aujourdHui = isoDu(new Date());
-  const [trajets, taches] = await Promise.all([
+  const [trajets, taches, aRacheter] = await Promise.all([
     sansErreur(lireTrajets(aujourdHui, ajouterJours(aujourdHui, 2), ctx.foyerId), null),
     sansErreur(tachesDuJour(aujourdHui), [] as TacheDuJour[]),
+    sansErreur(listerARacheter(), [] as ARacheter[]),
   ]);
   const actions: ActionAFaire[] = [];
 
@@ -264,7 +267,44 @@ export async function actionsAFaire(
     }
   });
 
+  // « Café à racheter ? » (spécification § 4.2.2) : deux au plus, ajoutés à
+  // la liste principale du foyer d'un appui.
+  aRacheter
+    .filter((r) => r.foyer_id === ctx.foyerId)
+    .slice(0, 2)
+    .forEach((r) => {
+      actions.push({
+        cle: `racheter-${r.cle}`,
+        module: 'courses',
+        titre: `${r.libelle} à racheter ?`,
+        detail: `Acheté ${rythmeAchat(r)}, la dernière fois ${dansCombien(r.dernier_achat, aujourdHui)}`,
+        bouton: 'Ajouter',
+        executer: () => ajouterAListePrincipale(ctx.foyerId, r),
+        cible: { onglet: 'Listes' },
+      });
+    });
+
   return actions;
+}
+
+// Ajoute un produit à racheter dans la liste principale du foyer.
+async function ajouterAListePrincipale(foyerId: string, r: ARacheter): Promise<void> {
+  const courses = clientPourSchema('courses');
+  const { data: liste, error } = await courses
+    .from('listes')
+    .select('id')
+    .eq('foyer_id', foyerId)
+    .eq('principale', true)
+    .maybeSingle();
+  if (error || !liste) throw error ?? new Error('Pas de liste principale.');
+  const { error: erreurAjout } = await courses.from('articles').insert({
+    liste_id: (liste as any).id,
+    libelle: r.libelle,
+    quantite: r.quantite,
+    unite: r.unite,
+    ...(r.rayon_id ? { rayon_id: r.rayon_id } : {}),
+  });
+  if (erreurAjout) throw erreurAjout;
 }
 
 // Tâches du jour pas encore faites (bloc « Aujourd'hui »).
