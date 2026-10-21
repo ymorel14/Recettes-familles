@@ -111,3 +111,19 @@ choix des photos : `src/composants/PanneauPhotos.tsx`, appel : `src/composants/u
 
 Migration : `20261021100000_famille_nuit.sql` (ajout seulement). Sans elle, rien ne s'affiche et le
 reste marche comme avant.
+
+## Assistant (chantier C, étape 8 : cuisine et voyage)
+
+- **Mode assistant en cuisine** (`DeroulementAssistantScreen`, `src/services/questionCuisine.ts`, route
+  `cuisine-question`) : les commandes vocales par mots-clés restent prioritaires ; une phrase qui n'est pas
+  une commande et ressemble à une question part à l'assistant, jamais pendant la lecture d'une étape ni si
+  elle reprend le texte qui vient d'être lu (écho). Bouton « ✦ Poser une question » pour le clavier. Réponse
+  dans une bulle sombre au-dessus des étapes, lue à voix haute ; les 3 derniers échanges servent de contexte.
+- **Brouillon de voyage** (`NouveauVoyageScreen` › « Avec l'assistant », `src/services/brouillonVoyage.ts`,
+  route `voyage-brouillon`) : une phrase pré-remplit le formulaire (titre, destination, période, nuits ;
+  programme et budget dans le mot aux invités) et propose dates, hébergements (liens réels) et activités à
+  cocher. À « Proposer ce voyage », ils deviennent des propositions ordinaires, votées comme les autres,
+  avec la mention « ✦ Proposé par l'assistant » dans Dates, Hébergement et Activités.
+
+Migration : `20261021110000_voyage_propositions_assistant.sql` (ajout seulement). Sans elle, les
+propositions sont créées sans la mention.

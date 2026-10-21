@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, ScrollView, Linking } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { listerPersonnes, type Personne } from '../services/personnes';
@@ -17,6 +17,14 @@ import {
 } from '../services/voyage';
 import { Aide, CarteChoix, CaseACocher, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton, Chargement } from '../components/ui';
+import { BandeauBrouillon, BoutonAssistant, ChargementAssistant, Etincelle, MessageAssistant } from '../../../composants/assistant';
+import { ErreurAssistant, messageErreurAssistant } from '../../../services/assistant';
+import {
+  creerPropositions,
+  demanderBrouillon,
+  texteProgrammeEtBudget,
+  type BrouillonVoyage,
+} from '../../../services/brouillonVoyage';
 
 // Proposer un voyage : destination connue ou non, période, type de séjour,
 // nombre de nuits estimé, et qui participe (toute la famille, en amoureux,
@@ -44,6 +52,55 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
   const [surprise, setSurprise] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+
+  // Avec l'assistant (spécification § 4.5.1) : une phrase → brouillon qui
+  // pré-remplit le formulaire, plus des propositions (dates, hébergements,
+  // activités) à cocher, créées avec le voyage.
+  const [demande, setDemande] = useState('');
+  const [lecture, setLecture] = useState(false);
+  const [erreurAssistant, setErreurAssistant] = useState<ErreurAssistant | null>(null);
+  const [brouillon, setBrouillon] = useState<BrouillonVoyage | null>(null);
+  const [garder, setGarder] = useState<{ dates: boolean[]; hebergements: boolean[]; activites: boolean[] }>({
+    dates: [],
+    hebergements: [],
+    activites: [],
+  });
+  const annulation = useRef<AbortController | null>(null);
+
+  const preparerBrouillon = async () => {
+    const texte = demande.trim();
+    if (texte.length < 8) return setErreurAssistant(new ErreurAssistant('entree', 'Décrivez le voyage : où, quand, avec qui.'));
+    const controle = new AbortController();
+    annulation.current = controle;
+    setLecture(true);
+    setErreurAssistant(null);
+    try {
+      const b = await demanderBrouillon(texte, participation === 'famille' ? [] : [...invites], controle.signal);
+      if (controle.signal.aborted) return;
+      setBrouillon(b);
+      setGarder({ dates: b.dates.map(() => true), hebergements: b.hebergements.map(() => true), activites: b.activites.map(() => true) });
+      // Pré-remplit le formulaire : tout reste modifiable.
+      setTitre(b.titre);
+      if (b.destination) {
+        setDestinationConnue(true);
+        setDestination(b.destination);
+      }
+      if (PERIODES.some((x) => x.id === b.periode)) setPeriode(b.periode as Periode);
+      if (b.annee) setAnnee(String(b.annee));
+      if (TYPES_SEJOUR.some((x) => x.id === b.type_sejour)) setTypeSejour(b.type_sejour as TypeSejour);
+      if (b.nb_nuits != null) setNuits(String(b.nb_nuits));
+      const extra = texteProgrammeEtBudget(b);
+      if (extra) setDescription((d) => (d.trim() ? `${d.trim()}\n\n${extra}` : extra));
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      setErreurAssistant(e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)));
+    } finally {
+      if (!controle.signal.aborted) setLecture(false);
+    }
+  };
+
+  const basculerGarde = (cle: 'dates' | 'hebergements' | 'activites', i: number) =>
+    setGarder((g) => ({ ...g, [cle]: g[cle].map((v, j) => (j === i ? !v : v)) }));
 
   useEffect(() => {
     listerPersonnes(foyersFamille)
@@ -131,6 +188,14 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
         },
         [...invites]
       );
+      // Propositions de l'assistant retenues : créées comme les autres.
+      if (brouillon) {
+        await creerPropositions(id, {
+          dates: brouillon.dates.filter((_d, i) => garder.dates[i]),
+          hebergements: brouillon.hebergements.filter((_h, i) => garder.hebergements[i]),
+          activites: brouillon.activites.filter((_a, i) => garder.activites[i]),
+        }).catch(() => 0);
+      }
       navigation.replace('Voyage', { voyageId: id });
       if (surprise) navigation.navigate('Surprise', { voyageId: id });
     } catch (e) {
@@ -189,6 +254,104 @@ export default function NouveauVoyageScreen({ navigation, route }: any) {
         valeur={nature}
         onChange={(n: NatureVoyage) => setNature(n)}
       />
+
+      {!repas && (
+        <View style={styles.assistant}>
+          <View style={styles.assistantEntete}>
+            <Etincelle couleur={theme.colors.accent} />
+            <Text style={styles.sousTitre}>Avec l’assistant</Text>
+          </View>
+          {lecture ? (
+            <ChargementAssistant
+              etapes={['Je regarde le calendrier…', 'Je cherche des hébergements…', 'Je choisis des activités…', 'Je prépare le programme…', 'Presque fini…']}
+              couleur={theme.colors.accent}
+              onAnnuler={() => {
+                annulation.current?.abort();
+                setLecture(false);
+              }}
+            />
+          ) : (
+            <>
+              <Champ
+                value={demande}
+                onChangeText={setDemande}
+                multiline
+                placeholder="Ex. Organise-nous un week-end en Bretagne en novembre, pas trop cher"
+                accessibilityLabel="Demande à l’assistant"
+              />
+              <BoutonAssistant titre={brouillon ? 'Refaire un brouillon' : 'Préparer un brouillon'} onPress={preparerBrouillon} couleur={theme.colors.accent} />
+              <Aide>
+                Il regarde le calendrier commun et cherche des hébergements réels. Rien n’est créé avant « Proposer ce voyage ».
+              </Aide>
+            </>
+          )}
+          {erreurAssistant && <MessageAssistant message={erreurAssistant.message} pause={erreurAssistant.code === 'plafond'} />}
+          {brouillon && !lecture && (
+            <View style={styles.brouillon}>
+              <BandeauBrouillon couleur={theme.colors.accent} />
+              {brouillon.question ? <Text style={styles.texte}>{brouillon.question}</Text> : null}
+              {brouillon.dates.length > 0 && (
+                <>
+                  <Text style={styles.foyer}>Dates à proposer au sondage</Text>
+                  {brouillon.dates.map((d, i) => (
+                    <CaseACocher
+                      key={`d${i}`}
+                      coche={!!garder.dates[i]}
+                      onChange={() => basculerGarde('dates', i)}
+                      libelle={plage(d.debut, d.fin)}
+                      aide={d.raison ?? undefined}
+                    />
+                  ))}
+                </>
+              )}
+              {brouillon.hebergements.length > 0 && (
+                <>
+                  <Text style={styles.foyer}>Hébergements</Text>
+                  {brouillon.hebergements.map((h, i) => (
+                    <View key={`h${i}`}>
+                      <CaseACocher
+                        coche={!!garder.hebergements[i]}
+                        onChange={() => basculerGarde('hebergements', i)}
+                        libelle={[h.nom, h.ville].filter(Boolean).join(' · ')}
+                        aide={[
+                          h.capacite ? `${h.capacite} couchages` : null,
+                          h.prix_total != null ? `${h.prix_total} € le séjour` : h.prix_nuit != null ? `${h.prix_nuit} € la nuit` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || undefined}
+                      />
+                      <Text style={styles.lien} onPress={() => Linking.openURL(h.lien)} accessibilityRole="link">
+                        Voir l’annonce
+                      </Text>
+                    </View>
+                  ))}
+                </>
+              )}
+              {brouillon.activites.length > 0 && (
+                <>
+                  <Text style={styles.foyer}>Activités</Text>
+                  {brouillon.activites.map((a, i) => (
+                    <CaseACocher
+                      key={`a${i}`}
+                      coche={!!garder.activites[i]}
+                      onChange={() => basculerGarde('activites', i)}
+                      libelle={a.titre}
+                      aide={a.description ?? undefined}
+                    />
+                  ))}
+                </>
+              )}
+              {brouillon.ecartes.hebergements > 0 && (
+                <Aide>
+                  {brouillon.ecartes.hebergements === 1 ? 'Un hébergement écarté' : `${brouillon.ecartes.hebergements} hébergements écartés`} :
+                  lien introuvable dans les recherches.
+                </Aide>
+              )}
+              <Aide>Le formulaire ci-dessous est pré-rempli (programme et budget dans le mot aux invités) : vérifiez-le avant de proposer le voyage.</Aide>
+            </View>
+          )}
+        </View>
+      )}
 
       {repas ? (
         <>
@@ -351,4 +514,30 @@ const styles = creerStylesThemes(() => ({
     color: theme.colors.textMuted,
   },
   bouton: { marginTop: theme.spacing.md },
+  assistant: {
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  assistantEntete: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  brouillon: { gap: theme.spacing.xs },
+  texte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
+  lien: {
+    fontFamily: theme.fontBody,
+    fontSize: 14,
+    color: theme.colors.accent,
+    textDecorationLine: 'underline',
+    marginLeft: 36,
+    marginBottom: theme.spacing.xs,
+  },
 }));
+
+// « Du sam. 7 au dim. 8 novembre »
+function plage(debut: string, fin: string): string {
+  const d = (iso: string, mois: boolean) =>
+    new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', ...(mois ? { month: 'long' } : {}) });
+  return debut === fin ? `Le ${d(debut, true)}` : `Du ${d(debut, debut.slice(5, 7) !== fin.slice(5, 7))} au ${d(fin, true)}`;
+}

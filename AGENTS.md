@@ -109,7 +109,10 @@ partagent le compte famille :
   de nuit à moitié prix (fonction Edge `ia-nuit`, API Batches : résumé du matin à partir de
   `famille.faits_du_jour`, calculés sous l'identité de chaque personne par
   `famille.preparer_travaux_nuit` ; affinage des habituels de Courses) et doublons de Courses (route
-  `doublons`, `courses.non_doublons`), migration `20261021100000_famille_nuit.sql` ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  `doublons`, `courses.non_doublons`), migration `20261021100000_famille_nuit.sql`, assistant en
+  cuisine (route `cuisine-question`, `DeroulementAssistantScreen`) et brouillon de voyage (route
+  `voyage-brouillon` avec recherche web, `NouveauVoyageScreen`, mention `voyage.proposes_assistant`,
+  migration `20261021110000_voyage_propositions_assistant.sql`) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

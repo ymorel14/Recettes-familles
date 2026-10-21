@@ -28,6 +28,8 @@ Routes disponibles :
 | `annonce-hebergement` | Annonce de location quand `lire-annonce` n'a pas trouvé le prix, les couchages ou les chambres → champs manquants | Sonnet, ~0,02 $ |
 | `resume-matin` | Résumé du matin quand rien n'a été préparé cette nuit (première visite) : faits du jour lus au jeton de l'utilisateur (`famille.faits_du_jour`), une seule rédaction par jour | Haiku, ~0,0005 $ |
 | `doublons` | Articles de courses ambigus (un mot en commun) : même produit ? libellé et quantité totale proposés | Haiku, ~0,0005 $ |
+| `cuisine-question` | Question pendant le mode assistant en cuisine (à la voix si la phrase n'est pas une commande, ou au clavier) ; recette affichée (version, quantités, astuces) en contexte mis en cache ; 80 mots au plus, lue à voix haute | Sonnet, effort medium, ~0,009 $ |
+| `voyage-brouillon` | « Organise-nous un week-end en Bretagne en novembre » : dates qui respectent le calendrier commun, hébergements et activités trouvés par recherche web (5 au plus ; un lien absent des résultats est écarté), programme, budget. Contexte au jeton de l'utilisateur : nombre d'adultes, âges des enfants, périodes non libres sans motif ni nom, adresse de départ de son foyer | Sonnet, effort medium + recherche web, ~0,15 $ |
 
 Photos et PDF (`_partage/images.ts`) : réduits par l'app avant l'envoi (1 568 px, JPEG 0,8),
 3 photos au plus, 5 Mo par fichier, 8 Mo en tout ; jamais enregistrés, ils ne font que passer.
@@ -75,6 +77,10 @@ sans toucher au socle.
 - **Tarifs** : table `famille.ia_tarifs` (octobre 2026), à mettre à jour à la
   main si les prix changent. Suivi réel : vue `famille.ia_usage_mensuel` dans
   l'éditeur SQL.
+
+Avec un outil côté serveur (recherche web), la sortie structurée n'est pas utilisée (incompatible avec
+les citations) : le schéma est donné dans la consigne et le JSON final est validé par le même schéma Zod.
+Les adresses des résultats de recherche sont renvoyées par `extraire` (`urls`) pour vérifier les liens.
 
 ## Traitement de nuit (fonction `ia-nuit`, chantier C, étape 7)
 

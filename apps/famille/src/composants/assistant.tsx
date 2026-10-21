@@ -127,6 +127,17 @@ export function BandeauBrouillon({ couleur, style }: { couleur?: string; style?:
   );
 }
 
+// Mention d'une proposition faite par l'assistant, mêlée aux propositions
+// humaines (brouillon de voyage, § 4.5.1).
+export function MentionAssistant({ couleur }: { couleur?: string }) {
+  return (
+    <View style={styles.mention} accessible accessibilityLabel="Proposé par l’assistant">
+      <Etincelle taille={12} couleur={couleur ?? couleurs.encreDouce} />
+      <Text style={[styles.mentionTexte, couleur ? { color: couleur } : null]}>Proposé par l’assistant</Text>
+    </View>
+  );
+}
+
 // Pastille orange « À vérifier », avec la raison si on la connaît (§ 7.3).
 export function PastilleAVerifier({ raison }: { raison?: string | null }) {
   return (
@@ -172,6 +183,8 @@ export function MessageAssistant({
 }
 
 const styles = creerStyles(() => ({
+  mention: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  mentionTexte: { fontFamily: polices.texteDemiGras, fontSize: 12, color: couleurs.encreDouce },
   boutonAssistant: {
     flexDirection: 'row',
     alignItems: 'center',

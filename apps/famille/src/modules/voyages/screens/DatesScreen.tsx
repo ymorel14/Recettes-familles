@@ -42,6 +42,8 @@ import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { GroupeNoms, NomAvecAvatar } from '@apps-famille/famille';
 import SyntheseDates from '../components/SyntheseDates';
 import { regrouperProches } from '../services/syntheseDates';
+import { MentionAssistant } from '../../../composants/assistant';
+import { proposesParAssistant } from '../../../services/brouillonVoyage';
 
 type Donnees = {
   voyage: VoyageAvecParticipants;
@@ -63,8 +65,11 @@ export default function DatesScreen({ route }: any) {
   const [debut, setDebut] = useState('');
   const [fin, setFin] = useState('');
   const [enCours, setEnCours] = useState(false);
+  // Propositions faites par l'assistant (brouillon de voyage).
+  const [parAssistant, setParAssistant] = useState<Set<string>>(new Set());
 
   const charger = useCallback(async () => {
+    proposesParAssistant(voyageId).then(setParAssistant);
     try {
       const voyage = await obtenirVoyage(voyageId);
       const attendus = voyage.participants.filter((p) => p.reponse !== 'decline');
@@ -253,7 +258,10 @@ export default function DatesScreen({ route }: any) {
         return (
           <View key={p.id} style={[styles.bloc, retenue && styles.bordureRetenue]}>
             <View style={styles.enteteProposition}>
-              <Text style={[styles.plage, { flex: 1 }]}>{plage(p.date_debut, p.date_fin)}</Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.plage}>{plage(p.date_debut, p.date_fin)}</Text>
+                {parAssistant.has(p.id) && <MentionAssistant />}
+              </View>
               {(p.propose_par === moiId || organisateur) && !retenue && (
                 <Pressable
                   onPress={() => agir(() => retirerProposition(p.id))}

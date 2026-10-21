@@ -27,6 +27,8 @@ import {
 import { Aide, Erreur, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
 import { GroupeNoms, NomAvecAvatar } from '@apps-famille/famille';
+import { MentionAssistant } from '../../../composants/assistant';
+import { proposesParAssistant } from '../../../services/brouillonVoyage';
 
 // Activités et visites : propositions de chacun, qui vient, coût pour le
 // groupe ; un organisateur retient celles qui entrent au budget loisirs.
@@ -43,7 +45,11 @@ export default function ActivitesScreen({ route, navigation }: any) {
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
 
+  // Activités proposées par l'assistant (brouillon de voyage).
+  const [parAssistant, setParAssistant] = useState<Set<string>>(new Set());
+
   const charger = useCallback(async () => {
+    proposesParAssistant(voyageId).then(setParAssistant);
     try {
       const [voyage, activites] = await Promise.all([obtenirVoyage(voyageId), listerActivites(voyageId)]);
       const attendus = voyage.participants.filter((p) => p.reponse !== 'decline').map((p) => p.personne_id);
@@ -110,6 +116,7 @@ export default function ActivitesScreen({ route, navigation }: any) {
           {a.statut === 'ecarte' && <Pastille texte="Écartée" ton="neutre" />}
         </View>
         <Text style={styles.titre}>{a.titre}</Text>
+        {parAssistant.has(a.id) && <MentionAssistant />}
         {a.jour ? <Text style={styles.detail}>Prévu le {formaterDate(a.jour)}</Text> : null}
         {a.adresse ? <Text style={styles.detail}>{a.adresse}</Text> : null}
         {a.description ? <Text style={styles.description}>{a.description}</Text> : null}

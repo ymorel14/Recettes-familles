@@ -28,6 +28,8 @@ import {
 } from '../services/voyage';
 import { Aide, Champ, Erreur, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { MentionAssistant } from '../../../composants/assistant';
+import { proposesParAssistant } from '../../../services/brouillonVoyage';
 
 const LIBELLES_AVIS_PLURIEL: Record<Avis, [string, string]> = {
   coup_de_coeur: ['coup de cœur', 'coups de cœur'],
@@ -56,7 +58,11 @@ export default function HebergementsScreen({ route, navigation }: any) {
   const [erreur, setErreur] = useState<string | null>(null);
   const [commentaires, setCommentaires] = useState<Record<string, string>>({});
 
+  // Hébergements proposés par l'assistant (brouillon de voyage).
+  const [parAssistant, setParAssistant] = useState<Set<string>>(new Set());
+
   const charger = useCallback(async () => {
+    proposesParAssistant(voyageId).then(setParAssistant);
     try {
       const [voyage, hebergements] = await Promise.all([obtenirVoyage(voyageId), listerHebergements(voyageId)]);
       const auteurs = new Set<string>();
@@ -136,6 +142,7 @@ export default function HebergementsScreen({ route, navigation }: any) {
           {h.id === moinsCher && <Pastille texte="Le moins cher / pers." ton="succes" />}
         </View>
         <Text style={styles.nom}>{h.nom}</Text>
+        {parAssistant.has(h.id) && <MentionAssistant />}
         {h.ville || h.adresse ? <Text style={styles.detail}>{[h.adresse, h.ville].filter(Boolean).join(', ')}</Text> : null}
         <Text style={styles.prix}>
           {prix !== null ? `${formaterEuros(prix)} le séjour` : 'Prix à préciser'}

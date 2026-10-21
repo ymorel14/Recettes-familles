@@ -64,3 +64,9 @@ passage.
 `doublons` : groupes d'articles comparés (même produit ou non, quantité totale). `resume-matin` :
 résumé du compte de test (dépend de ses données du jour ; une seule rédaction par jour). Le
 traitement de nuit lui-même (`ia-nuit`) utilise les mêmes consignes que `resume-matin`.
+
+## Cuisine et voyage (étape 8)
+
+`cuisine-question` : la recette est passée en texte dans l'entrée (comme l'app la construit).
+`voyage-brouillon` : environ 0,15 $ par passage (recherches web) ; le cas vérifie qu'au moins un
+hébergement, dont le lien vient des résultats de recherche, est proposé.

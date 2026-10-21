@@ -24,6 +24,8 @@
 //   recette-lien    page web sans fiche recette, vidéo, ou texte collé → recette (§ 4.1.2, § 4.1.3)
 //   resume-matin    résumé du matin quand rien n'a été préparé cette nuit (§ 4.6.2)
 //   doublons        articles de courses ambigus : même produit ? (§ 4.2.3)
+//   cuisine-question  question pendant le mode assistant en cuisine (§ 4.1.4)
+//   voyage-brouillon  « Organise-nous un week-end… » → brouillon de voyage (§ 4.5.1)
 import { servirIA } from '../_partage/ia.ts';
 import { essai } from './routes/essai.ts';
 import { plus } from './routes/plus.ts';
@@ -39,6 +41,8 @@ import { recetteLien } from './routes/recette-lien.ts';
 import { annonceHebergement } from './routes/annonce-hebergement.ts';
 import { resumeMatin } from './routes/resume-matin.ts';
 import { doublons } from './routes/doublons.ts';
+import { cuisineQuestion } from './routes/cuisine-question.ts';
+import { voyageBrouillon } from './routes/voyage-brouillon.ts';
 
 servirIA({
   essai,
@@ -55,4 +59,6 @@ servirIA({
   'annonce-hebergement': annonceHebergement,
   'resume-matin': resumeMatin,
   doublons,
+  'cuisine-question': cuisineQuestion,
+  'voyage-brouillon': voyageBrouillon,
 });

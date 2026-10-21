@@ -184,7 +184,24 @@ export type ResultatExtraction<T> = {
   modele: string;
   consommation: Consommation;
   coutUsd: number;
+  // Adresses des pages trouvées par l'outil de recherche web (résultats et
+  // citations) : seules sources acceptées pour un lien proposé.
+  urls: string[];
 };
+
+// Adresses des résultats de recherche web et des citations d'une réponse.
+export function urlsDeLaReponse(contenu: any[]): string[] {
+  const urls = new Set<string>();
+  for (const b of contenu ?? []) {
+    if (b?.type === 'web_search_tool_result' && Array.isArray(b.content)) {
+      b.content.forEach((r: any) => r?.url && urls.add(String(r.url)));
+    }
+    if (b?.type === 'text' && Array.isArray(b.citations)) {
+      b.citations.forEach((c: any) => c?.url && urls.add(String(c.url)));
+    }
+  }
+  return [...urls];
+}
 
 export type Contexte = {
   fonction: string;
@@ -226,13 +243,26 @@ function creerContexte(
     const format = zodOutputFormat(o.schema as any);
     const systeme: any[] = [{ type: 'text', text: o.consigne, cache_control: { type: 'ephemeral' } }];
     if (o.contexteStable) systeme.push({ type: 'text', text: o.contexteStable, cache_control: { type: 'ephemeral' } });
+    // Avec un outil côté serveur (recherche web), les réponses portent des
+    // citations, que la sortie structurée n'accepte pas : le schéma est
+    // alors donné dans la consigne et la réponse lue comme un JSON final.
+    const avecOutils = !!o.outils?.length;
+    if (avecOutils) {
+      systeme.push({
+        type: 'text',
+        text:
+          'Quand tes recherches sont finies, termine par UN SEUL objet JSON, sans texte autour ni bloc de code, ' +
+          `conforme à ce schéma JSON :\n${JSON.stringify((format as any).schema)}`,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
     const parametres: any = {
       model: o.modele,
       max_tokens: o.maxTokens ?? 4000,
       system: systeme,
       messages: [{ role: 'user', content: o.contenu }],
-      output_config: { format, effort: o.effort ?? 'low' },
-      ...(o.outils ? { tools: o.outils } : {}),
+      output_config: avecOutils ? { effort: o.effort ?? 'low' } : { format, effort: o.effort ?? 'low' },
+      ...(avecOutils ? { tools: o.outils } : {}),
     };
 
     const appeler = async (p: any): Promise<any> => {
@@ -263,6 +293,18 @@ function creerContexte(
       reponse = await appeler({ ...parametres, max_tokens: Math.max(16000, parametres.max_tokens * 2) });
       total = consommationDe(reponse.usage);
     }
+    // Outils côté serveur (recherche web) : le modèle peut s'interrompre
+    // (« pause_turn ») ; on le laisse reprendre, deux fois au plus.
+    const urls = new Set(urlsDeLaReponse(reponse.content));
+    for (let reprise = 0; reponse.stop_reason === 'pause_turn' && reprise < 2; reprise++) {
+      await enregistrer(reponse.model ?? o.modele, total);
+      reponse = await appeler({
+        ...parametres,
+        messages: [...parametres.messages, { role: 'assistant', content: reponse.content }],
+      });
+      total = consommationDe(reponse.usage);
+      urlsDeLaReponse(reponse.content).forEach((u) => urls.add(u));
+    }
     const cout = await enregistrer(reponse.model ?? o.modele, total);
 
     // Toujours lire stop_reason avant le contenu.
@@ -272,12 +314,25 @@ function creerContexte(
     const textes = ((reponse.content as any[]) ?? []).filter((b) => b.type === 'text');
     let brouillon: T;
     try {
-      brouillon = (format as any).parse(textes[textes.length - 1]?.text ?? '') as T;
+      if (avecOutils) {
+        // Le JSON final suit le dernier résultat de recherche ; il peut être
+        // découpé en plusieurs blocs de texte (citations).
+        const blocs = (reponse.content as any[]) ?? [];
+        let dernierOutil = -1;
+        blocs.forEach((b, i) => {
+          if (b.type !== 'text') dernierOutil = i;
+        });
+        const fin = blocs.slice(dernierOutil + 1).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
+        const json = fin.slice(fin.indexOf('{'), fin.lastIndexOf('}') + 1);
+        brouillon = (o.schema as any).parse(JSON.parse(json)) as T;
+      } else {
+        brouillon = (format as any).parse(textes[textes.length - 1]?.text ?? '') as T;
+      }
     } catch (e) {
       console.error('Réponse hors schéma', e);
       throw new ErreurIA('illisible', 'Je n’ai pas réussi à lire ce contenu. Remplissez à la main ou réessayez.');
     }
-    return { brouillon, modele: reponse.model ?? o.modele, consommation: total, coutUsd: cout };
+    return { brouillon, modele: reponse.model ?? o.modele, consommation: total, coutUsd: cout, urls: [...urls] };
   };
 
   return { fonction, utilisateurId, foyerId, client, admin, extraire, enregistrer };

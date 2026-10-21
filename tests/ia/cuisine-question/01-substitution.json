@@ -1,0 +1,9 @@
+{
+  "description": "Substitution d'un ingrédient avec la quantité adaptée.",
+  "entree": {
+    "question": "Je n'ai plus de crème fraîche, par quoi je peux la remplacer ?",
+    "recette": "Titre : Quiche lorraine\nPour 6 parts\n\nIngrédients :\n- 1 pâte brisée\n- 200 g de lardons\n- 3 œufs\n- 20 cl de crème fraîche\n- 25 cl de lait\n\nÉtapes :\n1. Préchauffer le four à 180 °C.\n2. Faire revenir les lardons.\n3. Battre les œufs avec 20 cl de crème fraîche et 25 cl de lait.\n4. Verser sur la pâte avec les lardons et cuire 35 minutes.",
+    "etape": "3 sur 4 : Battre les œufs avec 20 cl de crème fraîche et 25 cl de lait."
+  },
+  "attendu": { "reponse": "*" }
+}

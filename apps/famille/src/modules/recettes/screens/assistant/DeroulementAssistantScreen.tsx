@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform, Modal, Vibration } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform, Modal, Vibration, TextInput } from 'react-native';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Speech from 'expo-speech';
@@ -39,6 +39,14 @@ import {
   effacerProgression,
   formaterAnciennete,
 } from '../../services/progressionAssistant';
+import {
+  poserQuestionCuisine,
+  ressembleALaLecture,
+  ressembleAUneQuestion,
+  texteRecettePourAssistant,
+  type EchangeCuisine,
+} from '../../../../services/questionCuisine';
+import { ErreurAssistant, messageErreurAssistant } from '../../../../services/assistant';
 
 // Commandes vocales, minuteurs et reprise (étape 1 de l'assistant
 // interactif, sans IA) :
@@ -136,6 +144,15 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
     jetonLecture.current += 1;
     Speech.stop();
   };
+
+  // Assistant en cuisine (spécification § 4.1.4) : une phrase qui n'est
+  // pas une commande et ressemble à une question, ou « ✦ Poser une
+  // question » au clavier. Réponse en bulle au-dessus des étapes, lue à
+  // voix haute.
+  const [question, setQuestion] = useState<{ texte: string; enCours: boolean; reponse: string | null; erreur: string | null; pause?: boolean } | null>(null);
+  const [saisieQuestion, setSaisieQuestion] = useState<string | null>(null);
+  const echangesCuisine = useRef<EchangeCuisine[]>([]);
+  const questionEnCours = useRef(false);
 
   // Commandes vocales.
   const [ecouteVoulue, setEcouteVoulue] = useState(false);
@@ -537,6 +554,38 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
     }
   };
 
+  const poserQuestion = async (texte: string) => {
+    if (!recette || questionEnCours.current) return;
+    questionEnCours.current = true;
+    const index = recette.etapes.findIndex((e) => !etapesCochees.has(e.id));
+    const etape =
+      index === -1
+        ? null
+        : `${index + 1} sur ${recette.etapes.length} : ${resoudreEtapePourAffichage(recette.etapes[index].texte, recette.ingredients, ajustement.facteur)}`;
+    setQuestion({ texte, enCours: true, reponse: null, erreur: null });
+    try {
+      const reponse = await poserQuestionCuisine({
+        question: texte,
+        recette: texteRecettePourAssistant(recette, ajustement.facteur, astuces),
+        etape,
+        echanges: echangesCuisine.current,
+      });
+      echangesCuisine.current = [...echangesCuisine.current, { question: texte, reponse }].slice(-3);
+      setQuestion({ texte, enCours: false, reponse, erreur: null });
+      dire(reponse);
+    } catch (e) {
+      setQuestion({
+        texte,
+        enCours: false,
+        reponse: null,
+        erreur: messageErreurAssistant(e),
+        pause: e instanceof ErreurAssistant && e.code === 'plafond',
+      });
+    } finally {
+      questionEnCours.current = false;
+    }
+  };
+
   // Phrase entendue par le micro. Renvoie true si elle a été traitée.
   const traiterPhrase = (texte: string, definitive: boolean): boolean => {
     // Pendant que l'application parle, le micro l'entend aussi : on ne
@@ -555,6 +604,19 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
       commande = { type: 'acquitter' };
     }
     if (commande.type === 'inconnue') {
+      // Pas une commande : une vraie question part à l'assistant, jamais
+      // pendant la lecture (l'écho de la voix n'est pas une question).
+      if (
+        definitive &&
+        etatLectureRef.current !== 'parle' &&
+        !questionEnCours.current &&
+        ressembleAUneQuestion(texte) &&
+        !ressembleALaLecture(texte, segmentsActuels.current.join(' '))
+      ) {
+        setDerniereEntendue({ texte, comprise: true });
+        poserQuestion(texte);
+        return true;
+      }
       if (definitive) setDerniereEntendue({ texte, comprise: false });
       return false;
     }
@@ -657,7 +719,80 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
         >
           <Text style={styles.lectureBoutonTexte}>⏱ Minuteur</Text>
         </Pressable>
+        <Pressable
+          style={[styles.lectureBouton, saisieQuestion != null && styles.lectureBoutonActif]}
+          onPress={() => setSaisieQuestion((v) => (v == null ? '' : null))}
+          accessibilityRole="button"
+          accessibilityLabel="Poser une question à l’assistant"
+        >
+          <Text style={[styles.lectureBoutonTexte, saisieQuestion != null && styles.lectureBoutonTexteActif]}>
+            ✦ Poser une question
+          </Text>
+        </Pressable>
       </View>
+
+      {saisieQuestion != null && (
+        <View style={styles.questionSaisie}>
+          <TextInput
+            style={styles.questionChamp}
+            value={saisieQuestion}
+            onChangeText={setSaisieQuestion}
+            placeholder="Par quoi remplacer la crème ? C’est normal si…"
+            placeholderTextColor={theme.colors.textMuted}
+            returnKeyType="send"
+            autoFocus
+            onSubmitEditing={() => {
+              const t = saisieQuestion.trim();
+              if (!t) return;
+              setSaisieQuestion(null);
+              poserQuestion(t);
+            }}
+            accessibilityLabel="Votre question"
+          />
+          <Pressable
+            style={[styles.questionEnvoyer, !saisieQuestion.trim() && { opacity: 0.5 }]}
+            disabled={!saisieQuestion.trim()}
+            onPress={() => {
+              const t = saisieQuestion.trim();
+              setSaisieQuestion(null);
+              poserQuestion(t);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Envoyer la question"
+          >
+            <Text style={styles.questionEnvoyerTexte}>Demander</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {question && (
+        <View style={styles.bulle} accessibilityLiveRegion="polite">
+          <View style={styles.bulleEntete}>
+            <Text style={styles.bulleQuestion} numberOfLines={2}>✦ « {question.texte} »</Text>
+            <Pressable
+              onPress={() => {
+                if (question.reponse) couperVoix();
+                setQuestion(null);
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Fermer la réponse"
+            >
+              <Text style={styles.bulleFermer}>✕</Text>
+            </Pressable>
+          </View>
+          {question.enCours ? (
+            <View style={styles.bulleChargement}>
+              <ActivityIndicator color={theme.colors.background} />
+              <Text style={styles.bulleTexte}>Je réfléchis…</Text>
+            </View>
+          ) : question.reponse ? (
+            <Text style={styles.bulleTexte}>{question.reponse}</Text>
+          ) : (
+            <Text style={styles.bulleTexte}>{question.erreur}</Text>
+          )}
+        </View>
+      )}
 
       {ecouteVoulue && (
         <View style={styles.ecouteZone}>
@@ -856,6 +991,41 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
 }
 
 const styles = creerStylesThemes(() => ({
+  questionSaisie: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 8, alignItems: 'center' },
+  questionChamp: {
+    flex: 1,
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: 12,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.text,
+    fontFamily: theme.fontBody,
+    fontSize: 16,
+  },
+  questionEnvoyer: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  questionEnvoyerTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.background },
+  bulle: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 14,
+    gap: 6,
+    borderRadius: 18,
+    backgroundColor: theme.colors.text,
+  },
+  bulleEntete: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  bulleQuestion: { flex: 1, fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.background, opacity: 0.8 },
+  bulleFermer: { fontSize: 16, color: theme.colors.background, paddingHorizontal: 4 },
+  bulleChargement: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bulleTexte: { fontFamily: theme.fontBody, fontSize: 18, lineHeight: 26, color: theme.colors.background },
   titreElement: {
     fontFamily: theme.fontManuscrit,
     fontSize: 22,
