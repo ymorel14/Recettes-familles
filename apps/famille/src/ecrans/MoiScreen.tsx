@@ -25,13 +25,13 @@ import {
   supprimerPersonne,
   type Personne,
 } from '../modules/cadeaux/services/wishlist';
+import { jetonRappels, rappelsPossibles } from '../modules/quotidien/services/notifications';
 import {
-  activerRappels,
-  desactiverRappels,
-  jetonRappels,
-  messageResultat,
-  rappelsPossibles,
-} from '../modules/quotidien/services/notifications';
+  activerNotificationsTelephone,
+  desactiverNotificationsTelephone,
+  messageNotifications,
+  reglerModuleTelephone,
+} from '../services/notificationsTelephone';
 import VehiculesFoyer from '../modules/voyages/components/VehiculesFoyer';
 import { alerte } from '../modules/cadeaux/utils/alerte';
 import { usePreferences, type Apparence } from '../contexts/PreferencesContext';
@@ -204,15 +204,15 @@ export default function MoiScreen({ navigation }: any) {
       'rappels',
       async () => {
         if (rappelsActifs) {
-          await desactiverRappels();
+          await desactiverNotificationsTelephone();
           setRappelsActifs(false);
         } else {
-          const r = await activerRappels();
+          const r = await activerNotificationsTelephone();
           setRappelsActifs(r === 'ok');
-          if (r !== 'ok') setMessage(messageResultat(r));
+          if (r !== 'ok') setMessage(messageNotifications(r));
         }
       },
-      'Impossible de changer les rappels.'
+      'Impossible de changer les notifications.'
     );
 
   const seDeconnecter = () =>
@@ -222,7 +222,7 @@ export default function MoiScreen({ navigation }: any) {
         text: 'Se déconnecter',
         style: 'destructive',
         onPress: async () => {
-          await desactiverRappels().catch(() => {});
+          await desactiverNotificationsTelephone().catch(() => {});
           await deconnexion();
         },
       },
@@ -399,13 +399,22 @@ export default function MoiScreen({ navigation }: any) {
               key={m.id}
               gauche={<PastilleModule module={m.id} taille={36} />}
               titre={m.nom}
-              sousTitre={prefs.notificationsModules[m.id] ? 'Nouveautés affichées' : 'Nouveautés masquées'}
+              sousTitre={
+                prefs.notificationsModules[m.id]
+                  ? rappelsActifs
+                    ? 'Nouveautés affichées et sur ce téléphone'
+                    : 'Nouveautés affichées'
+                  : 'Nouveautés masquées'
+              }
               dernier={i === MODULES.length - 1 && !rappelsPossibles()}
               droite={
                 <Interrupteur
                   libelle={`Nouveautés ${m.nom}`}
                   valeur={prefs.notificationsModules[m.id]}
-                  onChange={(v) => prefs.definirNotificationModule(m.id, v)}
+                  onChange={(v) => {
+                    prefs.definirNotificationModule(m.id, v);
+                    reglerModuleTelephone(m.id, v).catch(() => {});
+                  }}
                 />
               }
             />
@@ -413,10 +422,10 @@ export default function MoiScreen({ navigation }: any) {
           {rappelsPossibles() ? (
             <LigneListe
               gauche={<PastilleModule module="quotidien" taille={36} icone="alarm-outline" />}
-              titre="Rappels des trajets sur ce téléphone"
-              sousTitre="La veille de vos trajets, et quand un trajet n’a pas de conducteur"
+              titre="Notifications sur ce téléphone"
+              sousTitre="Les nouveautés de la famille, et les rappels de vos trajets la veille"
               dernier
-              droite={<Interrupteur libelle="Rappels des trajets" valeur={rappelsActifs} onChange={basculerRappels} />}
+              droite={<Interrupteur libelle="Notifications sur ce téléphone" valeur={rappelsActifs} onChange={basculerRappels} />}
             />
           ) : null}
         </Carte>

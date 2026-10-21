@@ -54,6 +54,7 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 | `20261020120000_quotidien_taches_autres_foyers.sql` | Quotidien : **confier une tâche à une personne d'un autre foyer** de la famille (avec ou sans compte). Le foyer qui crée la tâche reste seul à la modifier ou la supprimer ; le foyer de la personne choisie la voit (tâches du jour, calendrier, espace enfant) quand c'est son tour et peut la cocher ou valider un « J'ai fini ». **Pas de points** pour une personne d'un autre foyer. Champs `foyer_id`, `confiee`, `foyer_nom` ajoutés à `taches_du_jour_foyer` et `taches_calendrier`. Élargissement seulement : règles d'écriture recréées avec la liste des personnes de la famille, fonctions de même nom et mêmes paramètres ; l'app Quotidien actuelle continue de marcher (elle voit aussi les tâches confiées) |
 | `20261021100000_famille_nuit.sql` | App **Famille** : **traitement de nuit de l'assistant et doublons** — faits du jour déjà filtrés (`famille.faits_du_jour`, fonction ordinaire : règles RLS de la personne ; trajets, tâches, congélateur, anniversaires, voyages, courses), résumé du matin (`famille.resumes_matin`, lu par `famille.resume_du_jour`), travail de nuit préparé **sous l'identité de chaque personne** par `famille.preparer_travaux_nuit` (pg_cron, réservée au propriétaire de la base) dans `famille.ia_travaux`, lots de l'API Batches (`famille.ia_lots`) ; produits à racheter (`courses.a_racheter` : intervalle moyen sur les listes du foyer, 3 achats au moins, jamais les listes « moi ») et affinage hebdomadaire (`courses.previsions_ia`) ; « pas le même produit » mémorisé par le foyer (`courses.non_doublons`). **Ajout seulement**. Puis déployer `ia-nuit` et exécuter une fois `supabase/planification_nuit.sql` |
 | `20261021110000_voyage_propositions_assistant.sql` | App **Famille** : mention « Proposé par l'assistant » sur les propositions d'un voyage (dates, hébergements, activités) créées depuis le brouillon de l'assistant (`voyage.proposes_assistant`) ; lisible par qui voit le voyage (règle « surprise » comprise), écrite par un organisateur. **Ajout seulement** : VoyageCommun voit les mêmes propositions, sans la mention |
+| `20261021120000_famille_notifications_modules.sql` | App **Famille** : **nouveautés de tous les modules** dans `famille.notifications` (Courses : liste partagée, articles ajoutés — regroupés par liste et par 3 h —, courses faites ; Cadeaux : nouvelle envie ou idée ; Recettes : nouvelle recette ; Quotidien : trajet de vos enfants pris ou laissé sans conducteur, tâche confiée à votre foyer). Règle « surprise » garantie par la base : pour Cadeaux et Recettes, chaque destinataire n'est prévenu que s'il voit l'élément avec SES règles RLS (vérification sous son identité, dans le déclencheur). Les déclencheurs ne lèvent jamais d'erreur. **Sur le téléphone** : `famille.appareils`, `famille.enregistrer_appareil`, réglage par module `famille.reglages_notifications`, `famille.notifications_a_envoyer` (clé de service) et `famille.notifications_envoyees`. **Ajout seulement** ; puis déployer `envoyer-notifications` et exécuter une fois `supabase/planification_notifications.sql` |
 
 ## Exécution
 
@@ -89,6 +90,12 @@ l'état d'avant et **ne doit plus être relancé** une fois la migration 1 pass�
 - `ia` et `ia-nuit` (app Famille) : l'assistant — voir `supabase/functions/ia/LISEZMOI.md`. `ia-nuit`
   rédige la nuit, à moitié prix, le résumé du matin et l'affinage des habituels ; planification par
   `supabase/planification_nuit.sql`.
+
+- `envoyer-notifications` (app Famille) : envoie chaque minute les nouveautés de la famille sur les
+  téléphones inscrits (Moi › Notifications sur ce téléphone), par le service d'Expo (aucune clé).
+  `supabase functions deploy envoyer-notifications`, puis exécuter une fois
+  `supabase/planification_notifications.sql`. Côté app : `eas init` dans `apps/famille` (identifiant de
+  projet pour les notifications).
 
 - `transfert-session` (toutes les apps, téléphone) : « Continuer avec mon compte » — une app déjà
   connectée transmet la connexion à une autre app de la famille sur le même téléphone (code de connexion

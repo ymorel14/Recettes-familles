@@ -112,7 +112,12 @@ partagent le compte famille :
   `doublons`, `courses.non_doublons`), migration `20261021100000_famille_nuit.sql`, assistant en
   cuisine (route `cuisine-question`, `DeroulementAssistantScreen`) et brouillon de voyage (route
   `voyage-brouillon` avec recherche web, `NouveauVoyageScreen`, mention `voyage.proposes_assistant`,
-  migration `20261021110000_voyage_propositions_assistant.sql`) ; voir `supabase/functions/ia/LISEZMOI.md`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  migration `20261021110000_voyage_propositions_assistant.sql`) ; voir `supabase/functions/ia/LISEZMOI.md`.
+  Notifications (§ 2.5, migration `20261021120000_famille_notifications_modules.sql`) : déclencheurs des
+  modules vers `famille.notifications` (règle « surprise » vérifiée sous l'identité de chaque destinataire,
+  `famille.prendre_identite`, jamais d'erreur levée), envoi sur téléphone par la fonction Edge
+  `envoyer-notifications` (`famille.appareils`, `famille.reglages_notifications`,
+  `supabase/planification_notifications.sql`), `apps/famille/src/services/notificationsTelephone.ts`. Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

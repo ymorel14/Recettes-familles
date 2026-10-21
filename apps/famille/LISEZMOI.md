@@ -127,3 +127,16 @@ reste marche comme avant.
 
 Migration : `20261021110000_voyage_propositions_assistant.sql` (ajout seulement). Sans elle, les
 propositions sont créées sans la mention.
+
+## Notifications (spécification § 2.5)
+
+- **Activité et accueil** : en plus de Voyages, les modules Courses, Cadeaux, Recettes et Quotidien créent
+  des nouveautés (déclencheurs de la base, migration `20261021120000_famille_notifications_modules.sql`).
+  Une idée cachée, une liste commune ou une recette surprise ne sont jamais annoncées à qui ne doit pas
+  les voir : la base vérifie, pour chaque destinataire, qu'il voit l'élément avec ses propres règles.
+- **Sur le téléphone** : Moi › « Notifications sur ce téléphone » (`src/services/notificationsTelephone.ts`)
+  inscrit le téléphone pour les nouveautés (`famille.appareils`, fonction Edge `envoyer-notifications`)
+  et pour les rappels de trajets (`quotidien.appareils`, `rappels-veille`). Les interrupteurs par module
+  valent aussi pour le téléphone (`famille.reglages_notifications`). Toucher une notification ouvre
+  l'écran concerné. Nécessite `eas init` dans ce dossier (identifiant de projet EAS) et un build EAS
+  (pas Expo Go).

@@ -19,6 +19,7 @@ import { PreferencesProvider, usePreferences } from './src/contexts/PreferencesC
 import { NotificationsProvider } from './src/contexts/NotificationsContext';
 import { ToastProvider } from './src/composants/Toast';
 import Navigation from './src/navigation/Navigation';
+import { useNotificationsTelephone } from './src/services/notificationsTelephone';
 import { couleurs, LARGEUR_MAX_WEB } from './src/theme/theme';
 
 // App « Famille » (V1 de l'app unique, spécification « V1-specification-dev.md ») :
@@ -77,6 +78,7 @@ function Racine() {
     <AuthProvider>
       <NotificationsProvider>
         <ToastProvider>
+          <NotificationsTelephone />
           <Navigation />
         </ToastProvider>
       </NotificationsProvider>
@@ -95,4 +97,10 @@ function Racine() {
       )}
     </View>
   );
+}
+
+// Notifications sur le téléphone : ré-inscription et ouverture au toucher.
+function NotificationsTelephone() {
+  useNotificationsTelephone();
+  return null;
 }
