@@ -183,6 +183,15 @@ export default function ImportWebScreen({ navigation, route }: any) {
           </Pressable>
         </View>
       ) : null}
+
+      {/* Sauvegarde d'une autre application de recettes (fichier .rtk). */}
+      <View style={styles.autreSource}>
+        <Text style={styles.label}>Depuis My Recipe Box</Text>
+        <Text style={styles.aide}>Importez toutes les recettes d'une sauvegarde My Recipe Box (fichier .rtk), photos comprises.</Text>
+        <Pressable style={styles.boutonSecondaire} onPress={() => navigation.navigate('ImportMyRecipeBox')}>
+          <Text style={styles.boutonSecondaireTexte}>Importer un fichier .rtk</Text>
+        </Pressable>
+      </View>
     </ScrollView>
     </ZoneClavier>
   );
@@ -213,4 +222,19 @@ const styles = creerStylesThemes(() => ({
     marginTop: theme.spacing.sm,
   },
   boutonPrincipalTexte: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.background },
+  autreSource: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  boutonSecondaire: {
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  boutonSecondaireTexte: { fontFamily: theme.fontBodyBold, color: theme.colors.accent },
 }));

@@ -117,7 +117,9 @@ partagent le compte famille :
   modules vers `famille.notifications` (règle « surprise » vérifiée sous l'identité de chaque destinataire,
   `famille.prendre_identite`, jamais d'erreur levée), envoi sur téléphone par la fonction Edge
   `envoyer-notifications` (`famille.appareils`, `famille.reglages_notifications`,
-  `supabase/planification_notifications.sql`), `apps/famille/src/services/notificationsTelephone.ts`. Toute migration pour l'app Famille est un AJOUT : les six apps
+  `supabase/planification_notifications.sql`), `apps/famille/src/services/notificationsTelephone.ts`. Import d'une sauvegarde My Recipe Box (fichier `.rtk` = archive ZIP de
+  `recipes_<n>.json` + photos, lue avec `fflate`) : `ImportMyRecipeBoxScreen`, conversion dans
+  `src/modules/recettes/services/myRecipeBox.ts`, enregistrement dans `importMyRecipeBox.ts` (sans migration). Toute migration pour l'app Famille est un AJOUT : les six apps
   actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants

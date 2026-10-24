@@ -6,6 +6,7 @@ import EssaiFormScreen from '../../modules/recettes/screens/recettes/EssaiFormSc
 import RecetteFormScreen from '../../modules/recettes/screens/recettes/RecetteFormScreen';
 import ScanRecetteScreen from '../../modules/recettes/screens/recettes/ScanRecetteScreen';
 import ImportWebScreen from '../../modules/recettes/screens/recettes/ImportWebScreen';
+import ImportMyRecipeBoxScreen from '../../modules/recettes/screens/recettes/ImportMyRecipeBoxScreen';
 import ListeDeCoursesScreen from '../../modules/recettes/screens/ListeDeCoursesScreen';
 import SelectionRecettesScreen from '../../modules/recettes/screens/courses/SelectionRecettesScreen';
 import ChoixRecetteAssistantScreen from '../../modules/recettes/screens/assistant/ChoixRecetteAssistantScreen';
@@ -45,6 +46,7 @@ export default creerModule({
     },
     { nom: 'ScanRecette', composant: ScanRecetteScreen, options: { title: 'Scanner une recette' } },
     { nom: 'ImportWeb', composant: ImportWebScreen, options: { title: 'Importer depuis le web' } },
+    { nom: 'ImportMyRecipeBox', composant: ImportMyRecipeBoxScreen, options: { title: 'Importer My Recipe Box' } },
     { nom: 'ListeDeCourses', composant: ListeDeCoursesScreen, options: { title: 'Liste de courses' } },
     { nom: 'SelectionRecettes', composant: SelectionRecettesScreen, options: { title: 'Ajouter des recettes' } },
     { nom: 'AssistantRecette', composant: DeroulementAssistantScreen, options: { title: 'Mode assistant' } },
