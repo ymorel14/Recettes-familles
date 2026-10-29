@@ -1,4 +1,7 @@
 // Jetons de la charte graphique V1 (docs « V1-charte-graphique.md », § 3 à 5).
+// Palette « par univers » (retour de test G-4, 27 octobre 2026) : neutres
+// chauds, une couleur douce par module en trois tons — pâle (fonds), principal
+// (boutons doux, bouton ⊕), foncé (icônes, textes, boutons pleins).
 // Seule source des couleurs, tailles et arrondis de l'app Famille : les
 // écrans n'écrivent jamais une couleur en dur.
 
@@ -16,6 +19,8 @@ export type Jetons = {
   separateur: string;
   accent: string;
   surAccent: string; // texte posé sur l'accent
+  marque: string; // Abricot principal : bouton ⊕
+  surMarque: string;
   succes: string;
   succesFond: string;
   attentionFond: string;
@@ -32,16 +37,18 @@ export type Jetons = {
 
 export const JETONS: Record<Mode, Jetons> = {
   clair: {
-    fond: '#F4F3EF',
+    fond: '#FAF8F6',
     surface: '#FFFFFF',
-    encre: '#17181C',
-    encreDouce: '#62656C',
-    encreInactive: '#6B6E75',
-    ligne: '#E6E4DE',
-    ligneCarte: '#ECEAE4',
-    separateur: '#EEECE7',
-    accent: '#D2432B',
+    encre: '#2B2420',
+    encreDouce: '#6F625A',
+    encreInactive: '#6F625A',
+    ligne: '#E8E2DC',
+    ligneCarte: '#E8E2DC',
+    separateur: '#F0EBE6',
+    accent: '#9A4A22',
     surAccent: '#FFFFFF',
+    marque: '#F2A882',
+    surMarque: '#5A2A12',
     succes: '#0F7A5F',
     succesFond: '#DDF2EA',
     attentionFond: '#FFF1DB',
@@ -49,9 +56,9 @@ export const JETONS: Record<Mode, Jetons> = {
     alerteFond: '#FDE8E4',
     alerte: '#A8321C',
     danger: '#B42318',
-    segment: '#ECEAE4',
-    interrupteurInactif: '#C9C6BF',
-    voile: 'rgba(23, 24, 28, 0.45)',
+    segment: '#F2EEEA',
+    interrupteurInactif: '#CFC6BE',
+    voile: 'rgba(43, 36, 32, 0.45)',
     focus: '#2F5BD3',
     enfant: '#FFE9A8',
   },
@@ -64,8 +71,10 @@ export const JETONS: Record<Mode, Jetons> = {
     ligne: '#30333B',
     ligneCarte: '#30333B',
     separateur: '#2A2D34',
-    accent: '#F0715A',
-    surAccent: '#15161A',
+    accent: '#F2A882',
+    surAccent: '#2B2420',
+    marque: '#F2A882',
+    surMarque: '#2B2420',
     succes: '#6FD0A9',
     succesFond: '#173A2E',
     attentionFond: '#3A2C14',
@@ -81,24 +90,24 @@ export const JETONS: Record<Mode, Jetons> = {
   },
 };
 
-export type CouleursModule = { fond: string; encre: string };
+export type CouleursModule = { fond: string; principal: string; encre: string };
 
 export const COULEURS_MODULES: Record<Mode, Record<IdModule, CouleursModule>> = {
   clair: {
-    recettes: { fond: '#FDEBDD', encre: '#A04A14' },
-    courses: { fond: '#E2F3E4', encre: '#2B7A34' },
-    quotidien: { fond: '#E3EEFB', encre: '#1D5FB8' },
-    cadeaux: { fond: '#FCE4EC', encre: '#B0335B' },
-    voyages: { fond: '#DDF3EF', encre: '#0F766E' },
-    souvenirs: { fond: '#ECE7FB', encre: '#5B45B0' },
+    recettes: { fond: '#FDF3DC', principal: '#EEC468', encre: '#7A5410' }, // Miel
+    courses: { fond: '#EAF4EB', principal: '#A3CBA8', encre: '#3B6B44' }, // Sauge
+    quotidien: { fond: '#EAF2FB', principal: '#93BCE6', encre: '#2D5E95' }, // Ciel
+    cadeaux: { fond: '#FCEBEF', principal: '#EEA7B8', encre: '#9C3352' }, // Rose poudré
+    voyages: { fond: '#FDEEE5', principal: '#F2A882', encre: '#9A4A22' }, // Abricot
+    souvenirs: { fond: '#F0EDFB', principal: '#BBAEE8', encre: '#5A4A9E' }, // Lavande
   },
   sombre: {
-    recettes: { fond: '#3A2416', encre: '#F4AE7E' },
-    courses: { fond: '#1B3420', encre: '#8FD69A' },
-    quotidien: { fond: '#172B45', encre: '#8EBBF2' },
-    cadeaux: { fond: '#3D1C28', encre: '#F29BB9' },
-    voyages: { fond: '#133632', encre: '#7FD9CB' },
-    souvenirs: { fond: '#2A2347', encre: '#BFB0F5' },
+    recettes: { fond: '#3A2F14', principal: '#EEC468', encre: '#EEC468' },
+    courses: { fond: '#1E3322', principal: '#A3CBA8', encre: '#A3CBA8' },
+    quotidien: { fond: '#1A2B40', principal: '#93BCE6', encre: '#93BCE6' },
+    cadeaux: { fond: '#3D1F28', principal: '#EEA7B8', encre: '#EEA7B8' },
+    voyages: { fond: '#3A2418', principal: '#F2A882', encre: '#F2A882' },
+    souvenirs: { fond: '#29243F', principal: '#BBAEE8', encre: '#BBAEE8' },
   },
 };
 
@@ -139,7 +148,7 @@ export const MODULES: { id: IdModule; nom: string; icone: string; chemin: string
   { id: 'courses', nom: 'Courses', icone: 'cart-outline', chemin: 'courses', route: 'Courses' },
   { id: 'quotidien', nom: 'Quotidien', icone: 'today-outline', chemin: 'quotidien', route: 'Quotidien' },
   { id: 'cadeaux', nom: 'Cadeaux', icone: 'gift-outline', chemin: 'cadeaux', route: 'Cadeaux' },
-  { id: 'voyages', nom: 'Voyages', icone: 'briefcase-outline', chemin: 'voyages', route: 'Voyages' },
+  { id: 'voyages', nom: 'Événements', icone: 'briefcase-outline', chemin: 'voyages', route: 'Voyages' },
   { id: 'souvenirs', nom: 'Souvenirs', icone: 'images-outline', chemin: 'souvenirs', route: 'Souvenirs' },
 ];
 

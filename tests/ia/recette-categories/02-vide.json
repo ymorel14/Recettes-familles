@@ -1,0 +1,5 @@
+{
+  "description": "Aucune recette : erreur de saisie, sans appel au modèle.",
+  "entree": { "recettes": [] },
+  "erreurAttendue": "entree"
+}

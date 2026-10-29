@@ -6,7 +6,7 @@ import { theme, useLargeurContenu } from '../theme/theme';
 // petite tablette → 5 à 6, grande tablette / web → jusqu'à 8.
 const LARGEUR_CIBLE = 120;
 const COLONNES_MIN = 2;
-const COLONNES_MAX = 8;
+const COLONNES_MAX = 10;
 
 // Calcule le nombre de colonnes et la largeur exacte des vignettes d'une
 // grille, en tenant compte des marges de l'écran et de l'espace entre

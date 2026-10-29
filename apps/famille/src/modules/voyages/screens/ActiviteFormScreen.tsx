@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView, Image } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { alerte } from '../utils/alerte';
 import { lireDateSaisie } from '../services/personnes';
@@ -98,7 +99,7 @@ export default function ActiviteFormScreen({ route, navigation }: any) {
       return setErreur('Indiquez jusqu’à quel âge s’applique le tarif enfant.');
     }
     const jourIso = jour.trim() ? lireDateSaisie(jour) : null;
-    if (jour.trim() && !jourIso) return setErreur('Date invalide (JJ/MM/AAAA).');
+    if (jour.trim() && !jourIso) return setErreur('Choisissez une date.');
     if (lien.trim() && !/^https?:\/\//i.test(lien.trim())) return setErreur('Le lien doit commencer par http:// ou https://');
 
     setEnCours(true);
@@ -187,7 +188,7 @@ export default function ActiviteFormScreen({ route, navigation }: any) {
       <View style={styles.ligne}>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-jour">Jour prévu</Libelle>
-          <Champ value={jour} onChangeText={setJour} placeholder="JJ/MM/AAAA" accessibilityLabelledBy="libelle-jour" />
+          <ChampDate value={jour} onChangeText={setJour} placeholder="Choisir (facultatif)" accessibilityLabel="Jour" couleur={theme.colors.accent} />
         </View>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-adresse">Lieu</Libelle>

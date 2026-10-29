@@ -16,12 +16,10 @@ import { listerPersonnesFamille, type Personne } from '../services/personnes';
 import { aujourdHuiIso, JOURS, libelleJour } from '../services/quotidien';
 import {
   annulerRealisation,
-  formaterPoints,
   libellePlanif,
   listerDomaines,
   listerTaches,
   marquerFaite,
-  pointsParEuro,
   tachesDuJour,
   validerRealisation,
   type Domaine,
@@ -48,7 +46,7 @@ export function libelleRecurrence(t: Pick<Tache, 'recurrence' | 'jours' | 'plani
 
 // Tâches de la maison, en deux vues :
 //   - Jour : tâches du jour choisi (récurrentes, datées, en retard) ; un
-//     parent coche « fait » (les points vont dans la tirelire), ou annule ;
+//     parent coche « fait » (sans argent : ce sont des tâches de la maison), ou annule ;
 //   - Calendrier : le mois des tâches datées, les retards, les prochaines.
 // Filtre par domaine (Potager, Voiture…). En bas, toutes les tâches du foyer.
 export default function TachesScreen({ navigation }: any) {
@@ -61,25 +59,24 @@ export default function TachesScreen({ navigation }: any) {
   const [taches, setTaches] = useState<TacheDuJour[] | null>(null);
   const [toutes, setToutes] = useState<Tache[]>([]);
   const [personnes, setPersonnes] = useState<Personne[]>([]);
-  const [taux, setTaux] = useState(10);
   const [enCours, setEnCours] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     if (!foyer) return;
     try {
-      const [td, tt, ps, tx, ds] = await Promise.all([
+      const [td, tt, ps, ds] = await Promise.all([
         tachesDuJour(jour),
         listerTaches(),
         listerPersonnesFamille(foyer.id),
-        pointsParEuro(),
         listerDomaines(),
       ]);
-      setTaches(td);
+      // Cet onglet ne montre que les tâches de la maison : les tâches
+      // d'enfants (obligatoires, coups de main) vivent dans Argent de poche.
+      setTaches(td.filter((t) => !t.type || t.type === 'maison'));
       setDomaines(ds);
       setFiltre((f) => (f && !ds.some((d) => d.id === f) ? null : f));
-      setToutes(tt);
+      setToutes(tt.filter((t) => !t.type || t.type === 'maison'));
       setPersonnes(ps);
-      setTaux(tx);
     } catch (e) {
       alerte('Chargement impossible', extraireMessageErreur(e, 'Veuillez réessayer.'));
       setTaches([]);
@@ -110,7 +107,6 @@ export default function TachesScreen({ navigation }: any) {
   // personnes : toute la famille active (une tâche peut être confiée à un
   // autre foyer) ; miennes : mon foyer seulement.
   const miennes = personnes.filter((p) => p.foyer_id === foyer?.id);
-  const enfants = miennes.filter((p) => !p.utilisateur_id);
   const prenom = (id: string) => personnes.find((p) => p.id === id)?.prenom ?? '…';
   const deMonFoyer = (id: string | null) => !!id && miennes.some((p) => p.id === id);
   const duFiltre = taches.filter((t) => !filtre || t.domaine_id === filtre);
@@ -123,24 +119,21 @@ export default function TachesScreen({ navigation }: any) {
   const domaine = (id: string | null) => domaines.find((d) => d.id === id);
 
   const carte = (t: TacheDuJour) => {
-    // « Qui veut » : les personnes prévues, sinon les enfants du foyer pour
-    // une tâche à points, ou tout le foyer pour une tâche sans points.
-    // Tâche confiée par un autre foyer : seules les personnes de mon foyer la
-    // cochent, et elle ne rapporte pas de points chez nous.
+    // « Qui veut » : les personnes prévues, sinon tout le foyer. Tâche confiée
+    // par un autre foyer : seules les personnes de mon foyer la cochent.
+    // Une tâche de la maison ne rapporte plus rien (refonte Quotidien).
     const candidats = t.confiee
       ? t.candidats.filter(deMonFoyer)
       : t.candidats.length
         ? t.candidats
-        : (t.points > 0 ? enfants : miennes).map((e) => e.id);
+        : miennes.map((e) => e.id);
     const planif = libellePlanif({ planif: t.planif, recurrence: t.recurrence, debut: t.debut, fin: t.fin });
-    const points = t.confiee || (t.pour && !deMonFoyer(t.pour)) ? 0 : t.points;
     return (
       <Carte key={t.id} accent={t.en_retard}>
         <View style={styles.ligne}>
           {t.domaine_icone ? <Ionicons name={t.domaine_icone as any} size={18} color={theme.colors.accent} /> : null}
           <Text style={[styles.libelle, t.realisation?.etat === 'validee' && styles.barre]}>{t.libelle}</Text>
           {t.en_retard && <Pastille texte="En retard" />}
-          {points > 0 && <Text style={styles.points}>+{points}</Text>}
         </View>
         {t.confiee ? <Text style={styles.detail}>Confiée par {t.foyer_nom ?? 'un autre foyer'}</Text> : null}
         <Text style={styles.detail}>
@@ -153,7 +146,6 @@ export default function TachesScreen({ navigation }: any) {
                 ? ' · une fois'
                 : ''}
           {t.domaine ? ` · ${t.domaine}` : ''}
-          {points > 0 ? ` · ${formaterPoints(points, taux)}` : ''}
         </Text>
         {t.realisation?.etat === 'faite' ? (
           <>
@@ -172,7 +164,7 @@ export default function TachesScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <Bouton
-                  titre={points > 0 && deMonFoyer(t.realisation.personne_id) ? `Valider (+${points})` : 'Valider'}
+                  titre="Valider"
                   onPress={() => agir(t.id, () => validerRealisation(t.realisation!.id))}
                   enCours={enCours === t.id}
                 />
@@ -292,7 +284,7 @@ export default function TachesScreen({ navigation }: any) {
       {toutesFiltrees.length === 0 && duFiltre.length === 0 && !filtre ? (
         <MessageVide
           titre="Pas encore de tâche"
-          texte="Ajoutez les tâches de la maison : mettre la table, ranger sa chambre… avec des points pour l’argent de poche."
+          texte="Ajoutez les tâches de la maison : arroser les plantes, sortir les poubelles… Les tâches des enfants se gèrent dans Argent de poche."
         />
       ) : duFiltre.length === 0 ? (
         <MessageVide titre="Rien de prévu ce jour-là" />
@@ -329,7 +321,6 @@ export default function TachesScreen({ navigation }: any) {
               {libelleRecurrence(t)} · {t.personnes.length ? t.personnes.map(prenom).join(t.personnes.length > 1 ? ' puis ' : '') : 'Qui veut'}
             </Text>
           </View>
-          <Text style={styles.points}>{t.points > 0 ? `+${t.points}` : ''}</Text>
           <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
         </Pressable>
       ))}
@@ -396,7 +387,6 @@ const styles = creerStylesThemes(() => ({
   libelle: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
   barre: { textDecorationLine: 'line-through', color: theme.colors.textMuted },
   detail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
-  points: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.accent },
   lienDiscret: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted, textDecorationLine: 'underline' },
   puces: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   puce: {

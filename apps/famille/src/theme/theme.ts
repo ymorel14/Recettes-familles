@@ -61,11 +61,22 @@ export function appliquerMode(mode: Mode): void {
 }
 
 export const EST_WEB = Platform.OS === 'web';
-export const LARGEUR_MAX_WEB = 760;
+// Tablettes et grands écrans (retour de test G-5) : plus de colonne étroite
+// de 760 px ; l'app prend toute la largeur (jusqu'à 1280 px sur un grand
+// écran d'ordinateur) et se réorganise au-delà de 700 px.
+export const LARGEUR_MAX_WEB = 1280;
+export const SEUIL_ECRAN_LARGE = 700;
+// Feuilles et fenêtres : centrées, de largeur raisonnable sur grand écran.
+export const LARGEUR_FEUILLE_LARGE = 600;
 
 export function useLargeurContenu(): { width: number; height: number } {
   const { width, height } = useWindowDimensions();
   return { width: EST_WEB ? Math.min(width, LARGEUR_MAX_WEB) : width, height };
+}
+
+// Vrai sur tablette, téléphone en paysage large et ordinateur.
+export function useEcranLarge(): boolean {
+  return useLargeurContenu().width >= SEUIL_ECRAN_LARGE;
 }
 
 // Remplace StyleSheet.create : styles recalculés après un changement de mode.

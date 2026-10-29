@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { IconeGlyphe } from '../../../../composants/ui';
 import * as DocumentPicker from 'expo-document-picker';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { theme, creerStylesThemes } from '../../theme/theme';
@@ -156,12 +157,24 @@ export default function ImportMyRecipeBoxScreen({ navigation }: any) {
           </>
         )}
         {categories.length === 0 && bilan.importees > 0 && (
-          <Text style={styles.aide}>
-            Les recettes sans catégorie sont dans la vignette « Sans catégorie » de l'accueil.
-          </Text>
+          <>
+            <Text style={styles.aide}>
+              Les recettes sans catégorie sont dans la vignette « Sans catégorie » de l'accueil. L’assistant peut les
+              ranger pour vous : vous relirez ses propositions avant de valider.
+            </Text>
+            {/* Classement automatique (retour de test R-4). */}
+            <Pressable style={styles.boutonPrincipal} onPress={() => navigation.replace('ClassementRecettes')}>
+              <Text style={styles.boutonPrincipalTexte}>Classer automatiquement</Text>
+            </Pressable>
+          </>
         )}
-        <Pressable style={styles.boutonPrincipal} onPress={() => navigation.popToTop()}>
-          <Text style={styles.boutonPrincipalTexte}>Voir nos recettes</Text>
+        <Pressable
+          style={categories.length === 0 && bilan.importees > 0 ? styles.boutonSecondaire : styles.boutonPrincipal}
+          onPress={() => navigation.popToTop()}
+        >
+          <Text style={categories.length === 0 && bilan.importees > 0 ? styles.boutonSecondaireTexte : styles.boutonPrincipalTexte}>
+            Voir nos recettes
+          </Text>
         </Pressable>
       </ScrollView>
     );
@@ -199,7 +212,7 @@ export default function ImportMyRecipeBoxScreen({ navigation }: any) {
           return (
             <Pressable key={r.cle} style={styles.ligne} onPress={() => basculer(r.cle)}>
               <View style={[styles.case, coche && styles.caseCochee]}>
-                {coche && <Text style={styles.caseTexte}>✓</Text>}
+                {coche && <IconeGlyphe nom="checkmark" style={styles.caseTexte} />}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.nomRecette}>{r.formulaire.titre}</Text>

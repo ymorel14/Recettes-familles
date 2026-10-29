@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { ChampDate } from '../composants/ChampDate';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -26,6 +27,7 @@ import {
   type Personne,
 } from '../modules/cadeaux/services/wishlist';
 import { jetonRappels, rappelsPossibles } from '../modules/quotidien/services/notifications';
+import { definirReglageAnniversaires, lireReglageAnniversaires } from '../modules/quotidien/services/maison';
 import {
   activerNotificationsTelephone,
   desactiverNotificationsTelephone,
@@ -68,6 +70,8 @@ export default function MoiScreen({ navigation }: any) {
   const [enCours, setEnCours] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [rappelsActifs, setRappelsActifs] = useState(false);
+  // Rappels automatiques d'anniversaires (Quotidien) : activés par défaut.
+  const [anniversairesActifs, setAnniversairesActifs] = useState(true);
   const [ajoutOuvert, setAjoutOuvert] = useState(false);
 
   const charger = useCallback(async () => {
@@ -83,6 +87,7 @@ export default function MoiScreen({ navigation }: any) {
       setPrenomEnregistre(moi);
       setMonPrenom(moi ?? '');
       if (rappelsPossibles()) setRappelsActifs(!!(await jetonRappels()));
+      setAnniversairesActifs(await lireReglageAnniversaires().catch(() => true));
     } catch {
       // Hors ligne : on garde l'affichage.
     }
@@ -123,7 +128,7 @@ export default function MoiScreen({ navigation }: any) {
     if (!foyer || !prenom.trim()) return;
     const iso = naissance.trim() ? lireDateSaisie(naissance) : null;
     if (naissance.trim() && !iso) {
-      setMessage('Date de naissance attendue au format JJ/MM/AAAA.');
+      setMessage('Choisissez la date de naissance au calendrier.');
       return;
     }
     executer(
@@ -294,7 +299,14 @@ export default function MoiScreen({ navigation }: any) {
         ) : null}
 
         <Carte style={styles.carte}>
-          <Text style={styles.titreCarte}>{familles.length > 1 ? 'Famille affichée' : 'Ma famille'}</Text>
+          <Text style={styles.titreCarte}>{familles.length > 1 ? 'Mes familles' : 'Ma famille'}</Text>
+          {familles.length > 1 ? (
+            // Vue unique (retour de test G-2) : l'app montre toutes les
+            // familles ; la famille cochée reçoit ce que l'on crée.
+            <Text style={styles.aide}>
+              L’app montre tout ce que partagent vos familles. Les nouveaux voyages, souvenirs, albums et listes communes sont partagés avec la famille cochée.
+            </Text>
+          ) : null}
           {familles.map((f) => (
             <Pressable
               key={f.id}
@@ -365,13 +377,11 @@ export default function MoiScreen({ navigation }: any) {
                 accessibilityLabel="Prénom de la personne"
                 autoFocus
               />
-              <TextInput
+              <ChampDate
                 style={styles.champ}
                 value={naissance}
                 onChangeText={setNaissance}
-                placeholder="Date de naissance (JJ/MM/AAAA, facultatif)"
-                placeholderTextColor={couleurs.encreDouce}
-                keyboardType="numbers-and-punctuation"
+                placeholder="Date de naissance (facultatif)"
                 accessibilityLabel="Date de naissance"
               />
               <Bouton titre="Ajouter" petit onPress={ajouterPersonne} enCours={enCours === 'personne'} desactive={!prenom.trim()} />
@@ -406,7 +416,7 @@ export default function MoiScreen({ navigation }: any) {
                     : 'Nouveautés affichées'
                   : 'Nouveautés masquées'
               }
-              dernier={i === MODULES.length - 1 && !rappelsPossibles()}
+              dernier={false}
               droite={
                 <Interrupteur
                   libelle={`Nouveautés ${m.nom}`}
@@ -424,10 +434,28 @@ export default function MoiScreen({ navigation }: any) {
               gauche={<PastilleModule module="quotidien" taille={36} icone="alarm-outline" />}
               titre="Notifications sur ce téléphone"
               sousTitre="Les nouveautés de la famille, et les rappels de vos trajets la veille"
-              dernier
               droite={<Interrupteur libelle="Notifications sur ce téléphone" valeur={rappelsActifs} onChange={basculerRappels} />}
             />
           ) : null}
+          <LigneListe
+            gauche={<PastilleModule module="quotidien" taille={36} icone="gift-outline" />}
+            titre="Anniversaires"
+            sousTitre="Un rappel pour souhaiter l’anniversaire des personnes de la famille"
+            dernier
+            droite={
+              <Interrupteur
+                libelle="Rappels d’anniversaires"
+                valeur={anniversairesActifs}
+                onChange={(v) => {
+                  setAnniversairesActifs(v);
+                  definirReglageAnniversaires(v).catch(() => {
+                    setAnniversairesActifs(!v);
+                    afficher('Impossible pour le moment. Réessayez.');
+                  });
+                }}
+              />
+            }
+          />
         </Carte>
       </View>
 
@@ -447,6 +475,18 @@ export default function MoiScreen({ navigation }: any) {
             onChange={prefs.definirApparence}
           />
           <Text style={styles.aide}>« Automatique » suit le réglage du téléphone.</Text>
+        </Carte>
+        <Carte style={styles.carte}>
+          <Text style={styles.titreCarte}>À prévoir sur l’accueil</Text>
+          <ControleSegmente<'7' | '14'>
+            options={[
+              { id: '7', libelle: '7 jours' },
+              { id: '14', libelle: '14 jours' },
+            ]}
+            valeur={String(prefs.horizonAPrevoir) as '7' | '14'}
+            onChange={(v) => prefs.definirHorizonAPrevoir(v === '14' ? 14 : 7)}
+          />
+          <Text style={styles.aide}>Tâches à venir sur cette période. Les rappels de cadeaux arrivent 3 semaines avant un anniversaire.</Text>
         </Carte>
         <Carte style={{ paddingVertical: espaces.xs }}>
           <LigneListe

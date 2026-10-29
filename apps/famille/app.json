@@ -3,7 +3,7 @@
     "name": "Famille",
     "slug": "famille",
     "version": "2.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "famille",
@@ -14,7 +14,7 @@
     "android": {
       "package": "fr.morel.famille",
       "adaptiveIcon": {
-        "backgroundColor": "#F4F3EF",
+        "backgroundColor": "#FAF8F6",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -28,8 +28,10 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F4F3EF",
-      "dark": { "backgroundColor": "#15161A" }
+      "backgroundColor": "#FAF8F6",
+      "dark": {
+        "backgroundColor": "#15161A"
+      }
     },
     "plugins": [
       [
@@ -45,11 +47,23 @@
         {
           "microphonePermission": "Permet de piloter le mode assistant des recettes à la voix (« suivant », « répète », « minuteur 10 minutes »…).",
           "speechRecognitionPermission": "Permet de comprendre les commandes vocales du mode assistant.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
-      ["expo-notifications", { "color": "#17181C" }]
+      [
+        "expo-notifications",
+        {
+          "color": "#17181C"
+        }
+      ]
     ],
-    "owner": "ymorel76"
+    "owner": "ymorel76",
+    "extra": {
+      "eas": {
+        "projectId": "2d4ac203-217d-4259-b339-72684b18c22b"
+      }
+    }
   }
 }

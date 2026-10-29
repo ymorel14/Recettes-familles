@@ -10,6 +10,7 @@ import CarteSouvenir from '../components/CarteSouvenir';
 import { useAdresses } from '../components/medias';
 import { MessageVide } from '../components/ui';
 import { formaterAge, formaterDateSouvenir } from '../utils/dates';
+import { useFamillesVues } from '../../../services/familles';
 
 // Rechercher dans les souvenirs avec une question en français : « Quand
 // sommes-nous allés en Irlande ? », « Quand Sybille a-t-elle commencé à
@@ -18,6 +19,8 @@ import { formaterAge, formaterDateSouvenir } from '../utils/dates';
 // frappe ; le premier résultat est la réponse la plus probable.
 export default function RechercheScreen({ navigation }: any) {
   const { famille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const { categorie, personnes } = useFamilleDonnees();
   const [question, setQuestion] = useState('');
   const [resultats, setResultats] = useState<ResultatRecherche[] | null>(null);
@@ -45,7 +48,7 @@ export default function RechercheScreen({ navigation }: any) {
     setEnCours(true);
     setErreur(null);
     try {
-      const r = await rechercher(q, { familleId: famille.id, limite: 40 });
+      const r = await rechercher(q, { familleId: famillesVues, limite: 40 });
       if (n !== numero.current) return;
       setResultats(r);
       setPosee(q);

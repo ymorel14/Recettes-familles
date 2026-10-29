@@ -11,6 +11,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import { IconeGlyphe } from '../../../../composants/ui';
 import { alerte } from '../../utils/alerte';
 import * as ImagePicker from 'expo-image-picker';
 import { theme, creerStylesThemes } from '../../theme/theme';
@@ -278,7 +279,7 @@ export default function EssaiFormScreen({ route, navigation }: any) {
               <View style={styles.pointEnTete}>
                 <Text style={styles.pointNumero}>Souci {index + 1}</Text>
                 <Pressable hitSlop={8} onPress={() => retirerPoint(point.clefId)}>
-                  <Text style={styles.retirer}>✕</Text>
+                  <IconeGlyphe nom="close" style={styles.retirer} />
                 </Pressable>
               </View>
               <ChampExtensible hauteurMin={44}
@@ -294,8 +295,8 @@ export default function EssaiFormScreen({ route, navigation }: any) {
                     <View style={styles.puces}>
                       {(
                         [
-                          ['solution', '💡 Solution'],
-                          ['changement', '✏️ Changement'],
+                          ['solution', 'Solution'],
+                          ['changement', 'Changement'],
                         ] as const
                       ).map(([nature, libelle]) => (
                         <Pressable
@@ -311,7 +312,7 @@ export default function EssaiFormScreen({ route, navigation }: any) {
                     </View>
                     {point.reponses.length > 1 && (
                       <Pressable hitSlop={8} onPress={() => retirerReponse(point.clefId, reponse.clefId)}>
-                        <Text style={styles.retirer}>✕</Text>
+                        <IconeGlyphe nom="close" style={styles.retirer} />
                       </Pressable>
                     )}
                   </View>

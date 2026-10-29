@@ -14,6 +14,7 @@ import {
 import { Carte, EtatVide, Icone, LibelleSection } from '../composants/ui';
 import { LigneElement } from './AccueilScreen';
 import { arrondis, couleurs, creerStyles, espaces, margePage, polices, texte } from '../theme/theme';
+import { useFamillesVues } from '../services/familles';
 
 // Agenda (spécification § 2.4, charte § 8.4) : la semaine en 7 cases, un
 // point sous les jours occupés, le programme du jour choisi, puis « Plus
@@ -31,6 +32,8 @@ function lundiDe(iso: string): string {
 export default function AgendaScreen() {
   const insets = useSafeAreaInsets();
   const { famille, foyer, foyersFamille } = useAuth();
+  // Toutes les familles du foyer (vue unique, G-2).
+  const famillesVues = useFamillesVues();
   const aujourdHui = isoDu(new Date());
   const [jour, setJour] = useState(aujourdHui);
   const [lundi, setLundi] = useState(lundiDe(aujourdHui));
@@ -42,9 +45,9 @@ export default function AgendaScreen() {
 
   const charger = useCallback(async () => {
     if (!famille || !foyer) return;
-    setElements(await elementsAgenda(lundi, finPeriode, { familleId: famille.id, foyerId: foyer.id, foyersFamille }));
+    setElements(await elementsAgenda(lundi, finPeriode, { familleId: famillesVues, foyerId: foyer.id, foyersFamille }));
     setChargement(false);
-  }, [famille?.id, foyer?.id, foyersFamille, lundi, finPeriode]);
+  }, [famille?.id, foyer?.id, foyersFamille, famillesVues, lundi, finPeriode]);
 
   useFocusEffect(
     useCallback(() => {

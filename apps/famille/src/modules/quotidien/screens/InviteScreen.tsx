@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { Carte, TitreSection } from '../components/elements';
 import CarteTrajet from '../components/CarteTrajet';
@@ -117,22 +118,12 @@ export default function InviteScreen({ jeton }: { jeton: string }) {
           </View>
         ))}
         <View style={styles.ligneSaisie}>
-          <TextInput
-            style={[styles.champ, { flex: 1 }]}
-            value={du}
-            onChangeText={setDu}
-            placeholder="Du (JJ/MM/AAAA)"
-            placeholderTextColor={theme.colors.textMuted}
-            accessibilityLabel="Indisponible à partir du"
-          />
-          <TextInput
-            style={[styles.champ, { flex: 1 }]}
-            value={au}
-            onChangeText={setAu}
-            placeholder="Au (facultatif)"
-            placeholderTextColor={theme.colors.textMuted}
-            accessibilityLabel="Indisponible jusqu'au"
-          />
+          <View style={{ flex: 1 }}>
+            <ChampDate style={styles.champ} value={du} onChangeText={setDu} placeholder="Du" accessibilityLabel="Indisponible à partir du" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ChampDate style={styles.champ} value={au} onChangeText={setAu} placeholder="Au (facultatif)" accessibilityLabel="Indisponible jusqu'au" />
+          </View>
         </View>
         <Bouton
           variante="contour"
@@ -143,7 +134,7 @@ export default function InviteScreen({ jeton }: { jeton: string }) {
             const d = lireDateSaisie(du);
             const a = au.trim() ? lireDateSaisie(au) : d;
             if (!d || !a || a < d) {
-              alerte('Dates à vérifier', 'Dates attendues au format JJ/MM/AAAA, la seconde après la première.');
+              alerte('Dates à vérifier', 'Choisissez les dates, la seconde après la première.');
               return;
             }
             agir('indispo', async () => {

@@ -5,54 +5,74 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  evenementsPourMoi,
   estActif,
   libelle,
   libelleQuand,
   listerVoyages,
   messageErreurVoyage,
-  PARTICIPATIONS,
+  mesPersonnes,
+  repondre,
   STATUTS,
-  TYPES_SEJOUR,
-  type EvenementPourMoi,
+  type NatureVoyage,
+  type ReponseInvite,
   type VoyageAvecParticipants,
 } from '../services/voyage';
-import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { Chargement, MessageVide, Pastille } from '../components/ui';
 import { listerPersonnes } from '../services/personnes';
 import { GroupeNoms } from '@apps-famille/famille';
+import { useFamillesVues } from '../../../services/familles';
 
-// Onglet "Voyages" : les voyages de la famille active auxquels on a accès
-// (la base ne renvoie jamais un voyage privé auquel on n'est pas invité),
-// ceux en cours d'abord, puis les terminés et annulés.
+// Refonte Événements (§ 3 et 4) : une seule liste pour les deux onglets,
+// filtrée par nature. « À venir » d'abord (triés par date, sans date à la
+// fin), puis « Terminés » repliés. La base ne renvoie jamais un événement
+// auquel on n'est pas invité, ni une surprise dont on est la cible : il n'y a
+// donc plus de carte « Organisé pour vous », qui trahirait la surprise.
 export default function VoyagesScreen({ navigation }: any) {
-  const { famille, foyersFamille } = useAuth();
+  return <ListeEvenements navigation={navigation} nature="voyage" />;
+}
+
+const REPONSES_REPAS: { id: ReponseInvite; libelle: string }[] = [
+  { id: 'partant', libelle: 'Oui' },
+  { id: 'peut_etre', libelle: 'Peut-être' },
+  { id: 'decline', libelle: 'Non' },
+];
+
+// Jour de la semaine + date, ex. « samedi 21 novembre ».
+function jourLong(iso: string): string {
+  const [a, m, j] = iso.split('-').map(Number);
+  return new Date(a, m - 1, j).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+export function ListeEvenements({ navigation, nature }: { navigation: any; nature: NatureVoyage }) {
+  const { famille, foyersFamille, session, foyer } = useAuth();
+  const repas = nature === 'repas';
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const [voyages, setVoyages] = useState<VoyageAvecParticipants[] | null>(null);
   const [rechargement, setRechargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [foyers, setFoyers] = useState<Map<string, string>>(new Map());
   const [prenoms, setPrenoms] = useState<Map<string, string>>(new Map());
-  // Événements organisés pour moi (surprise) : je sais qu'ils existent, sans
-  // en voir le contenu.
-  const [pourMoi, setPourMoi] = useState<EvenementPourMoi[]>([]);
+  const [personnesIds, setPersonnesIds] = useState<string[]>([]);
+  const [termines, setTermines] = useState(false);
 
   const charger = useCallback(async () => {
     if (!famille) return;
     try {
       setErreur(null);
-      const [liste, fetes, personnes] = await Promise.all([
-        listerVoyages(famille.id),
-        evenementsPourMoi(famille.id).catch(() => [] as EvenementPourMoi[]),
+      const [liste, personnes] = await Promise.all([
+        listerVoyages(famillesVues),
         listerPersonnes(foyersFamille).catch(() => []),
       ]);
-      setVoyages(liste);
-      setPourMoi(fetes.filter((e) => e.statut !== 'annule'));
+      setVoyages(liste.filter((v) => v.nature === nature));
+      if (session) setPersonnesIds(mesPersonnes(personnes, session.user.id, foyer?.id ?? null).map((p) => p.id));
       setFoyers(new Map(personnes.filter((p) => p.foyer_id && p.foyer_nom).map((p) => [p.foyer_id!, p.foyer_nom!])));
       setPrenoms(new Map(personnes.map((p) => [p.id, p.prenom])));
     } catch (e: any) {
       setErreur(messageErreurVoyage(e));
       setVoyages([]);
     }
-  }, [famille, foyersFamille]);
+  }, [famille, foyersFamille, famillesVues, nature, session, foyer]);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,9 +82,24 @@ export default function VoyagesScreen({ navigation }: any) {
 
   if (voyages === null) return <Chargement />;
 
-  const enCours = voyages.filter(estActif);
-  const autres = voyages.filter((v) => !estActif(v));
-  const lignes = [...enCours, ...autres];
+  // À venir : par date de début, puis les événements sans date à la fin.
+  const aVenir = voyages
+    .filter(estActif)
+    .sort((a, b) => (a.date_debut ?? '9999').localeCompare(b.date_debut ?? '9999'));
+  const passes = voyages.filter((v) => !estActif(v));
+  const lignes = termines ? [...aVenir, ...passes] : aVenir;
+  const enCours = aVenir;
+
+  const repondreRepas = async (v: VoyageAvecParticipants, reponse: ReponseInvite) => {
+    try {
+      await Promise.all(
+        v.participants.filter((p) => personnesIds.includes(p.personne_id)).map((p) => repondre(v.id, p.personne_id, reponse))
+      );
+      await charger();
+    } catch (e: any) {
+      setErreur(messageErreurVoyage(e));
+    }
+  };
 
   return (
     <FlatList
@@ -84,77 +119,55 @@ export default function VoyagesScreen({ navigation }: any) {
         />
       }
       ListHeaderComponent={
-        <View style={styles.entete}>
-          <View style={styles.boutons}>
-            <Bouton
-              titre="+ Un voyage"
-              onPress={() => navigation.navigate('NouveauVoyage', { nature: 'voyage' })}
-              style={styles.boutonMoitie}
-            />
-            <Bouton
-              titre="+ Un repas"
-              variante="contour"
-              onPress={() => navigation.navigate('NouveauVoyage', { nature: 'repas' })}
-              style={styles.boutonMoitie}
-            />
+        erreur ? (
+          <View style={styles.entete}>
+            <Text style={styles.erreur}>{erreur}</Text>
           </View>
-          {erreur && <Text style={styles.erreur}>{erreur}</Text>}
-          {pourMoi.length > 0 && <Text style={styles.section}>Organisé pour vous</Text>}
-          {pourMoi.map((e) => (
-            <View key={e.id} style={[styles.carte, styles.cartePourMoi]} accessibilityLabel={`Organisé pour vous : ${e.titre}`}>
-              <View style={styles.carteHaut}>
-                <Text style={styles.type}>{e.nature === 'repas' ? 'Repas en votre honneur' : 'Une surprise vous attend'}</Text>
-                <Ionicons name="gift-outline" size={20} color={theme.colors.accent} />
-              </View>
-              <Text style={styles.titre}>{e.titre}</Text>
-              <View style={styles.ligne}>
-                <Ionicons name="calendar-outline" size={16} color={theme.colors.textMuted} />
-                <Text style={styles.detail}>{libelleQuand(e)}</Text>
-              </View>
-              <View style={styles.ligne}>
-                <Ionicons name={e.nature === 'repas' ? 'restaurant-outline' : 'location-outline'} size={16} color={theme.colors.textMuted} />
-                <Text style={styles.detail}>
-                  {e.nature === 'repas'
-                    ? e.foyer_hote
-                      ? `Chez ${foyers.get(e.foyer_hote) ?? 'un foyer de la famille'}`
-                      : e.lieu ?? 'Lieu à venir'
-                    : 'Destination surprise'}
-                </Text>
-              </View>
-              {e.message ? <Text style={styles.message}>« {e.message} »</Text> : null}
-              <Text style={styles.detail}>Le reste est une surprise : vous n’en saurez pas plus d’ici là.</Text>
-            </View>
-          ))}
-          {pourMoi.length > 0 && lignes.length > 0 && <Text style={styles.section}>Vos voyages et repas</Text>}
+        ) : null
+      }
+      ListFooterComponent={
+        <View style={{ gap: theme.spacing.sm }}>
+          {passes.length > 0 ? (
+            <Pressable onPress={() => setTermines((t) => !t)} accessibilityRole="button" style={styles.replie}>
+              <Text style={styles.section}>
+                {repas ? 'Passés' : 'Terminés'} · {passes.length} · {termines ? 'masquer' : 'voir'}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Text style={styles.aide}>
+            {repas ? 'Pour proposer un repas, touchez + en bas.' : 'Pour proposer un voyage, touchez + en bas.'}
+          </Text>
         </View>
       }
       ListEmptyComponent={
-        erreur || pourMoi.length > 0 ? null : (
+        erreur ? null : (
           <MessageVide
             titre="Rien de prévu pour l'instant"
-            texte="Proposez un voyage (une destination ou juste une période) ou un repas de famille : chacun donnera ses disponibilités."
+            texte={
+              repas
+                ? 'Proposez un repas de famille : chacun répondra et choisira ce qu’il apporte.'
+                : 'Proposez un voyage (une destination ou juste une période) : chacun donnera ses disponibilités.'
+            }
           />
         )
       }
       renderItem={({ item, index }) => {
         const actif = estActif(item);
         const premierAutre = !actif && index === enCours.length;
+        const maReponse = item.participants.find((p) => personnesIds.includes(p.personne_id))?.reponse;
         const partants = item.participants.filter((p) => p.reponse === 'partant').length;
         const invites = item.participants.filter((p) => p.reponse !== 'decline').length;
         return (
           <>
-            {premierAutre && <Text style={styles.section}>Terminés et annulés</Text>}
+            {premierAutre && <Text style={styles.section}>{repas ? 'Passés' : 'Terminés et annulés'}</Text>}
             <Pressable
               style={[styles.carte, !actif && styles.carteInactive]}
               onPress={() => navigation.navigate('Voyage', { voyageId: item.id })}
               accessibilityRole="button"
             >
               <View style={styles.carteHaut}>
-                <Text style={styles.type}>
-                  {item.nature === 'repas' ? 'Repas de famille' : libelle(TYPES_SEJOUR, item.type_sejour)} ·{' '}
-                  {libelle(PARTICIPATIONS, item.participation)}
-                </Text>
-                <Pastille texte={libelle(STATUTS, item.statut)} ton={actif ? 'accent' : 'neutre'} />
+                <Text style={styles.type}>{repas ? 'Repas de famille' : 'Voyage'}</Text>
+                <Pastille texte={libelle(STATUTS, item.statut)} ton={item.statut === 'confirme' ? 'succes' : actif ? 'accent' : 'neutre'} />
               </View>
               <Text style={styles.titre}>{item.titre}</Text>
               {item.secrets.length > 0 && (
@@ -188,14 +201,33 @@ export default function VoyagesScreen({ navigation }: any) {
               </View>
               <View style={styles.ligne}>
                 <Ionicons name="calendar-outline" size={16} color={theme.colors.textMuted} />
-                <Text style={styles.detail}>{libelleQuand(item)}</Text>
+                <Text style={styles.detail}>
+                  {repas && item.date_debut ? jourLong(item.date_debut) : libelleQuand(item)}
+                </Text>
               </View>
               <View style={styles.ligne}>
                 <Ionicons name="people-outline" size={16} color={theme.colors.textMuted} />
                 <Text style={styles.detail}>
-                  {partants} partant{partants > 1 ? 's' : ''} sur {invites} invité{invites > 1 ? 's' : ''}
+                  {repas
+                    ? `${partants} oui sur ${invites} invité${invites > 1 ? 's' : ''}`
+                    : `${partants} partant${partants > 1 ? 's' : ''} sur ${invites} invité${invites > 1 ? 's' : ''}`}
                 </Text>
               </View>
+              {repas && actif && maReponse === 'invite' ? (
+                <View style={styles.reponses}>
+                  {REPONSES_REPAS.map((r) => (
+                    <Pressable
+                      key={r.id}
+                      onPress={() => repondreRepas(item, r.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${r.libelle}, je viens au repas ${item.titre}`}
+                      style={styles.boutonReponse}
+                    >
+                      <Text style={styles.boutonReponseTexte}>{r.libelle}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
             </Pressable>
           </>
         );
@@ -242,5 +274,19 @@ const styles = creerStylesThemes(() => ({
   ligne: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   detail: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
   aChoisir: { fontStyle: 'italic' },
+  replie: { minHeight: 44, justifyContent: 'center' },
+  aide: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, textAlign: 'center' },
+  reponses: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.sm },
+  boutonReponse: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.selection,
+  },
+  boutonReponseTexte: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
   erreur: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.warning },
 }));

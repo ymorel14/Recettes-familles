@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ScrollView } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { alerte } from '../utils/alerte';
 import { formaterDate, lireDateSaisie } from '../services/personnes';
@@ -60,7 +61,7 @@ export default function RepasFormScreen({ route, navigation }: any) {
     if (jours.length) jourIso = jour === 'aucun' ? null : jour;
     else if (jourTexte.trim()) {
       jourIso = lireDateSaisie(jourTexte);
-      if (!jourIso) return setErreur('Date invalide (JJ/MM/AAAA).');
+      if (!jourIso) return setErreur('Choisissez une date.');
     } else jourIso = existant?.jour ?? null;
     setEnCours(true);
     try {
@@ -106,7 +107,7 @@ export default function RepasFormScreen({ route, navigation }: any) {
         />
       ) : (
         <>
-          <Champ value={jourTexte} onChangeText={setJourTexte} placeholder="JJ/MM/AAAA (facultatif)" accessibilityLabel="Jour du repas" />
+          <ChampDate value={jourTexte} onChangeText={setJourTexte} placeholder="Choisir (facultatif)" accessibilityLabel="Jour du repas" couleur={theme.colors.accent} />
           <Aide>Le jour se choisira plus facilement une fois la date de l’événement retenue.</Aide>
         </>
       )}

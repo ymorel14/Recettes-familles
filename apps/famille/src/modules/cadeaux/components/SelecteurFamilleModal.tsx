@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Text, Pressable, ActivityIndicator, Modal } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { alerte } from '../utils/alerte';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,7 +47,7 @@ export default function SelecteurFamilleModal({ visible, onFermer }: Props) {
               accessibilityState={{ selected: f.active }}
             >
               <Text style={styles.choixTexte}>{f.nom}</Text>
-              {f.active && <Text style={styles.coche}>✓</Text>}
+              {f.active && <IconeGlyphe nom="checkmark" style={styles.coche} />}
             </Pressable>
           ))}
           {enCours ? (

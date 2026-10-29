@@ -30,6 +30,8 @@ Routes disponibles :
 | `doublons` | Articles de courses ambigus (un mot en commun) : même produit ? libellé et quantité totale proposés | Haiku, ~0,0005 $ |
 | `cuisine-question` | Question pendant le mode assistant en cuisine (à la voix si la phrase n'est pas une commande, ou au clavier) ; recette affichée (version, quantités, astuces) en contexte mis en cache ; 80 mots au plus, lue à voix haute | Sonnet, effort medium, ~0,009 $ |
 | `voyage-brouillon` | « Organise-nous un week-end en Bretagne en novembre » : dates qui respectent le calendrier commun, hébergements et activités trouvés par recherche web (5 au plus ; un lien absent des résultats est écarté), programme, budget. Contexte au jeton de l'utilisateur : nombre d'adultes, âges des enfants, périodes non libres sans motif ni nom, adresse de départ de son foyer | Sonnet, effort medium + recherche web, ~0,15 $ |
+| `recette-categories` | Classement automatique des recettes (retour de test R-4) : titre et ingrédients de 25 recettes au plus → 1 à 3 catégories chacune, prises dans les catégories existantes (nouvelles seulement si l'app l'autorise) ; validées sur l'écran de revue | Haiku, ~0,0005 $ par recette |
+| `recette-ingredients` | Lien entre les étapes d'une recette et ses ingrédients (retour de test R-12) : verbes (« salez »), familles (« les épices »), pluriels ; gardé dans `recettes.etapes.ingredients_cites` (migration `20261027110000`) pour le mode assistant | Haiku, ~0,001 $ par recette |
 
 Photos et PDF (`_partage/images.ts`) : réduits par l'app avant l'envoi (1 568 px, JPEG 0,8),
 3 photos au plus, 5 Mo par fichier, 8 Mo en tout ; jamais enregistrés, ils ne font que passer.

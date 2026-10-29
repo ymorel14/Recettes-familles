@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -14,12 +15,10 @@ import { aujourdHuiIso, JOURS } from '../services/quotidien';
 import {
   creerDomaine,
   creerTache,
-  formaterPoints,
   libellePlanif,
   listerDomaines,
   listerTaches,
   modifierTache,
-  pointsParEuro,
   SUGGESTIONS_DOMAINES,
   supprimerTache,
   type Domaine,
@@ -60,7 +59,7 @@ function plusUnAn(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Créer ou modifier une tâche : libellé, domaine, points, quand (récurrente
+// Créer ou modifier une tâche : libellé, domaine, quand (récurrente
 // ou datée, éventuellement chaque année), pour qui (plusieurs personnes = à
 // tour de rôle ; personne = « qui veut »).
 export default function TacheFormScreen({ route, navigation }: any) {
@@ -71,8 +70,9 @@ export default function TacheFormScreen({ route, navigation }: any) {
   const { foyer } = useAuth();
   const [pret, setPret] = useState(!id);
   const [libelle, setLibelle] = useState(brouillon?.libelle ?? '');
-  const [points, setPoints] = useState(brouillon?.points != null ? String(brouillon.points) : '10');
-  const [quand, setQuand] = useState<Quand>(brouillon?.quand ?? route.params?.quand ?? 'quotidienne');
+  const [quand, setQuand] = useState<Quand>(
+    brouillon?.quand && brouillon.quand !== 'quotidienne' && brouillon.quand !== 'hebdomadaire' ? brouillon.quand : route.params?.quand ?? 'libre'
+  );
   const [annuelle, setAnnuelle] = useState(brouillon?.annuelle ?? false);
   const [date1, setDate1] = useState(
     versSaisie(brouillon ? (brouillon.quand === 'avant' ? brouillon.date_debut : brouillon.date_debut) : route.params?.date ?? null)
@@ -86,16 +86,14 @@ export default function TacheFormScreen({ route, navigation }: any) {
   const [domaines, setDomaines] = useState<Domaine[]>([]);
   const [nouveauDomaine, setNouveauDomaine] = useState<string | null>(null);
   const [personnes, setPersonnes] = useState<Personne[]>([]);
-  const [taux, setTaux] = useState(10);
   const [enCours, setEnCours] = useState<string | null>(null);
 
   useEffect(() => {
     navigation.setOptions({ title: id ? 'Modifier la tâche' : 'Nouvelle tâche' });
     if (!foyer) return;
-    Promise.all([listerPersonnesFamille(foyer.id), pointsParEuro(), id ? listerTaches() : Promise.resolve([])])
-      .then(([ps, tx, taches]) => {
+    Promise.all([listerPersonnesFamille(foyer.id), id ? listerTaches() : Promise.resolve([])])
+      .then(([ps, taches]) => {
         setPersonnes(ps);
-        setTaux(tx);
         if (brouillon?.pour.length) {
           const ids = brouillon.pour
             .map((p) => ps.find((x) => x.prenom.toLowerCase() === p.toLowerCase())?.id)
@@ -105,7 +103,6 @@ export default function TacheFormScreen({ route, navigation }: any) {
         const t = taches.find((x) => x.id === id);
         if (t) {
           setLibelle(t.libelle);
-          setPoints(String(t.points));
           setQuand(t.planif !== 'libre' ? t.planif : t.recurrence === 'aucune' || t.recurrence === 'annuelle' ? 'libre' : t.recurrence);
           setAnnuelle(t.recurrence === 'annuelle');
           if (t.planif === 'avant') {
@@ -148,7 +145,6 @@ export default function TacheFormScreen({ route, navigation }: any) {
     else groupesPersonnes.push([nom, [p]]);
   }
 
-  const nbPoints = Number(points.trim() || '0');
   const basculer = <T,>(liste: T[], v: T) => (liste.includes(v) ? liste.filter((x) => x !== v) : [...liste, v]);
   const datee = DATEE(quand);
 
@@ -162,21 +158,21 @@ export default function TacheFormScreen({ route, navigation }: any) {
     const recurrence: Recurrence = annuelle ? 'annuelle' : 'aucune';
     if (quand === 'le') {
       const d = lireDateSaisie(date1);
-      if (!d) return 'Indiquez la date au format JJ/MM/AAAA.';
+      if (!d) return 'Choisissez la date.';
       return { recurrence, planif: 'le', periode_debut: d, periode_fin: d };
     }
     if (quand === 'entre') {
       const d1 = lireDateSaisie(date1);
       const d2 = lireDateSaisie(date2);
-      if (!d1 || !d2) return 'Indiquez les deux dates au format JJ/MM/AAAA.';
+      if (!d1 || !d2) return 'Choisissez les deux dates.';
       if (d2 < d1) return 'La fin de la période doit suivre son début.';
       if (annuelle && d2 >= plusUnAn(d1)) return 'Pour une tâche de chaque année, la période doit durer moins d’un an.';
       return { recurrence, planif: 'entre', periode_debut: d1, periode_fin: d2 };
     }
     const fin = lireDateSaisie(date2);
-    if (!fin) return 'Indiquez la date limite au format JJ/MM/AAAA.';
+    if (!fin) return 'Choisissez la date limite.';
     let debut: string | null = date1.trim() ? lireDateSaisie(date1) : null;
-    if (date1.trim() && !debut) return '« À partir du » : date attendue au format JJ/MM/AAAA.';
+    if (date1.trim() && !debut) return '« À partir du » : choisissez une date.';
     // Sans date de début : tout de suite (une fois), ou un mois avant (chaque année).
     if (!debut) debut = annuelle ? decaler(fin, -30) : aujourdHuiIso() < fin ? aujourdHuiIso() : fin;
     if (debut > fin) return '« À partir du » doit précéder la date limite.';
@@ -202,7 +198,6 @@ export default function TacheFormScreen({ route, navigation }: any) {
   const enregistrer = async () => {
     if (!foyer) return;
     if (!libelle.trim()) return alerte('Tâche', 'Indiquez ce qu’il faut faire.');
-    if (!Number.isInteger(nbPoints) || nbPoints < 0) return alerte('Points', 'Indiquez un nombre de points (0 ou plus).');
     if (quand === 'hebdomadaire' && jours.length === 0) return alerte('Jours', 'Choisissez au moins un jour.');
     const dates = calculerDates();
     if (typeof dates === 'string') return alerte('Dates', dates);
@@ -210,7 +205,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
     try {
       const saisie = {
         libelle: libelle.trim(),
-        points: nbPoints,
+        points: 0, // une tâche de la maison ne rapporte rien (les tâches d'enfants ont leur écran)
         ...dates,
         jours: quand === 'hebdomadaire' ? jours : [],
         personnes: choisies,
@@ -227,7 +222,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
   };
 
   const supprimer = () =>
-    alerte('Supprimer cette tâche ?', 'Son historique disparaît aussi, ainsi que les points déjà gagnés avec elle.', [
+    alerte('Supprimer cette tâche ?', 'Son historique disparaît aussi.', [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Supprimer',
@@ -253,14 +248,13 @@ export default function TacheFormScreen({ route, navigation }: any) {
   const champDate = (valeur: string, changer: (v: string) => void, libelleChamp: string, aide?: string) => (
     <View style={{ flex: 1, gap: 4 }}>
       <Text style={styles.petitLibelle}>{libelleChamp}</Text>
-      <TextInput
+      <ChampDate
         style={styles.champ}
         value={valeur}
         onChangeText={changer}
-        placeholder={aide ?? 'JJ/MM/AAAA'}
-        placeholderTextColor={theme.colors.textMuted}
-        keyboardType="numbers-and-punctuation"
+        placeholder={aide ?? 'Choisir'}
         accessibilityLabel={libelleChamp}
+        couleur={theme.colors.accent}
       />
     </View>
   );
@@ -277,7 +271,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
         style={styles.champ}
         value={libelle}
         onChangeText={setLibelle}
-        placeholder="ex. Mettre la table, Semer les radis, Vidange"
+        placeholder="ex. Semer les radis, Vidange, Arroser les plantes"
         placeholderTextColor={theme.colors.textMuted}
         accessibilityLabel="Tâche"
       />
@@ -357,19 +351,9 @@ export default function TacheFormScreen({ route, navigation }: any) {
         </View>
       )}
 
-      <Text style={styles.libelle}>Points gagnés</Text>
-      <TextInput
-        style={styles.champ}
-        value={points}
-        onChangeText={(v) => setPoints(v.replace(/[^0-9]/g, ''))}
-        keyboardType="number-pad"
-        accessibilityLabel="Points gagnés"
-      />
-      <Text style={styles.aide}>{nbPoints > 0 ? `Soit ${formaterPoints(nbPoints, taux)} dans la tirelire.` : 'Pas de points.'}</Text>
-
       <Text style={styles.libelle}>Quand</Text>
       <View style={styles.puces}>
-        {QUAND.map((r) => (
+        {QUAND.filter((r) => (r.id !== 'quotidienne' && r.id !== 'hebdomadaire') || quand === r.id).map((r) => (
           <Pressable
             key={r.id}
             onPress={() => {
@@ -445,7 +429,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
       </Text>
       {/* Mon foyer, puis les autres foyers de la famille : une tâche peut être
           confiée à quelqu'un d'un autre foyer (il la voit et la coche chez lui,
-          sans points). */}
+          sans argent). */}
       {groupesPersonnes.map(([nomFoyer, ps]) => (
         <View key={nomFoyer ?? 'moi'} style={{ gap: theme.spacing.xs }}>
           {nomFoyer ? <Text style={styles.aide}>{nomFoyer}</Text> : null}
@@ -473,8 +457,7 @@ export default function TacheFormScreen({ route, navigation }: any) {
       ))}
       {choisies.some((c) => personnes.find((p) => p.id === c)?.foyer_id !== foyer?.id) ? (
         <Text style={styles.aide}>
-          Quelqu’un d’un autre foyer : il verra la tâche chez lui et pourra la cocher. Pas de points pour lui (chaque foyer
-          gère ses tirelires).
+          Quelqu’un d’un autre foyer : il verra la tâche chez lui et pourra la cocher.
         </Text>
       ) : null}
       {personnes.length === 0 && (

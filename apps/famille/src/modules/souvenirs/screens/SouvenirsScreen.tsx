@@ -11,6 +11,7 @@ import { useAdresses, Vignette } from '../components/medias';
 import Filtres, { AUCUN_FILTRE, appliquerFiltres, type FiltresActifs } from '../components/Filtres';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { anneeDe, aujourdhuiIso, formaterDateSouvenir, ilYaAns } from '../utils/dates';
+import { useFamillesVues } from '../../../services/familles';
 
 export const SANS_DATE = 'Sans date';
 
@@ -48,6 +49,8 @@ export function regrouperParAnnee(souvenirs: Carte[]): Decennie[] {
 // lisible avec des centaines de souvenirs.
 export default function SouvenirsScreen({ navigation }: any) {
   const { famille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const { categorie, completer } = useFamilleDonnees();
   const [souvenirs, setSouvenirs] = useState<Carte[] | null>(null);
   const [jourLa, setJourLa] = useState<Souvenir[]>([]);
@@ -60,8 +63,8 @@ export default function SouvenirsScreen({ navigation }: any) {
     if (!famille) return;
     try {
       const [liste, jour] = await Promise.all([
-        listerSouvenirs(famille.id),
-        ceJourLa(aujourdhuiIso(), famille.id).catch(() => [] as Souvenir[]),
+        listerSouvenirs(famillesVues),
+        ceJourLa(aujourdhuiIso(), famillesVues).catch(() => [] as Souvenir[]),
       ]);
       setSouvenirs(liste);
       setJourLa(jour);
@@ -70,7 +73,7 @@ export default function SouvenirsScreen({ navigation }: any) {
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Impossible de charger les souvenirs.'));
     }
-  }, [famille?.id, completer]);
+  }, [famille?.id, famillesVues, completer]);
 
   useFocusEffect(
     useCallback(() => {

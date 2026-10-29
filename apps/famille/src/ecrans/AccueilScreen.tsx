@@ -2,10 +2,11 @@ import React, { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Avatar, obtenirMonPrenom, useAuth } from '@apps-famille/famille';
-import { accepterTrajet, prendreTrajet } from '../modules/quotidien/services/quotidien';
-import { validerRealisation } from '../modules/quotidien/services/maison';
+import { obtenirMonPrenom, useAuth } from '@apps-famille/famille';
+import { accepterTrajet } from '../modules/quotidien/services/quotidien';
+import { anniversaires, rappelAutoFait, validerRealisation, type Anniversaire } from '../modules/quotidien/services/maison';
 import {
+  aPrevoir,
   actionsAFaire,
   ajouterJours,
   dansCombien,
@@ -13,15 +14,20 @@ import {
   elementsAgenda,
   heureEnClair,
   isoDu,
+  jeMEnOccuper,
   souvenirsDuJour,
   tachesAFaireAujourdhui,
   type ActionAFaire,
   type ElementAgenda,
+  type ElementAPrevoir,
 } from '../services/journee';
+import { usePreferences } from '../contexts/PreferencesContext';
+import { listeDe } from '../modules/cadeaux/services/wishlist';
 import { ilYA } from '../services/notifications';
 import { useNotifications } from '../contexts/NotificationsContext';
-import { ChoixFamille } from '../composants/ChoixFamille';
 import { ResumeMatin } from '../composants/ResumeMatin';
+import { libelleRecetteEnCours, useRecettesEnCours } from '../modules/recettes/hooks/useRecettesEnCours';
+import { useFamillesVues } from '../services/familles';
 import { resumeDuJour, type PhraseResume } from '../services/resumeMatin';
 import { useToast } from '../composants/Toast';
 import {
@@ -35,7 +41,7 @@ import {
   PastilleModule,
   Section,
 } from '../composants/ui';
-import { MODULES, couleurs, couleursModule, creerStyles, espaces, margePage, polices, texte, type IdModule } from '../theme/theme';
+import { MODULES, couleurs, couleursModule, creerStyles, espaces, margePage, polices, texte, useEcranLarge, type IdModule } from '../theme/theme';
 import { ouvrirCible, ouvrirModule, ouvrirOngletModule } from '../navigation/navigationRef';
 import type { TacheDuJour } from '../modules/quotidien/services/maison';
 import type { Souvenir } from '../modules/souvenirs/services/souvenirs';
@@ -52,7 +58,11 @@ export function ouvrirElement(module: IdModule, cible: ElementAgenda['cible']) {
 
 export default function AccueilScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+  // Tablette (G-5) : deux colonnes, « pour vous » à gauche, la famille à droite.
+  const large = useEcranLarge();
   const { session, famille, foyer, foyersFamille } = useAuth();
+  // Toutes les familles du foyer (vue unique, G-2).
+  const famillesVues = useFamillesVues();
   const { notifications, nonLuesParModule, marquerLue, marquerActionFaite, rafraichir } = useNotifications();
   const { afficher } = useToast();
   const [prenom, setPrenom] = useState<string | null>(null);
@@ -60,7 +70,12 @@ export default function AccueilScreen({ navigation }: any) {
   const [faites, setFaites] = useState<Set<string>>(new Set());
   const [aujourdhui, setAujourdhui] = useState<ElementAgenda[]>([]);
   const [taches, setTaches] = useState<TacheDuJour[]>([]);
+  // Rappels automatiques du jour (anniversaires) : « C'est fait » directement.
+  const [annivsDuJour, setAnnivsDuJour] = useState<Anniversaire[]>([]);
   const [bientot, setBientot] = useState<ElementAgenda[]>([]);
+  // « À prévoir » (retour de test G-3) : horizon réglable dans Moi.
+  const { horizonAPrevoir } = usePreferences();
+  const [prevoir, setPrevoir] = useState<ElementAPrevoir[]>([]);
   const [souvenirs, setSouvenirs] = useState<Souvenir[]>([]);
   const [resume, setResume] = useState<PhraseResume[]>([]);
   const [chargement, setChargement] = useState(true);
@@ -68,25 +83,36 @@ export default function AccueilScreen({ navigation }: any) {
 
   const charger = useCallback(async () => {
     if (!session || !famille || !foyer) return;
-    const ctx = { familleId: famille.id, foyerId: foyer.id, foyersFamille };
+    const ctx = { familleId: famillesVues, foyerId: foyer.id, foyersFamille };
     const jour = isoDu(new Date());
-    const [p, a, elements, t, s] = await Promise.all([
+    const [p, a, elements, t, s, ap, an] = await Promise.all([
       obtenirMonPrenom(session.user.id).catch(() => null),
-      actionsAFaire(ctx, { prendreTrajet, accepterTrajet, validerRealisation }),
+      actionsAFaire(ctx, {
+        prendreTrajet: (idTrajet) => jeMEnOccuper(idTrajet, foyer.id, session.user.id),
+        accepterTrajet,
+        validerRealisation,
+      }),
       elementsAgenda(jour, ajouterJours(jour, 30), ctx),
       tachesAFaireAujourdhui(),
-      souvenirsDuJour(famille.id),
+      souvenirsDuJour(famillesVues),
+      aPrevoir(ctx, horizonAPrevoir, session.user.id).catch(() => [] as ElementAPrevoir[]),
+      anniversaires(jour, jour).catch(() => [] as Anniversaire[]),
     ]);
     setPrenom(p);
     setActions(a);
-    setAujourdhui(elements.filter((e) => e.date === jour));
-    setBientot(elements.filter((e) => e.date > jour).slice(0, 12));
+    // Les anniversaires du jour sont des rappels automatiques (avec « C'est fait »).
+    setAnnivsDuJour(an.filter((x) => !x.moi && !x.fait));
+    setAujourdhui(elements.filter((e) => e.date === jour && !e.cle.startsWith('anniv-')));
+    // « Bientôt » garde les grands événements ; les tâches à venir sont
+    // dans « À prévoir ».
+    setBientot(elements.filter((e) => e.date > jour && !e.cle.startsWith('tache-')).slice(0, 12));
+    setPrevoir(ap);
     setTaches(t);
     setSouvenirs(s);
     setChargement(false);
     // Résumé du matin : à part, il ne retarde pas le reste de l'accueil.
     resumeDuJour().then(setResume).catch(() => {});
-  }, [session, famille?.id, foyer?.id, foyersFamille]);
+  }, [session, famille?.id, foyer?.id, foyersFamille, famillesVues, horizonAPrevoir]);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +129,8 @@ export default function AccueilScreen({ navigation }: any) {
   // « À faire pour vous » : actions de la base (notifications à action) et
   // actions directes calculées (trajets sans conducteur, tâches à valider).
   const aFaireNotifs = notifications.filter((n) => n.action && !n.action_faite_le).slice(0, 5);
+  // Recettes commencées dans le mode assistant, sur ce téléphone (R-14).
+  const recettesEnCours = useRecettesEnCours();
   const nouveautes = notifications.slice(0, 5);
   const aujourdHuiTexte = dateEnClair(isoDu(new Date()));
 
@@ -111,10 +139,10 @@ export default function AccueilScreen({ navigation }: any) {
       await a.executer();
       setFaites((f) => new Set(f).add(a.cle));
       afficher(
-        a.bouton === 'Je conduis'
-          ? 'C’est noté : vous conduisez.'
+        a.bouton === 'Je conduis' || a.bouton === 'Je m’en occupe'
+          ? 'C’est noté : vous vous en occupez.'
           : a.bouton === 'Valider'
-            ? 'Tâche validée, points versés.'
+            ? 'Validé.'
             : a.bouton === 'Ajouter'
               ? 'Ajouté à la liste de courses.'
               : 'C’est noté.'
@@ -131,15 +159,24 @@ export default function AccueilScreen({ navigation }: any) {
       refreshControl={<RefreshControl refreshing={actualisation} onRefresh={actualiser} tintColor={couleurs.encre} />}
     >
       <View style={styles.entete}>
+        {/* Plus de « Famille Morel ▾ » (G-2) : l'accueil montre toutes les
+            familles du foyer. Plus d'avatar non plus (G-1) : le profil est
+            l'onglet « Moi » de la barre du bas, qui affiche la photo.
+            Loupe : recherche dans toute l'app (P-2). */}
         <View style={styles.enteteLigne}>
-          <ChoixFamille />
-          <Pressable onPress={() => navigation.navigate('Moi')} accessibilityRole="button" accessibilityLabel="Mon profil" hitSlop={8}>
-            {session ? <Avatar utilisateurId={session.user.id} prenom={prenom} taille={40} /> : null}
+          <Text style={[styles.bonjour, { flex: 1 }]} accessibilityRole="header">
+            Bonjour{prenom ? ` ${prenom}` : ''}
+          </Text>
+          <Pressable
+            onPress={() => navigation.navigate('Recherche')}
+            accessibilityRole="button"
+            accessibilityLabel="Rechercher dans toute l’app"
+            hitSlop={8}
+            style={styles.loupe}
+          >
+            <Icone nom="search-outline" taille={22} couleur={couleurs.encre} />
           </Pressable>
         </View>
-        <Text style={styles.bonjour} accessibilityRole="header">
-          Bonjour{prenom ? ` ${prenom}` : ''}
-        </Text>
         <Text style={styles.date}>{aujourdHuiTexte}</Text>
       </View>
 
@@ -149,9 +186,40 @@ export default function AccueilScreen({ navigation }: any) {
         </View>
       ) : null}
 
-      {aFaireNotifs.length + actions.length > 0 ? (
+      <View style={large ? styles.deuxColonnes : undefined}>
+      <View style={large ? styles.moitie : undefined}>
+      {aFaireNotifs.length + actions.length + recettesEnCours.length > 0 ? (
         <Section titre="À faire pour vous">
           <View style={styles.colonne}>
+            {recettesEnCours.map((r, i) => (
+              <Carte key={`cuisine-${r.recetteId}`} style={[styles.carteAction, { backgroundColor: couleursModule('recettes').fond, borderWidth: 0 }]}>
+                <PastilleModule module="recettes" />
+                <Pressable
+                  style={{ flex: 1, gap: 4 }}
+                  onPress={() => ouvrirModule('recettes', 'AssistantRecette', { recetteId: r.recetteId })}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.carteTitre} numberOfLines={2}>{r.titre}</Text>
+                  <Text style={[styles.carteDetail, { color: couleursModule('recettes').encre }]}>En cuisine · {libelleRecetteEnCours(r)}</Text>
+                  {r.etapesTotal > 0 ? (
+                    <View style={[styles.progres, { backgroundColor: couleurs.surface }]}>
+                      <View
+                        style={[
+                          styles.progres,
+                          { width: `${Math.round((Math.min(r.etapesFaites, r.etapesTotal) / r.etapesTotal) * 100)}%`, backgroundColor: couleursModule('recettes').principal },
+                        ]}
+                      />
+                    </View>
+                  ) : null}
+                </Pressable>
+                <BoutonPilule
+                  titre="Reprendre"
+                  ton="doux"
+                  module="recettes"
+                  onPress={() => ouvrirModule('recettes', 'AssistantRecette', { recetteId: r.recetteId })}
+                />
+              </Carte>
+            ))}
             {aFaireNotifs.map((n, i) => (
               <Carte key={n.id} style={styles.carteAction}>
                 <PastilleModule module={n.module} />
@@ -161,7 +229,7 @@ export default function AccueilScreen({ navigation }: any) {
                 </Pressable>
                 <BoutonPilule
                   titre={libelleAction(n.action)}
-                  ton={i === 0 ? 'accent' : 'encre'}
+                  ton={i === 0 && recettesEnCours.length === 0 ? 'accent' : 'encre'}
                   onPress={() => {
                     marquerActionFaite(n.id);
                     ouvrirCible(n.cible);
@@ -171,7 +239,7 @@ export default function AccueilScreen({ navigation }: any) {
             ))}
             {actions.map((a, i) => {
               const fait = faites.has(a.cle);
-              const premier = aFaireNotifs.length === 0 && i === 0;
+              const premier = aFaireNotifs.length === 0 && recettesEnCours.length === 0 && i === 0;
               return (
                 <Carte key={a.cle} style={styles.carteAction}>
                   <PastilleModule module={a.module} />
@@ -198,12 +266,39 @@ export default function AccueilScreen({ navigation }: any) {
 
       <Section titre="Aujourd’hui" action="Agenda" onAction={() => navigation.navigate('Agenda')}>
         <View style={styles.colonne}>
-          {aujourdhui.length === 0 && taches.length === 0 ? (
+          {aujourdhui.length === 0 && taches.length === 0 && annivsDuJour.length === 0 ? (
             <EtatVide texte={chargement ? 'Je regarde votre journée…' : 'Rien de prévu aujourd’hui.'} />
           ) : (
             <Carte style={{ paddingVertical: espaces.xs }}>
               {aujourdhui.map((e, i) => (
-                <LigneElement key={e.cle} e={e} dernier={i === aujourdhui.length - 1 && taches.length === 0} />
+                <LigneElement
+                  key={e.cle}
+                  e={e}
+                  dernier={i === aujourdhui.length - 1 && taches.length === 0 && annivsDuJour.length === 0}
+                />
+              ))}
+              {annivsDuJour.map((a, i) => (
+                <LigneListe
+                  key={a.cle}
+                  gauche={<PastilleModule module="quotidien" taille={36} icone="gift-outline" />}
+                  titre={`Souhaiter l’anniversaire de ${a.prenom}`}
+                  sousTitre={`Automatique · ${a.age} ans`}
+                  droite={
+                    <BoutonPilule
+                      titre="C’est fait"
+                      ton="encre"
+                      onPress={() =>
+                        rappelAutoFait(a.cle)
+                          .then(() => {
+                            setAnnivsDuJour((l) => l.filter((x) => x.cle !== a.cle));
+                            afficher('C’est noté.');
+                          })
+                          .catch(() => afficher('Impossible pour le moment. Réessayez.'))
+                      }
+                    />
+                  }
+                  dernier={i === annivsDuJour.length - 1 && taches.length === 0}
+                />
               ))}
               {taches.length > 0 ? (
                 <LigneListe
@@ -219,6 +314,33 @@ export default function AccueilScreen({ navigation }: any) {
         </View>
       </Section>
 
+      {prevoir.length > 0 ? (
+        <Section titre="À prévoir">
+          <View style={styles.colonne}>
+            <Carte style={{ paddingVertical: espaces.xs }}>
+              {prevoir.map((e, i) =>
+                e.personneId ? (
+                  <LigneElement
+                    key={e.cle}
+                    e={e}
+                    dernier={i === prevoir.length - 1}
+                    onPress={() =>
+                      listeDe(e.personneId!)
+                        .then((listeId) => ouvrirModule('cadeaux', 'Liste', { listeId }))
+                        .catch(() => ouvrirElement(e.module, e.cible))
+                    }
+                  />
+                ) : (
+                  <LigneElement key={e.cle} e={e} dernier={i === prevoir.length - 1} />
+                )
+              )}
+            </Carte>
+          </View>
+        </Section>
+      ) : null}
+
+      </View>
+      <View style={large ? styles.moitie : undefined}>
       <View style={styles.tuiles}>
         {MODULES.map((m) => {
           const c = couleursModule(m.id);
@@ -306,6 +428,8 @@ export default function AccueilScreen({ navigation }: any) {
           </View>
         </Section>
       ) : null}
+      </View>
+      </View>
     </ScrollView>
   );
 }
@@ -325,10 +449,10 @@ function libelleAction(action: string | null): string {
   }
 }
 
-export function LigneElement({ e, dernier }: { e: ElementAgenda; dernier?: boolean }) {
+export function LigneElement({ e, dernier, onPress }: { e: ElementAgenda; dernier?: boolean; onPress?: () => void }) {
   return (
     <Pressable
-      onPress={() => ouvrirElement(e.module, e.cible)}
+      onPress={onPress ?? (() => ouvrirElement(e.module, e.cible))}
       accessibilityRole="button"
       accessibilityLabel={[e.heure ? heureEnClair(e.heure) : '', e.titre, e.detail, e.statut?.texte].filter(Boolean).join(', ')}
       style={({ pressed }) => [styles.ligneElement, !dernier && styles.ligneSeparee, pressed && { opacity: 0.7 }]}
@@ -348,10 +472,14 @@ export function LigneElement({ e, dernier }: { e: ElementAgenda; dernier?: boole
 
 const styles = creerStyles(() => ({
   entete: { paddingHorizontal: margePage, gap: espaces.xs },
-  enteteLigne: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: espaces.l },
+  enteteLigne: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: espaces.m },
+  loupe: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: couleurs.surface },
   bonjour: texte.titreAccueil(),
   date: { ...texte.secondaire(), fontSize: 15 },
   colonne: { paddingHorizontal: margePage, gap: espaces.s },
+  deuxColonnes: { flexDirection: 'row', alignItems: 'flex-start' },
+  progres: { height: 6, borderRadius: 3, marginTop: 4 },
+  moitie: { flex: 1, minWidth: 0 },
   carteAction: { flexDirection: 'row', alignItems: 'center', gap: espaces.m, paddingVertical: espaces.m },
   carteTitre: { fontFamily: polices.texteGras, fontSize: 15, lineHeight: 20, color: couleurs.encre },
   carteDetail: { ...texte.secondaire(), marginTop: 2 },

@@ -8,12 +8,15 @@ import { extraireMessageErreur } from '@apps-famille/famille';
 import { creerDepuisVoyage, listerVoyagesPasses, type VoyagePasse } from '../services/souvenirs';
 import { Chargement, MessageVide } from '../components/ui';
 import { aujourdhuiIso, formaterDateSouvenir } from '../utils/dates';
+import { useFamillesVues } from '../../../services/familles';
 
 // Voyages passés de VoyageCommun (famille active). Toucher un voyage crée son
 // souvenir (titre, dates, destination, participants), ou ouvre celui qui
 // existe déjà, pour y ajouter les photos.
 export default function DepuisVoyageScreen({ navigation }: any) {
   const { famille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const [voyages, setVoyages] = useState<VoyagePasse[] | null>(null);
   const [enCours, setEnCours] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -21,13 +24,13 @@ export default function DepuisVoyageScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       if (!famille) return;
-      listerVoyagesPasses(famille.id, aujourdhuiIso())
+      listerVoyagesPasses(famillesVues, aujourdhuiIso())
         .then(setVoyages)
         .catch((e) => {
           setVoyages([]);
           setErreur(extraireMessageErreur(e, 'Impossible de lire les voyages.'));
         });
-    }, [famille?.id])
+    }, [famille?.id, famillesVues])
   );
 
   const ouvrir = async (v: VoyagePasse) => {

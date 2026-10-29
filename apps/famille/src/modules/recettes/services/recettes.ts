@@ -220,7 +220,43 @@ export async function listerRecettes(
 
   if (error) throw error;
 
-  return (data ?? []).map((ligne: any) => mettreEnForme(ligne));
+  return (data ?? []).map((ligne: any) => mettreEnForme(ligne)).filter((r: RecetteComplete) => !suppressionsEnAttente.has(r.id));
+}
+
+// Suppression différée (retour de test R-8) : la recette disparaît tout de
+// suite des listes, un message propose « Annuler », et elle n'est vraiment
+// supprimée en base qu'à la fin du délai.
+export const DELAI_ANNULATION_SUPPRESSION = 6000; // durée du message avec « Annuler »
+const suppressionsEnAttente = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function programmerSuppressionRecette(recetteId: string, onEchec?: (e: unknown) => void): void {
+  annulerSuppressionRecette(recetteId);
+  const minuteur = setTimeout(() => {
+    supprimerRecette(recetteId)
+      .catch((e) => onEchec?.(e))
+      .finally(() => suppressionsEnAttente.delete(recetteId));
+  }, DELAI_ANNULATION_SUPPRESSION);
+  suppressionsEnAttente.set(recetteId, minuteur);
+  prevenirSuppressions();
+}
+
+export function annulerSuppressionRecette(recetteId: string): void {
+  const minuteur = suppressionsEnAttente.get(recetteId);
+  if (minuteur) clearTimeout(minuteur);
+  if (suppressionsEnAttente.delete(recetteId)) prevenirSuppressions();
+}
+
+// Les écrans de liste se rechargent quand une suppression est programmée ou
+// annulée (la recette disparaît, puis réapparaît après « Annuler »).
+const abonnesSuppressions = new Set<() => void>();
+function prevenirSuppressions(): void {
+  abonnesSuppressions.forEach((f) => f());
+}
+export function surChangementSuppressions(rappel: () => void): () => void {
+  abonnesSuppressions.add(rappel);
+  return () => {
+    abonnesSuppressions.delete(rappel);
+  };
 }
 
 export async function obtenirRecette(id: string): Promise<RecetteComplete> {
@@ -757,42 +793,9 @@ export function resoudreLibelleIngredient(ingredient: Ingredient, facteurEchelle
 
 // Mots trop courants pour servir de "mot-clé" d'un ingrédient (ex. dans
 // "Poudre à lever", on ne veut pas chercher le mot "à").
-const MOTS_VIDES_INGREDIENT = new Set([
-  'de', 'du', 'des', 'la', 'le', 'les', 'un', 'une', 'et', 'à', 'au', 'aux', 'en', "d", "l",
-]);
-
-// Mots "signifiants" du libellé d'un ingrédient (au moins 3 lettres, hors
-// mots vides), utilisés comme indices pour le repérer dans le texte libre
-// d'une étape — voir `detecterIngredientsCites`.
-function motsSignificatifs(libelle: string): string[] {
-  return normaliserTexte(libelle)
-    .split(/[^a-z0-9]+/)
-    .filter((mot) => mot.length >= 3 && !MOTS_VIDES_INGREDIENT.has(mot));
-}
-
-// Repère automatiquement, parmi la liste d'ingrédients d'une recette, ceux
-// cités dans le texte libre d'une étape (ex. l'étape "Mélanger la farine et
-// les œufs" cite les ingrédients "Farine" et "Œufs") — sans que l'utilisateur
-// ait à les associer lui-même. Un ingrédient est considéré comme cité si l'un
-// de ses mots signifiants apparaît comme mot entier dans le texte (accents et
-// casse ignorés, pluriel simple toléré). Fonctionne aussi bien avec des
-// `Ingredient` (recette enregistrée) qu'avec des `IngredientBrouillon`
-// (formulaire en cours de saisie), d'où le type générique.
-export function detecterIngredientsCites<T extends { libelle: string }>(
-  texte: string,
-  ingredients: T[]
-): T[] {
-  const texteNormalise = normaliserTexte(texte);
-  return ingredients.filter((ingredient) => {
-    if (!ingredient.libelle.trim()) return false;
-    const mots = motsSignificatifs(ingredient.libelle);
-    if (mots.length === 0) return false;
-    return mots.some((mot) => {
-      const motEchappe = mot.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`\\b${motEchappe}s?\\b`, 'i').test(texteNormalise);
-    });
-  });
-}
+// Repérage des ingrédients cités dans une étape : services/ingredientsCites.ts
+// (verbes, familles d'épices et d'herbes, pluriels — retour de test R-12).
+export { detecterIngredientsCites } from './ingredientsCites';
 
 // Remplace {{ingredient:<id>}} par "quantité unité libellé", pour l'affichage
 // (fiche recette, mode assistant) — avec un facteur d'échelle optionnel

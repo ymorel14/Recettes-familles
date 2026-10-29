@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, Text } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { theme } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { Bouton, Chargement } from '../components/ui';
@@ -108,9 +109,9 @@ export default function ObjetFormScreen({ route, navigation }: any) {
     const q = Number(quantite.trim() || '0');
     if (!Number.isInteger(q) || q < 0) return alerte('Quantité', 'Indiquez un nombre (0 ou plus).');
     const range = rangeDepuis.trim() ? lireDateSaisie(rangeDepuis) : null;
-    if (rangeDepuis.trim() && !range) return alerte('Rangé depuis', 'Date attendue au format JJ/MM/AAAA.');
+    if (rangeDepuis.trim() && !range) return alerte('Rangé depuis', 'Choisissez une date.');
     const possede = possedeDepuis.trim() ? lireDateSaisie(possedeDepuis) : null;
-    if (possedeDepuis.trim() && !possede) return alerte('Possédé depuis', 'Date attendue au format JJ/MM/AAAA.');
+    if (possedeDepuis.trim() && !possede) return alerte('Possédé depuis', 'Choisissez une date.');
     setEnCours(true);
     try {
       const enregistre = await avecPhoto(foyer.id, photo, (chemin) =>
@@ -230,20 +231,14 @@ export default function ObjetFormScreen({ route, navigation }: any) {
       )}
 
       {(lieuId || contenantId) && (
-        <Champ
-          libelle="Rangé là depuis le"
-          value={rangeDepuis}
-          onChangeText={setRangeDepuis}
-          placeholder="JJ/MM/AAAA"
-          keyboardType="numbers-and-punctuation"
-        />
+        <ChampDate libelle="Rangé là depuis le" value={rangeDepuis} onChangeText={setRangeDepuis} couleur={theme.colors.accent} />
       )}
-      <Champ
+      <ChampDate
         libelle="Possédé depuis le (facultatif)"
         value={possedeDepuis}
         onChangeText={setPossedeDepuis}
-        placeholder="JJ/MM/AAAA (date d’achat, de cadeau…)"
-        keyboardType="numbers-and-punctuation"
+        placeholder="Date d’achat, de cadeau…"
+        couleur={theme.colors.accent}
       />
 
       <Bouton titre="Enregistrer" onPress={enregistrer} enCours={enCours} style={{ marginTop: theme.spacing.md }} />

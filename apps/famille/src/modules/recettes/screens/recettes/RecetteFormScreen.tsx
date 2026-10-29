@@ -11,6 +11,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
+import { IconeGlyphe } from '../../../../composants/ui';
 import { alerte } from '../../utils/alerte';
 import * as ImagePicker from 'expo-image-picker';
 import { theme, creerStylesThemes } from '../../theme/theme';
@@ -31,6 +32,8 @@ import {
   nouvelleEtapeBrouillon,
   nouvellePhotoBrouillonLocale,
   listerRecettesPourLiaison,
+  programmerSuppressionRecette,
+  annulerSuppressionRecette,
 } from '../../services/recettes';
 import type { RecetteFormulaire, PhotoBrouillon, EtapeBrouillon } from '../../services/recettes';
 import type { RecetteLiee } from '../../types/models';
@@ -40,6 +43,7 @@ import ReglageSurprise from '../../components/ReglageSurprise';
 import { decouperIngredients, reconnaitreTexteZone, texteScanneEnEtape } from '../../services/ocr';
 import { BandeauBrouillon, PastilleAVerifier, styleChampAVerifier } from '../../../../composants/assistant';
 import type { VerificationRecette } from '../../../../services/recetteAssistant';
+import { useToast } from '../../../../composants/Toast';
 
 // Formulaire de création ET de modification d'une recette (cahier des
 // charges §4) : titre, photo, catégories, parts, ingrédients, étapes — avec
@@ -50,7 +54,11 @@ import type { VerificationRecette } from '../../../../services/recetteAssistant'
 // l'enregistrement.
 export default function RecetteFormScreen({ navigation, route }: any) {
   const { foyer, session } = useAuth();
+  const { afficher } = useToast();
   const recetteId: string | undefined = route?.params?.recetteId;
+  // Créateur de la recette (mode édition) : lui seul peut la supprimer.
+  const [creePar, setCreePar] = useState<string | null>(null);
+  const [confirmationSuppression, setConfirmationSuppression] = useState(false);
   const modeEdition = Boolean(recetteId);
   // Catégorie déjà sélectionnée si on arrive depuis l'écran d'une catégorie
   // (vignette "Ajouter" — voir RecettesCategorieScreen) : on la pré-remplit
@@ -151,7 +159,10 @@ export default function RecetteFormScreen({ navigation, route }: any) {
   useEffect(() => {
     if (!modeEdition || !recetteId) return;
     obtenirRecette(recetteId)
-      .then((r) => setForm(recetteVersFormulaire(r)))
+      .then((r) => {
+        setCreePar(r.cree_par ?? null);
+        setForm(recetteVersFormulaire(r));
+      })
       .catch((e) => setErreur(e instanceof Error ? e.message : 'Impossible de charger la recette.'))
       .finally(() => setChargementInitial(false));
   }, [modeEdition, recetteId]);
@@ -615,6 +626,23 @@ export default function RecetteFormScreen({ navigation, route }: any) {
     }
   };
 
+  // Suppression (retour de test R-8) : seulement ici, en mode édition, avec
+  // confirmation dans l'écran, puis « Annuler » pendant quelques secondes.
+  const supprimer = () => {
+    if (!recetteId) return;
+    if (delaiAutoRef.current) clearTimeout(delaiAutoRef.current);
+    const titre = form.titre.trim() || 'La recette';
+    programmerSuppressionRecette(recetteId, () =>
+      afficher(`« ${titre} » n’a pas pu être supprimée. Réessayez dans un instant.`)
+    );
+    afficher('Recette supprimée', { annuler: () => annulerSuppressionRecette(recetteId) });
+    // On quitte le formulaire ET la fiche de la recette supprimée.
+    const routes = navigation.getState?.()?.routes ?? [];
+    const precedente = routes[routes.length - 2];
+    if (precedente?.name === 'DetailRecette' && precedente.params?.recetteId === recetteId) navigation.pop(2);
+    else navigation.goBack();
+  };
+
   if (chargementInitial) {
     return (
       <View style={styles.centre}>
@@ -660,11 +688,11 @@ export default function RecetteFormScreen({ navigation, route }: any) {
               onPress={() => setADeplacer({ type: 'ingredient', clefId: ingredient.clefId })}
               accessibilityLabel="Changer d'élément"
             >
-              <Text style={styles.changerElement}>⇄</Text>
+              <IconeGlyphe nom="swap-horizontal-outline" style={styles.changerElement} />
             </Pressable>
           )}
           <Pressable onPress={() => supprimerIngredient(ingredient.clefId)}>
-            <Text style={styles.supprimer}>✕</Text>
+            <IconeGlyphe nom="close" style={styles.supprimer} />
           </Pressable>
         </View>
       ))}
@@ -680,7 +708,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         <Text style={styles.boutonAjouterTexte}>+ Ajouter un ingrédient</Text>
       </Pressable>
       <Pressable style={styles.boutonAjouter} onPress={() => setCollageElement(clefElement)}>
-        <Text style={styles.boutonAjouterTexte}>📋 Coller une liste d'ingrédients</Text>
+        <Text style={styles.boutonAjouterTexte}><IconeGlyphe nom="clipboard-outline" style={styles.boutonAjouterTexte} />{' '}Coller une liste d'ingrédients</Text>
       </Pressable>
       {lectureScan === clefElement ? (
         <View style={[styles.boutonAjouter, styles.lectureScan]}>
@@ -693,7 +721,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           onPress={() => scannerEtape(clefElement, 'ingredients')}
           disabled={lectureScan !== null}
         >
-          <Text style={styles.boutonAjouterTexte}>📷 Scanner une liste d'ingrédients</Text>
+          <Text style={styles.boutonAjouterTexte}><IconeGlyphe nom="camera-outline" style={styles.boutonAjouterTexte} />{' '}Scanner une liste d'ingrédients</Text>
         </Pressable>
       )}
 
@@ -701,7 +729,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
         <Text style={recetteDecoupee ? styles.sousLabel : styles.label}>Étapes</Text>
         {etapesAvantFusion && !recetteDecoupee && (
           <Pressable style={styles.boutonAnnulerFusion} onPress={annulerFusion}>
-            <Text style={styles.boutonAnnulerFusionTexte}>↩ Annuler la fusion</Text>
+            <Text style={styles.boutonAnnulerFusionTexte}><IconeGlyphe nom="arrow-undo-outline" style={styles.boutonAnnulerFusionTexte} />{' '}Annuler la fusion</Text>
           </Pressable>
         )}
       </View>
@@ -724,7 +752,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                   onPress={() => deplacerEtape(etape.clefId, 'premier')}
                   accessibilityLabel="Placer en première étape"
                 >
-                  <Text style={styles.boutonDeplacerTexte}>⤒ 1re</Text>
+                  <Text style={styles.boutonDeplacerTexte}><IconeGlyphe nom="arrow-up-outline" style={styles.boutonDeplacerTexte} />{' '}1re</Text>
                 </Pressable>
               )}
               {index > 0 && (
@@ -734,7 +762,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                   onPress={() => deplacerEtape(etape.clefId, 'haut')}
                   accessibilityLabel="Monter l'étape"
                 >
-                  <Text style={styles.boutonDeplacerTexte}>▲</Text>
+                  <IconeGlyphe nom="chevron-up" style={styles.boutonDeplacerTexte} />
                 </Pressable>
               )}
               {index < etapesElement.length - 1 && (
@@ -744,7 +772,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                   onPress={() => deplacerEtape(etape.clefId, 'bas')}
                   accessibilityLabel="Descendre l'étape"
                 >
-                  <Text style={styles.boutonDeplacerTexte}>▼</Text>
+                  <IconeGlyphe nom="chevron-down" style={styles.boutonDeplacerTexte} />
                 </Pressable>
               )}
               {recetteDecoupee && (
@@ -754,11 +782,11 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                   onPress={() => setADeplacer({ type: 'etape', clefId: etape.clefId })}
                   accessibilityLabel="Changer d'élément"
                 >
-                  <Text style={styles.boutonDeplacerTexte}>⇄ élément</Text>
+                  <Text style={styles.boutonDeplacerTexte}><IconeGlyphe nom="swap-horizontal-outline" style={styles.boutonDeplacerTexte} />{' '}élément</Text>
                 </Pressable>
               )}
               <Pressable hitSlop={6} onPress={() => supprimerEtape(etape.clefId)}>
-                <Text style={styles.supprimer}>✕</Text>
+                <IconeGlyphe nom="close" style={styles.supprimer} />
               </Pressable>
             </View>
           </View>
@@ -771,11 +799,11 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           />
           {etape.recetteLieeId ? (
             <Pressable style={styles.chipRecetteLiee} onPress={() => setEtapeEnLiaison(etape.clefId)}>
-              <Text style={styles.chipRecetteLieeTexte}>🔗 {etape.recetteLieeTitre ?? 'Recette liée'}</Text>
+              <Text style={styles.chipRecetteLieeTexte}><IconeGlyphe nom="link-outline" style={styles.chipRecetteLieeTexte} />{' '}{etape.recetteLieeTitre ?? 'Recette liée'}</Text>
             </Pressable>
           ) : (
             <Pressable style={styles.boutonLierRecette} onPress={() => setEtapeEnLiaison(etape.clefId)}>
-              <Text style={styles.boutonLierRecetteTexte}>🔗 Lier à une recette</Text>
+              <Text style={styles.boutonLierRecetteTexte}><IconeGlyphe nom="link-outline" style={styles.boutonLierRecetteTexte} />{' '}Lier à une recette</Text>
             </Pressable>
           )}
           {lectureScan === etape.clefId ? (
@@ -785,17 +813,17 @@ export default function RecetteFormScreen({ navigation, route }: any) {
             </View>
           ) : (
             <Pressable style={styles.boutonLierRecette} onPress={() => scannerEtape(etape.clefId)} disabled={lectureScan !== null}>
-              <Text style={styles.boutonLierRecetteTexte}>📷 Scanner du texte</Text>
+              <Text style={styles.boutonLierRecetteTexte}><IconeGlyphe nom="camera-outline" style={styles.boutonLierRecetteTexte} />{' '}Scanner du texte</Text>
             </Pressable>
           )}
           {etapesAvantFusion && etapeFusionnee === etape.clefId && (
             <Pressable style={styles.boutonAnnulerFusionEtape} onPress={annulerFusion}>
-              <Text style={styles.boutonAnnulerFusionTexte}>↩ Annuler la fusion</Text>
+              <Text style={styles.boutonAnnulerFusionTexte}><IconeGlyphe nom="arrow-undo-outline" style={styles.boutonAnnulerFusionTexte} />{' '}Annuler la fusion</Text>
             </Pressable>
           )}
           {index < etapesElement.length - 1 && (
             <Pressable style={styles.boutonFusionner} onPress={() => fusionnerEtapeSuivante(etape.clefId)}>
-              <Text style={styles.boutonFusionnerTexte}>⌄ Fusionner avec l'étape suivante</Text>
+              <Text style={styles.boutonFusionnerTexte}><IconeGlyphe nom="git-merge-outline" style={styles.boutonFusionnerTexte} />{' '}Fusionner avec l'étape suivante</Text>
             </Pressable>
           )}
         </View>
@@ -861,14 +889,14 @@ export default function RecetteFormScreen({ navigation, route }: any) {
               </Pressable>
             )}
             <Pressable style={styles.boutonSupprimerPhoto} hitSlop={6} onPress={() => supprimerPhoto(photo.clefId)}>
-              <Text style={styles.boutonSupprimerPhotoTexte}>✕</Text>
+              <IconeGlyphe nom="close" style={styles.boutonSupprimerPhotoTexte} />
             </Pressable>
             <Pressable
               style={styles.boutonRecadrerPhoto}
               hitSlop={6}
               onPress={() => recadrerPhotoExistante(photo)}
             >
-              <Text style={styles.boutonRecadrerPhotoTexte}>✂ Recadrer</Text>
+              <Text style={styles.boutonRecadrerPhotoTexte}><IconeGlyphe nom="cut-outline" style={styles.boutonRecadrerPhotoTexte} />{' '}Recadrer</Text>
             </Pressable>
           </View>
         ))}
@@ -946,16 +974,16 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                 />
                 {indexElement > 0 && (
                   <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'haut')}>
-                    <Text style={styles.boutonDeplacerTexte}>▲</Text>
+                    <IconeGlyphe nom="chevron-up" style={styles.boutonDeplacerTexte} />
                   </Pressable>
                 )}
                 {indexElement < principaux.length - 1 && (
                   <Pressable hitSlop={6} style={styles.boutonDeplacer} onPress={() => deplacerElement(element.clefId, 'bas')}>
-                    <Text style={styles.boutonDeplacerTexte}>▼</Text>
+                    <IconeGlyphe nom="chevron-down" style={styles.boutonDeplacerTexte} />
                   </Pressable>
                 )}
                 <Pressable hitSlop={6} onPress={() => demanderRetraitElement(element.clefId, element.nom)}>
-                  <Text style={styles.supprimer}>✕</Text>
+                  <IconeGlyphe nom="close" style={styles.supprimer} />
                 </Pressable>
               </View>
             )}
@@ -980,7 +1008,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                     onChangeText={(v) => renommerElement(variante.clefId, v)}
                   />
                   <Pressable hitSlop={6} onPress={() => demanderRetraitElement(variante.clefId, variante.nom)}>
-                    <Text style={styles.supprimer}>✕</Text>
+                    <IconeGlyphe nom="close" style={styles.supprimer} />
                   </Pressable>
                 </View>
                 {rendreIngredientsEtEtapes(variante.clefId)}
@@ -1048,6 +1076,28 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           </Text>
         )}
       </Pressable>
+
+      {modeEdition && creePar === session?.user.id ? (
+        confirmationSuppression ? (
+          <View style={styles.blocSuppression}>
+            <Text style={styles.texteSuppression}>
+              Supprimer « {form.titre.trim() || 'cette recette'} » ? Vous pourrez annuler pendant quelques secondes.
+            </Text>
+            <View style={styles.ligneSuppression}>
+              <Pressable style={styles.boutonGarder} onPress={() => setConfirmationSuppression(false)}>
+                <Text style={styles.boutonGarderTexte}>Garder</Text>
+              </Pressable>
+              <Pressable style={styles.boutonSupprimer} onPress={supprimer} accessibilityRole="button">
+                <Text style={styles.boutonSupprimerTexte}>Supprimer</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <Pressable onPress={() => setConfirmationSuppression(true)} accessibilityRole="button" style={styles.lienSuppression}>
+            <Text style={styles.lienSuppressionTexte}>Supprimer la recette</Text>
+          </Pressable>
+        )
+      ) : null}
     </ScrollView>
     </ZoneClavier>
     <RecadragePhotoModal
@@ -1111,7 +1161,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
           </Text>
           <Pressable style={styles.optionSuivants} onPress={() => setAvecSuivants((v) => !v)}>
             <View style={[styles.caseOption, avecSuivants && styles.caseOptionCochee]}>
-              {avecSuivants && <Text style={styles.caseOptionTexte}>✓</Text>}
+              {avecSuivants && <IconeGlyphe nom="checkmark" style={styles.caseOptionTexte} />}
             </View>
             <Text style={styles.optionSuivantsTexte}>
               {aDeplacer?.type === 'etape' ? 'avec toutes les étapes suivantes' : 'avec tous les ingrédients suivants'}
@@ -1131,7 +1181,7 @@ export default function RecetteFormScreen({ navigation, route }: any) {
                   {el.varianteDe ? '↳ Variante : ' : ''}
                   {el.nom.trim() || (el.varianteDe ? 'sans nom' : `Élément ${principaux.indexOf(el) + 1} (sans nom)`)}
                 </Text>
-                {actuel && <Text style={styles.changerElement}>✓</Text>}
+                {actuel && <IconeGlyphe nom="checkmark" style={styles.changerElement} />}
               </Pressable>
             );
           })}
@@ -1158,6 +1208,35 @@ export default function RecetteFormScreen({ navigation, route }: any) {
 }
 
 const styles = creerStylesThemes(() => ({
+  lienSuppression: { alignSelf: 'center', paddingVertical: theme.spacing.md, marginTop: theme.spacing.sm },
+  lienSuppressionTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.warning },
+  blocSuppression: {
+    borderColor: theme.colors.warning,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  texteSuppression: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text, lineHeight: 21 },
+  ligneSuppression: { flexDirection: 'row', gap: theme.spacing.sm },
+  boutonGarder: {
+    flex: 1,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  boutonGarderTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  boutonSupprimer: {
+    flex: 1,
+    backgroundColor: theme.colors.warning,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  boutonSupprimerTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.background },
   container: { flex: 1, backgroundColor: theme.colors.background },
   centre: { flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' },
   contenu: { padding: theme.spacing.md, gap: theme.spacing.sm },

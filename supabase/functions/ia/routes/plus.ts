@@ -5,9 +5,11 @@ import { CONSIGNE } from '../../_partage/consignes/plus.ts';
 
 // ⊕ universel (spécification § 4.6.1) : une phrase → des actions PROPOSÉES.
 // Rien n'est créé ici : l'app montre une carte par action et la personne
-// valide (« Tout ajouter »). Haiku 5.5, ~0,0005 $.
+// valide (« Tout ajouter »). Retour de test P-3 : aussi des consignes qui
+// OUVRENT un écran (cuisiner une recette, ouvrir une liste, rechercher),
+// exécutées tout de suite par l'app. Haiku 5.5, ~0,0005 $.
 const Action = z.object({
-  type: z.string().describe('Une valeur parmi : courses, tache, envie, souvenir, recette'),
+  type: z.string().describe('Une valeur parmi : courses, tache, envie, souvenir, recette, cuisiner, ouvrir, rechercher'),
   resume: z.string(),
   incertain: z.boolean(),
   articles: z.array(Article),
@@ -16,6 +18,11 @@ const Action = z.object({
   envie: Envie.nullable(),
   souvenir: Souvenir.nullable(),
   lien: z.string().nullable(),
+  // cuisiner : nom de la recette ; ouvrir : ce qu'il faut ouvrir (« liste
+  // Carrefour », « voyage en Bretagne ») ; rechercher : le texte cherché.
+  cible: z.string().nullable(),
+  // ouvrir : recettes, courses, quotidien, cadeaux, voyages ou souvenirs.
+  module: z.string().nullable(),
 });
 
 const Schema = z.object({
@@ -36,7 +43,8 @@ export const plus: Route = async (corps, ctx) => {
   ].join('\n');
   const r = await ctx.extraire({ modele: 'claude-haiku-5-5', consigne: CONSIGNE, contenu, schema: Schema, maxTokens: 2500 });
   // Une action n'est gardée que si son type est connu et son contenu rempli.
-  const TYPES = ['courses', 'tache', 'envie', 'souvenir', 'recette'];
+  const TYPES = ['courses', 'tache', 'envie', 'souvenir', 'recette', 'cuisiner', 'ouvrir', 'rechercher'];
+  const MODULES = ['recettes', 'courses', 'quotidien', 'cadeaux', 'voyages', 'souvenirs'];
   const actions = r.brouillon.actions
     .map((a) => ({ ...a, type: String(a.type).toLowerCase().replace('tâche', 'tache') }))
     .filter((a) => TYPES.includes(a.type))
@@ -46,8 +54,12 @@ export const plus: Route = async (corps, ctx) => {
         (a.type === 'tache' && !!a.tache?.libelle?.trim()) ||
         (a.type === 'envie' && !!a.envie?.titre?.trim()) ||
         (a.type === 'souvenir' && !!a.souvenir?.titre?.trim()) ||
-        (a.type === 'recette' && !!a.lien)
+        (a.type === 'recette' && !!a.lien) ||
+        (a.type === 'cuisiner' && !!a.cible?.trim()) ||
+        (a.type === 'ouvrir' && (MODULES.includes(String(a.module)) || !!a.cible?.trim())) ||
+        (a.type === 'rechercher' && !!a.cible?.trim())
     )
+    .map((a) => ({ ...a, module: MODULES.includes(String(a.module)) ? a.module : null }))
     .map((a) => (a.type === 'tache' && a.tache ? { ...a, tache: normaliserTache(a.tache) } : a));
   return { actions, question: r.brouillon.question };
 };

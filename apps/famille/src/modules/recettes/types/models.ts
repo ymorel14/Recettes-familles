@@ -99,6 +99,9 @@ export type Etape = {
   // `obtenirRecette`/`listerRecettes`.
   recette_liee_id: string | null;
   element_id?: string | null;
+  // Ingrédients utilisés par l'étape, reliés par l'assistant (R-12, migration
+  // 20261027110000) ; valable tant que `texte` est celui de l'étape.
+  ingredients_cites?: { texte: string; libelles: string[] } | null;
   // Titre de la recette liée, résolu par la jointure Supabase au chargement
   // (voir SELECTION_RECETTE_COMPLETE) — absent tant que l'étape n'a pas été
   // chargée via `obtenirRecette`/`listerRecettes` ; null si aucun lien.
@@ -201,13 +204,19 @@ export type NoteUtile = {
   cree_par: string;
   cree_le: string;
   maj_le: string;
+  // Foyer de la fiche (lecture des fiches de nos familles, M-1).
+  foyer?: { id: string; nom: string } | null;
 };
 
 // Congélateur (voir supabase/congelateur.sql et services/congelateur.ts).
+// Genre d'un emplacement du garde-manger (retour de test C-1).
+export type GenreLieu = 'congelateur' | 'frigo' | 'placard' | 'cave' | 'autre';
+
 export type Congelateur = {
   id: string;
   foyer_id: string;
   nom: string;
+  genre?: GenreLieu; // absent avant la migration 20261027130000 → congélateur
   cree_par: string;
   cree_le: string;
 };
@@ -221,6 +230,8 @@ export type AlimentCongele = {
   date_stockage: string; // AAAA-MM-JJ
   cree_par: string;
   cree_le: string;
+  // Genre de son emplacement, recopié par l'app (pas une colonne).
+  genre?: GenreLieu;
 };
 
 export type ListeCourses = {

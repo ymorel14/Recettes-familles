@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { ChampDate } from '../../../../composants/ChampDate';
+import { IconeGlyphe } from '../../../../composants/ui';
 import { alerte } from '../../utils/alerte';
 import { theme, creerStylesThemes } from '../../theme/theme';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +21,10 @@ import {
   formaterDate,
   lireDateSaisie,
   etatConservation,
+  dateLimite,
+  avecConservation,
+  genreLieu,
+  libelleDateRangement,
 } from '../../services/congelateur';
 import ZoneClavier from '../../components/ZoneClavier';
 import type { Congelateur } from '../../types/models';
@@ -56,7 +62,7 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
   const champNom = useRef<TextInput>(null);
 
   useEffect(() => {
-    navigation.setOptions?.({ title: alimentId ? "Modifier l'aliment" : 'Ajouter au congélateur' });
+    navigation.setOptions?.({ title: alimentId ? "Modifier l'aliment" : 'Ajouter au garde-manger' });
   }, [navigation, alimentId]);
 
   useEffect(() => {
@@ -108,16 +114,22 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
   const dateSaisieValide = lireDateSaisie(saisieDate) !== null;
   const dateFuture = versDate(dateIso) > aujourdhui();
 
+  // Genre de l'emplacement choisi (garde-manger, C-1) : la conservation ne
+  // concerne que le congélateur et le frigo.
+  const genre = congelateurs.find((c) => c.id === congelateurId)?.genre ?? 'congelateur';
+  const conservation = avecConservation(genre);
   const conseil = useMemo(() => {
     const t = typeAliment(type);
-    const limite = ajouterMois(versDate(dateIso), t.mois);
-    const etat = etatConservation({ type, date_stockage: dateIso });
-    return { mois: t.mois, limite: formaterDate(versIso(limite)), etat };
-  }, [type, dateIso]);
+    const aliment = { type, date_stockage: dateIso, genre };
+    const limite = dateLimite(aliment);
+    const jours = Math.round((limite.getTime() - versDate(dateIso).getTime()) / 86400000);
+    const duree = genre === 'frigo' ? `${jours} jour${jours > 1 ? 's' : ''}` : `${t.mois} mois`;
+    return { duree, limite: formaterDate(versIso(limite)), etat: etatConservation(aliment) };
+  }, [type, dateIso, genre]);
 
   const enregistrer = async (enchainer: boolean) => {
     if (!nom.trim()) {
-      alerte('Aliment manquant', "Indiquez ce que vous mettez au congélateur.");
+      alerte('Aliment manquant', 'Indiquez ce que vous rangez.');
       return;
     }
     if (!dateSaisieValide || dateFuture) {
@@ -152,7 +164,7 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
 
   const demanderRetrait = () => {
     if (!alimentId) return;
-    alerte('Retirer du congélateur ?', `"${nom}" sera retiré de la liste (consommé ou jeté).`, [
+    alerte('Retirer du garde-manger ?', `"${nom}" sera retiré de la liste (consommé ou jeté).`, [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Retirer',
@@ -183,7 +195,7 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
   return (
     <ZoneClavier>
       <ScrollView style={styles.container} contentContainerStyle={styles.contenuScroll} keyboardShouldPersistTaps="handled">
-        {dernierAjout && <Text style={styles.confirmation}>✓ « {dernierAjout} » ajouté. Aliment suivant :</Text>}
+        {dernierAjout && <Text style={styles.confirmation}><IconeGlyphe nom="checkmark" style={styles.confirmation} />{' '}« {dernierAjout} » ajouté. Aliment suivant :</Text>}
 
         <Text style={styles.label}>Aliment</Text>
         <TextInput
@@ -197,8 +209,8 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
           autoCapitalize="sentences"
         />
 
-        <Text style={styles.label}>Type</Text>
-        <View style={styles.puces}>
+        {conservation ? <Text style={styles.label}>Type</Text> : null}
+        {conservation ? <View style={styles.puces}>
           {TYPES_ALIMENTS.map((t) => {
             const actif = type === t.cle;
             return (
@@ -207,17 +219,19 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
               </Pressable>
             );
           })}
-        </View>
+        </View> : null}
 
         {congelateurs.length > 1 && (
           <>
-            <Text style={styles.label}>Congélateur</Text>
+            <Text style={styles.label}>Où ?</Text>
             <View style={styles.puces}>
               {congelateurs.map((c) => {
                 const actif = congelateurId === c.id;
                 return (
                   <Pressable key={c.id} style={[styles.puce, actif && styles.puceActive]} onPress={() => setCongelateurId(c.id)}>
-                    <Text style={[styles.puceTexte, actif && styles.puceTexteActif]}>{c.nom}</Text>
+                    <Text style={[styles.puceTexte, actif && styles.puceTexteActif]}>
+                      <IconeGlyphe nom={genreLieu(c.genre).icone} style={[styles.puceTexte, actif && styles.puceTexteActif]} /> {c.nom}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -225,7 +239,7 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
           </>
         )}
 
-        <Text style={styles.label}>Mis au congélateur le</Text>
+        <Text style={styles.label}>{libelleDateRangement(genre)}</Text>
         <View style={styles.puces}>
           {RACCOURCIS_DATE.map((r) => {
             const iso = versIso(ajouterMois(aujourdhui(), -r.mois));
@@ -237,13 +251,13 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
             );
           })}
         </View>
-        <TextInput
+        <ChampDate
           style={[styles.champ, (!dateSaisieValide || dateFuture) && styles.champErreur]}
-          placeholder="JJ/MM/AAAA ou MM/AAAA"
-          placeholderTextColor={theme.colors.textMuted}
           value={saisieDate}
           onChangeText={changerSaisieDate}
-          keyboardType="numbers-and-punctuation"
+          facultatif={false}
+          accessibilityLabel={libelleDateRangement(genre)}
+          couleur={theme.colors.accent}
         />
         {!dateSaisieValide ? (
           <Text style={[styles.conseil, { color: theme.colors.warning }]}>
@@ -251,12 +265,12 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
           </Text>
         ) : dateFuture ? (
           <Text style={[styles.conseil, { color: theme.colors.warning }]}>Cette date est dans le futur.</Text>
-        ) : (
+        ) : conservation ? (
           <Text style={[styles.conseil, { color: couleurConseil }]}>
-            Conservation conseillée : {conseil.mois} mois, soit jusqu'au {conseil.limite}
+            Conservation conseillée : {conseil.duree}, soit jusqu'au {conseil.limite}
             {conseil.etat === 'depasse' ? ' — déjà dépassée : plus consommable.' : '.'}
           </Text>
-        )}
+        ) : null}
 
         <Pressable style={styles.boutonEnregistrer} onPress={() => enregistrer(false)} disabled={enregistrement}>
           {enregistrement ? (
@@ -268,7 +282,7 @@ export default function AlimentCongeleFormScreen({ route, navigation }: any) {
 
         {alimentId ? (
           <Pressable style={styles.boutonSecondaire} onPress={demanderRetrait}>
-            <Text style={[styles.boutonSecondaireTexte, { color: theme.colors.warning }]}>Retirer du congélateur</Text>
+            <Text style={[styles.boutonSecondaireTexte, { color: theme.colors.warning }]}>Retirer du garde-manger</Text>
           </Pressable>
         ) : (
           <Pressable style={styles.boutonSecondaire} onPress={() => enregistrer(true)} disabled={enregistrement}>

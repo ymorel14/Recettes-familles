@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { formaterPlage } from './personnes';
+import { listeFamilles, pourChaqueFamille, type Familles } from '../../../services/familles';
 
 // Accès aux données de VoyageCommun (schéma "voyage",
 // supabase/migrations/20260929100000_voyage.sql). Qui voit quoi est garanti
@@ -36,6 +37,12 @@ export type Voyage = {
   image: string | null;
   nature: NatureVoyage;
   foyer_hote: string | null;
+  // Refonte Événements (migration 20261028150000) : occasion, personne fêtée,
+  // heure de début, et date à laquelle les dates ont été arrêtées.
+  occasion?: 'repas' | 'noel' | 'nouvel_an' | 'paques' | 'anniversaire' | 'autre' | null;
+  fete_personne_id?: string | null;
+  heure_debut?: string | null;
+  dates_validees_le?: string | null;
   // Mot montré aux personnes fêtées d'une surprise.
   message_surprise: string | null;
   cree_par: string;
@@ -156,10 +163,11 @@ const sansSurprises = (e: any) => /secrets|PGRST200/i.test(`${e?.code ?? ''} ${e
 const avecSecrets = (v: any): VoyageAvecParticipants => ({ ...v, secrets: v?.secrets ?? [] });
 
 // Voyages visibles (la base ne renvoie que ceux auxquels on a droit) de la
-// famille active, avec leurs participants.
-export async function listerVoyages(familleId: string): Promise<VoyageAvecParticipants[]> {
+// famille, ou de toutes mes familles (vue unique, G-2), avec leurs participants.
+export async function listerVoyages(familles: Familles): Promise<VoyageAvecParticipants[]> {
+  const ids = listeFamilles(familles);
   const lire = (selection: string) =>
-    supabase.from('voyages').select(selection).eq('famille_id', familleId).order('cree_le', { ascending: false });
+    supabase.from('voyages').select(selection).in('famille_id', ids).order('cree_le', { ascending: false });
   let { data, error } = await lire(SELECTION);
   if (error && sansSurprises(error)) ({ data, error } = await lire(SELECTION_SANS_SURPRISES));
   if (error) throw error;
@@ -314,14 +322,15 @@ export type EvenementPourMoi = {
   message: string | null;
 };
 
-export async function evenementsPourMoi(familleId: string): Promise<EvenementPourMoi[]> {
+export async function evenementsPourMoi(familles: Familles): Promise<EvenementPourMoi[]> {
+  const ids = listeFamilles(familles);
   const { data, error } = await supabase.rpc('evenements_pour_moi');
   if (error) {
     // Migration des surprises pas encore passée : rien à montrer.
     if (/evenements_pour_moi|PGRST202|function/i.test(String(error.message))) return [];
     throw error;
   }
-  return ((data ?? []) as EvenementPourMoi[]).filter((e) => e.famille_id === familleId);
+  return ((data ?? []) as EvenementPourMoi[]).filter((e) => ids.includes(e.famille_id));
 }
 
 export const REPONSES: { id: ReponseInvite; libelle: string }[] = [

@@ -8,6 +8,7 @@ import { extraireMessageErreur } from '@apps-famille/famille';
 import { listerAlbums, VISIBILITES_ALBUM, type Album } from '../services/souvenirs';
 import { useAdresses, Vignette } from '../components/medias';
 import { Bouton, Chargement, MessageVide, Pastille } from '../components/ui';
+import { useFamillesVues } from '../../../services/familles';
 
 // "2005 – 2015", "2019", "" : période couverte par un album.
 export function periodeAlbum(debut: string | null, fin: string | null): string {
@@ -22,6 +23,8 @@ export function periodeAlbum(debut: string | null, fin: string | null): string {
 // motos », « Les enfants que j'ai gardés », « Nos Noëls »).
 export default function AlbumsScreen({ navigation }: any) {
   const { famille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const [albums, setAlbums] = useState<Album[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [rafraichissement, setRafraichissement] = useState(false);
@@ -29,13 +32,13 @@ export default function AlbumsScreen({ navigation }: any) {
   const charger = useCallback(async () => {
     if (!famille) return;
     try {
-      setAlbums(await listerAlbums(famille.id));
+      setAlbums(await listerAlbums(famillesVues));
       setErreur(null);
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Impossible de charger les albums.'));
       setAlbums((a) => a ?? []);
     }
-  }, [famille?.id]);
+  }, [famille?.id, famillesVues]);
 
   useFocusEffect(
     useCallback(() => {

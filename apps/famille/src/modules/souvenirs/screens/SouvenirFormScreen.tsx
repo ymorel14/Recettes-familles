@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
@@ -253,25 +254,29 @@ export default function SouvenirFormScreen({ route, navigation }: any) {
         <Libelle>Date</Libelle>
         <Puces options={PRECISIONS.map((p) => ({ id: p.id, libelle: p.libelle }))} valeur={form.precision_date} onChange={changerPrecision} />
         <View style={styles.dates}>
-          <Champ
-            style={styles.date}
-            value={saisieDebut}
-            onChangeText={setSaisieDebut}
-            placeholder={precision.exemple}
-            keyboardType="numbers-and-punctuation"
-            accessibilityLabel={avecFin ? 'Date de début' : 'Date'}
-          />
+          <View style={styles.date}>
+            <ChampDate
+              value={saisieDebut}
+              onChangeText={setSaisieDebut}
+              precision={form.precision_date === 'jour' ? 'jour' : form.precision_date === 'mois' ? 'mois' : 'annee'}
+              placeholder="Choisir"
+              accessibilityLabel={avecFin ? 'Date de début' : 'Date'}
+              couleur={theme.colors.accent}
+            />
+          </View>
           {avecFin && (
             <>
               <Text style={styles.au}>au</Text>
-              <Champ
-                style={styles.date}
-                value={saisieFin}
-                onChangeText={setSaisieFin}
-                placeholder="(facultatif)"
-                keyboardType="numbers-and-punctuation"
-                accessibilityLabel="Date de fin"
-              />
+              <View style={styles.date}>
+                <ChampDate
+                  value={saisieFin}
+                  onChangeText={setSaisieFin}
+                  precision={form.precision_date === 'jour' ? 'jour' : form.precision_date === 'mois' ? 'mois' : 'annee'}
+                  placeholder="(facultatif)"
+                  accessibilityLabel="Date de fin"
+                  couleur={theme.colors.accent}
+                />
+              </View>
             </>
           )}
         </View>

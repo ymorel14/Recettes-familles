@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, TextInput } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { formaterDate, lireDateSaisie, versIso, aujourdhui } from '../services/congelateur';
 
@@ -48,10 +50,10 @@ export default function ReglageSurprise({
     <View style={styles.zone}>
       <Pressable style={styles.ligne} onPress={basculer} accessibilityRole="checkbox" accessibilityState={{ checked: active }}>
         <View style={[styles.case, active && styles.caseCochee]}>
-          {active && <Text style={styles.coche}>✓</Text>}
+          {active && <IconeGlyphe nom="checkmark" style={styles.coche} />}
         </View>
         <View style={styles.ligneTextes}>
-          <Text style={styles.titre}>🤫 Recette surprise</Text>
+          <Text style={styles.titre}><IconeGlyphe nom="eye-off-outline" style={styles.titre} />{' '}Recette surprise</Text>
           <Text style={styles.aide}>Pour un repas de famille : la recette reste cachée jusqu'au jour J.</Text>
         </View>
       </Pressable>
@@ -75,13 +77,13 @@ export default function ReglageSurprise({
           {aideActive && <Text style={styles.aide}>{aideActive}</Text>}
 
           <Text style={styles.label}>Révéler automatiquement le (facultatif)</Text>
-          <TextInput
+          <ChampDate
             style={[styles.champ, (dateInvalide || datePassee) && styles.champErreur]}
-            placeholder="JJ/MM/AAAA — ex. le jour du repas"
-            placeholderTextColor={theme.colors.textMuted}
+            placeholder="Ex. le jour du repas"
             value={saisieDate}
             onChangeText={changerDate}
-            keyboardType="numbers-and-punctuation"
+            accessibilityLabel="Révéler automatiquement le"
+            couleur={theme.colors.accent}
           />
           <Text style={[styles.aide, (dateInvalide || datePassee) && { color: theme.colors.warning }]}>
             {dateInvalide

@@ -34,7 +34,9 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
 
 // Pas d'« app » déclarée : l'app Famille ne participe pas au passage de
 // connexion entre les anciennes apps (inutile dans l'app unique).
-configurerFamille(supabase);
+// Une seule vue pour toutes les familles du foyer (retour de test G-2) : plus
+// de « famille affichée » à choisir.
+configurerFamille(supabase, { vueToutesFamilles: true });
 export { schemaFamille };
 
 // Chemin de l'app sur le site web commun (/famille), à côté des six apps

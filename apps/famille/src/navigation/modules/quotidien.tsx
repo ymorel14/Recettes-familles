@@ -1,6 +1,5 @@
 import { creerModule } from '../creerModule';
-import AujourdhuiScreen from '../../modules/quotidien/screens/AujourdhuiScreen';
-import TrajetsScreen from '../../modules/quotidien/screens/TrajetsScreen';
+import ActivitesScreen from '../../modules/quotidien/screens/ActivitesScreen';
 import TachesScreen from '../../modules/quotidien/screens/TachesScreen';
 import ArgentPocheScreen from '../../modules/quotidien/screens/ArgentPocheScreen';
 import GroupeScreen from '../../modules/quotidien/screens/GroupeScreen';
@@ -9,6 +8,9 @@ import ActiviteFormScreen from '../../modules/quotidien/screens/ActiviteFormScre
 import TacheFormScreen from '../../modules/quotidien/screens/TacheFormScreen';
 import DomainesScreen from '../../modules/quotidien/screens/DomainesScreen';
 import TirelireScreen from '../../modules/quotidien/screens/TirelireScreen';
+import TachesEnfantScreen from '../../modules/quotidien/screens/TachesEnfantScreen';
+import TacheEnfantFormScreen from '../../modules/quotidien/screens/TacheEnfantFormScreen';
+import BilanScreen from '../../modules/quotidien/screens/BilanScreen';
 import InventairesScreen from '../../modules/quotidien/screens/InventairesScreen';
 import InventaireScreen from '../../modules/quotidien/screens/InventaireScreen';
 import InventaireFormScreen from '../../modules/quotidien/screens/InventaireFormScreen';
@@ -23,10 +25,9 @@ import ImportPlanning from '../../ecrans/ImportPlanning';
 export default creerModule({
   id: 'quotidien',
   onglets: [
-    { nom: 'Aujourdhui', titre: 'Aujourd’hui', composant: AujourdhuiScreen },
-    { nom: 'Trajets', titre: 'Trajets', composant: TrajetsScreen },
     { nom: 'Taches', titre: 'Tâches', composant: TachesScreen },
     { nom: 'ArgentPoche', titre: 'Argent de poche', composant: ArgentPocheScreen },
+    { nom: 'Activites', titre: 'Activités', composant: ActivitesScreen },
     { nom: 'Inventaires', titre: 'Inventaires', composant: InventairesScreen },
   ],
   ecrans: [
@@ -36,7 +37,10 @@ export default creerModule({
     { nom: 'ImportPlanning', composant: ImportPlanning, options: { title: 'Importer un planning' } },
     { nom: 'TacheForm', composant: TacheFormScreen, options: { title: 'Tâche' } },
     { nom: 'Domaines', composant: DomainesScreen, options: { title: 'Domaines des tâches' } },
-    { nom: 'Tirelire', composant: TirelireScreen, options: { title: 'Tirelire' } },
+    { nom: 'TacheEnfantForm', composant: TacheEnfantFormScreen, options: { title: 'Tâche d’enfant' } },
+    { nom: 'TachesEnfant', composant: TachesEnfantScreen, options: { title: 'Tâches de l’enfant' } },
+    { nom: 'Bilan', composant: BilanScreen, options: { title: 'Bilan de la semaine' } },
+    { nom: 'Tirelire', composant: TirelireScreen, options: { title: 'Historique' } },
     { nom: 'Inventaire', composant: InventaireScreen, options: { title: 'Inventaire' } },
     { nom: 'InventaireForm', composant: InventaireFormScreen, options: { title: 'Inventaire' } },
     { nom: 'Objet', composant: ObjetScreen, options: { title: 'Objet' } },

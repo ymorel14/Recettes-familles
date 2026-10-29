@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -36,7 +37,24 @@ import { calculerBudget } from '../services/budget';
 import { fenetrePeriode } from '../services/dates';
 import { versIso } from '../services/calendrier';
 import { listerPostes, type Poste } from '../services/voyage';
-import { listerRepas, listesLiees, type Repas } from '../services/repas';
+import { listerRepas, ETAPES_REPAS, type Repas } from '../services/repas';
+import { ouvrirModule } from '../../../navigation/navigationRef';
+import {
+  aFaire,
+  enAttente,
+  enviesDeListe,
+  listesEnviesLiees,
+  offrirEnvie,
+  prendrePlat,
+  proposerPlat,
+  relancer,
+  type ActionAFaire,
+  type EnAttente,
+  type Envie,
+} from '../services/evenement';
+import { AFaire, OnAttend } from '../components/AFaire';
+import { Synthese } from '../components/Synthese';
+import { donnerAvisActivite } from '../services/activites';
 import { Champ } from '../components/formulaire';
 import { listerOptions, listerTrajetsDuBudget, type OptionTrajet, type Trajet } from '../services/transport';
 import { listerActivites, type Activite } from '../services/activites';
@@ -75,6 +93,13 @@ export default function VoyageScreen({ route, navigation }: any) {
     repas: Repas[];
     listes: number;
   }>({ propositions: 0, hebergements: [], postes: [], trajets: [], options: [], activites: [], repas: [], listes: 0 });
+  const [actions, setActions] = useState<ActionAFaire[]>([]);
+  const [attente, setAttente] = useState<EnAttente[]>([]);
+  const [relances, setRelances] = useState<Set<string>>(new Set());
+  const [envies, setEnvies] = useState<Envie[]>([]);
+  const [listesIds, setListesIds] = useState<string[]>([]);
+  const [vue, setVue] = useState<'programmation' | 'synthese' | null>(null);
+  const [autre, setAutre] = useState<{ repasId: string; texte: string } | null>(null);
   const [lieuOuvert, setLieuOuvert] = useState(false);
   const [lieuChoix, setLieuChoix] = useState('decider');
   const [lieuTexte, setLieuTexte] = useState('');
@@ -94,8 +119,25 @@ export default function VoyageScreen({ route, navigation }: any) {
         listerOptions(v.id),
         listerActivites(v.id),
         estRepas ? listerRepas(v.id) : Promise.resolve([] as Repas[]),
-        estRepas ? listesLiees(v.id) : Promise.resolve([] as string[]),
+        listesEnviesLiees(v.id),
       ]);
+      const [mesActions, enRetard] = await Promise.all([aFaire(v.id), enAttente(v.id)]);
+      const lesEnvies = listes.length ? await enviesDeListe(listes[0]) : [];
+      setActions(mesActions);
+      setAttente(enRetard);
+      setEnvies(lesEnvies);
+      setListesIds(listes);
+      // Vue par défaut : Programmation s'il y a quelque chose à faire, sinon
+      // Synthèse ; le dernier choix de la personne pour cet événement l'emporte.
+      let memorisee: string | null = null;
+      try {
+        memorisee = await AsyncStorage.getItem(`vue-evenement.${v.id}`);
+      } catch {
+        memorisee = null;
+      }
+      setVue((actuelle) =>
+        actuelle ?? (memorisee === 'programmation' || memorisee === 'synthese' ? memorisee : mesActions.length > 0 ? 'programmation' : 'synthese')
+      );
       setEtat({ propositions: propositions.length, hebergements, postes, trajets, options, activites, repas, listes: listes.length });
       const carte = new Map<string, Personne>();
       for (const p of [...famille, ...invites]) carte.set(p.id, p);
@@ -253,6 +295,35 @@ export default function VoyageScreen({ route, navigation }: any) {
     }
   };
 
+  const choisirVue = (v: 'programmation' | 'synthese') => {
+    setVue(v);
+    AsyncStorage.setItem(`vue-evenement.${voyage.id}`, v).catch(() => {});
+  };
+
+  const reponduePour = (personneId: string, r: ReponseInvite) => agir(() => repondre(voyage.id, personneId, r));
+  const presencePour = (activiteId: string, nous: boolean) =>
+    agir(async () => {
+      for (const p of miennes) await donnerAvisActivite(activiteId, p.id, nous ? 'partant' : 'non');
+    });
+  const relancerPersonne = (l: EnAttente) =>
+    agir(async () => {
+      const fait = await relancer(voyage.id, l.personne_id, l.type);
+      setRelances((s) => new Set(s).add(`${l.personne_id}-${l.type}`));
+      if (!fait) alerte(`${nom(l.personne_id)} a déjà été relancé(e) aujourd’hui.`);
+    });
+
+  const nomUtilisateur = (uid: string) => [...personnes.values()].find((p) => p.utilisateur_id === uid)?.prenom ?? null;
+  const enviesLibres = envies.filter((e) => e.reservations.length === 0);
+  const enviesPourSynthese = envies
+    .filter((e) => e.reservations.length > 0)
+    .map((e) => ({ titre: e.titre, offertPar: nomUtilisateur(e.reservations[0].reserve_par) ?? 'quelqu’un' }));
+  const retenuTransport = etat.options.find((o) => o.statut === 'retenue');
+  const lieuSynthese =
+    voyage.nature === 'repas' && voyage.foyer_hote
+      ? `Chez ${nomFoyer(voyage.foyer_hote) ?? 'un foyer de la famille'}`
+      : voyage.destination;
+  const reponsePendante = actions.some((a) => a.type === 'repondre');
+
   const confirmerRetrait = (p: Participant) =>
     alerte(`Retirer ${nom(p.personne_id)} du voyage ?`, undefined, [
       { text: 'Annuler', style: 'cancel' },
@@ -397,8 +468,139 @@ export default function VoyageScreen({ route, navigation }: any) {
         )
       )}
 
+      {/* Sélecteur Programmation / Synthèse */}
+      <View style={styles.selecteur} accessibilityRole="tablist">
+        {(['programmation', 'synthese'] as const).map((v) => (
+          <Pressable
+            key={v}
+            onPress={() => choisirVue(v)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: vue === v }}
+            style={[styles.onglet, vue === v && styles.ongletActif]}
+          >
+            <Text style={[styles.ongletTexte, vue === v && styles.ongletTexteActif]}>
+              {v === 'programmation' ? 'Programmation' : 'Synthèse'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {vue === 'synthese' ? (
+        <Synthese
+          quand={libelleQuand(voyage)}
+          lieu={lieuSynthese}
+          partants={partants}
+          attendus={attendus}
+          logement={retenus.length ? retenus.map((h) => h.nom).join(', ') : null}
+          transport={retenuTransport ? retenuTransport.nom : null}
+          activites={etat.activites}
+          repas={etat.repas}
+          budgetTotal={budget.total}
+          nomDe={nom}
+          cadeau={enviesPourSynthese}
+        />
+      ) : (
+        <>
+          <AFaire
+            actions={actions}
+            repas={voyage.nature === 'repas'}
+            nomDe={nom}
+            nbDansMonFoyer={miennes.length}
+            onOuvrir={(ecran) => navigation.navigate(ecran, { voyageId: voyage.id })}
+            onRepondre={reponduePour}
+            onPresence={presencePour}
+            enCours={enCours}
+          />
+          {organisateur ? <OnAttend lignes={attente} nomDe={nom} relances={relances} onRelancer={relancerPersonne} /> : null}
+        </>
+      )}
+
+      {vue !== 'synthese' && voyage.nature === 'repas' && etat.repas.length > 0 && (
+        <View style={styles.bloc}>
+          <Text style={styles.blocTitre}>Au menu</Text>
+          {etat.repas.map((r) => (
+            <View key={r.id} style={{ gap: theme.spacing.xs }}>
+              {etat.repas.length > 1 ? <Text style={styles.inviteNom}>{r.titre}</Text> : null}
+              {r.plats.length === 0 ? <Text style={styles.aide}>Rien de prévu pour l’instant.</Text> : null}
+              {r.plats.map((p) => (
+                <View key={p.id} style={styles.platLigne}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inviteNom}>{p.titre}</Text>
+                    <Text style={styles.inviteReponse}>
+                      {ETAPES_REPAS.find((e) => e.id === p.etape)?.libelle ?? 'Proposé par la famille'}
+                      {' · '}
+                      {p.responsables.length ? p.responsables.map((x) => nom(x.personne_id)).join(', ') : 'personne pour l’instant'}
+                    </Text>
+                  </View>
+                  {p.responsables.length === 0 && maPersonne ? (
+                    <Bouton
+                      titre="Je m’en charge"
+                      variante="contour"
+                      desactive={enCours}
+                      onPress={() => agir(() => prendrePlat(p.id, maPersonne.id))}
+                    />
+                  ) : null}
+                </View>
+              ))}
+              {maPersonne ? (
+                autre?.repasId === r.id ? (
+                  <View style={{ gap: theme.spacing.sm }}>
+                    <Champ
+                      value={autre.texte}
+                      onChangeText={(t) => setAutre({ repasId: r.id, texte: t })}
+                      placeholder="Ce que vous apportez"
+                      accessibilityLabel="Plat que vous proposez"
+                    />
+                    <View style={styles.boutons}>
+                      <Bouton titre="Annuler" variante="discret" onPress={() => setAutre(null)} />
+                      <Bouton
+                        titre="Ajouter"
+                        desactive={!autre.texte.trim()}
+                        enCours={enCours}
+                        onPress={() =>
+                          agir(async () => {
+                            await proposerPlat(r.id, autre.texte, maPersonne.id);
+                            setAutre(null);
+                          })
+                        }
+                      />
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setAutre({ repasId: r.id, texte: '' })} accessibilityRole="button" hitSlop={6}>
+                    <Text style={styles.lienDiscret}>Proposer autre chose</Text>
+                  </Pressable>
+                )
+              ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {vue !== 'synthese' && envies.length > 0 && (
+        <View style={styles.bloc}>
+          <Text style={styles.blocTitre}>Cadeau</Text>
+          {enviesLibres.slice(0, 3).map((e) => (
+            <View key={e.id} style={styles.platLigne}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inviteNom}>{e.titre}</Text>
+                {e.prix != null ? <Text style={styles.inviteReponse}>{formaterEuros(e.prix)}</Text> : null}
+              </View>
+              <Bouton titre="Je l’offre" variante="contour" desactive={enCours} onPress={() => agir(() => offrirEnvie(e.id))} />
+            </View>
+          ))}
+          {enviesLibres.length === 0 ? <Text style={styles.aide}>Toutes les envies de la liste ont trouvé preneur.</Text> : null}
+          {listesIds.length > 0 ? (
+            <Pressable onPress={() => ouvrirModule('cadeaux', 'Liste', { listeId: listesIds[0] })} accessibilityRole="button" hitSlop={6}>
+              <Text style={styles.lienDiscret}>Voir les {envies.length} envies</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      )}
+
+      {vue !== 'synthese' && (<>
       {/* Ma réponse (et celle de mes enfants sans compte) */}
-      {mesInvitations.length > 0 && (
+      {mesInvitations.length > 0 && !reponsePendante && (
         <View style={styles.bloc}>
           <Text style={styles.blocTitre}>{mesInvitations.length > 1 ? 'Vos réponses' : 'Votre réponse'}</Text>
           {mesInvitations.map((p) => (
@@ -587,6 +789,8 @@ export default function VoyageScreen({ route, navigation }: any) {
         );
       })}
 
+      </>)}
+
       {createur && (
         <Bouton titre={voyage.nature === 'repas' ? 'Supprimer ce repas' : 'Supprimer ce voyage'} variante="discret" onPress={confirmerSuppression} style={styles.supprimer} />
       )}
@@ -652,4 +856,16 @@ const styles = creerStylesThemes(() => ({
   bientot: { fontFamily: theme.fontManuscrit, fontSize: 13, color: theme.colors.textMuted },
   lienDiscret: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.accent, textDecorationLine: 'underline' },
   supprimer: { marginTop: theme.spacing.lg },
+  selecteur: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: theme.radii.lg,
+    backgroundColor: theme.colors.selection,
+    gap: 4,
+  },
+  onglet: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: theme.radii.lg },
+  ongletActif: { backgroundColor: theme.colors.surface },
+  ongletTexte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.textMuted },
+  ongletTexteActif: { fontFamily: theme.fontBodyBold, color: theme.colors.text },
+  platLigne: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
 }));

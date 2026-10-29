@@ -67,14 +67,22 @@ export function MessageVide({ titre, texte }: { titre: string; texte?: string })
 }
 
 // Pastille (compte à rebours, statut…).
-export function Pastille({ texte, ton = 'accent' }: { texte: string; ton?: 'accent' | 'neutre' | 'succes' }) {
+export function Pastille({ texte, ton = 'accent' }: { texte: string; ton?: 'accent' | 'neutre' | 'succes' | 'alerte' }) {
   return (
-    <View style={[styles.pastille, ton === 'neutre' && styles.pastilleNeutre, ton === 'succes' && styles.pastilleSucces]}>
+    <View
+      style={[
+        styles.pastille,
+        ton === 'neutre' && styles.pastilleNeutre,
+        ton === 'succes' && styles.pastilleSucces,
+        ton === 'alerte' && styles.pastilleAlerte,
+      ]}
+    >
       <Text
         style={[
           styles.pastilleTexte,
           ton === 'neutre' && { color: theme.colors.textMuted },
           ton === 'succes' && { color: theme.colors.success },
+          ton === 'alerte' && { color: theme.colors.warning },
         ]}
       >
         {texte}
@@ -116,5 +124,6 @@ const styles = creerStylesThemes(() => ({
   },
   pastilleNeutre: { backgroundColor: theme.colors.selectionTransparent, borderWidth: 1, borderColor: theme.colors.border },
   pastilleSucces: { backgroundColor: theme.colors.selectionTransparent },
+  pastilleAlerte: { backgroundColor: theme.colors.selectionTransparent, borderWidth: 1, borderColor: theme.colors.warning },
   pastilleTexte: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.accent },
 }));

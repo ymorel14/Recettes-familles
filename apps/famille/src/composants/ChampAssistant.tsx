@@ -15,6 +15,7 @@ export function ChampAssistant({
   exemples = [],
   autoFocus,
   desactive,
+  grandMicro,
 }: {
   valeur: string;
   onChange: (t: string) => void;
@@ -23,6 +24,9 @@ export function ChampAssistant({
   exemples?: string[];
   autoFocus?: boolean;
   desactive?: boolean;
+  // Grand bouton « Assistant » sous le champ au lieu du petit micro (⊕,
+  // retours de test P-1 et P-3) : on parle, la phrase s'écrit dans le champ.
+  grandMicro?: boolean;
 }) {
   const debutDictee = useRef('');
   const { ecoute, erreur, demarrer, arreter, possible } = useDictee((texte) => {
@@ -46,7 +50,7 @@ export function ChampAssistant({
           onSubmitEditing={onValider}
           accessibilityLabel={placeholder}
         />
-        {possible ? (
+        {possible && !grandMicro ? (
           <Pressable
             onPress={() => {
               if (ecoute) return arreter();
@@ -63,8 +67,26 @@ export function ChampAssistant({
           </Pressable>
         ) : null}
       </View>
+      {possible && grandMicro ? (
+        <Pressable
+          onPress={() => {
+            if (ecoute) return arreter();
+            debutDictee.current = valeur.trim();
+            demarrer();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={ecoute ? 'Arrêter l’écoute' : 'Parler à l’assistant'}
+          accessibilityState={{ selected: ecoute }}
+          style={({ pressed }) => [styles.grandMicro, ecoute && { backgroundColor: couleurs.accent }, pressed && { opacity: 0.85 }]}
+        >
+          <Icone nom={ecoute ? 'mic' : 'mic-outline'} taille={24} couleur={ecoute ? couleurs.surAccent : couleurs.fond} />
+          <Text style={[styles.grandMicroTexte, ecoute && { color: couleurs.surAccent }]}>
+            {ecoute ? 'J’écoute… touchez pour arrêter' : 'Assistant : parlez'}
+          </Text>
+        </Pressable>
+      ) : null}
       {erreur ? <Text style={styles.erreur}>{erreur}</Text> : null}
-      {exemples.length && !valeur ? (
+      {exemples.length > 0 && !valeur ? (
         <View style={styles.exemples}>
           {exemples.map((e) => (
             <Pressable key={e} onPress={() => onChange(e)} accessibilityRole="button" accessibilityLabel={`Exemple : ${e}`} style={styles.exemple}>
@@ -113,6 +135,16 @@ const styles = creerStyles(() => ({
     backgroundColor: couleurs.segment,
   },
   ecoute: { fontFamily: polices.texteGras, fontSize: 13, color: couleurs.surAccent },
+  grandMicro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: espaces.s,
+    minHeight: 54,
+    borderRadius: arrondis.champ,
+    backgroundColor: couleurs.encre,
+  },
+  grandMicroTexte: { fontFamily: polices.texteGras, fontSize: 16, color: couleurs.fond },
   erreur: { fontFamily: polices.texteDemiGras, fontSize: 13, color: couleurs.attention },
   exemples: { flexDirection: 'row', flexWrap: 'wrap', gap: espaces.s },
   exemple: {

@@ -1,6 +1,6 @@
 import { creerModule } from '../creerModule';
 import VoyagesScreen from '../../modules/voyages/screens/VoyagesScreen';
-import CalendrierScreen from '../../modules/voyages/screens/CalendrierScreen';
+import RepasFamilleScreen from '../../modules/voyages/screens/RepasFamilleScreen';
 import NouveauVoyageScreen from '../../modules/voyages/screens/NouveauVoyageScreen';
 import VoyageScreen from '../../modules/voyages/screens/VoyageScreen';
 import DisponibiliteScreen from '../../modules/voyages/screens/DisponibiliteScreen';
@@ -29,8 +29,8 @@ import SurpriseScreen from '../../modules/voyages/screens/SurpriseScreen';
 export default creerModule({
   id: 'voyages',
   onglets: [
-    { nom: 'Voyages', titre: 'Voyages & repas', composant: VoyagesScreen },
-    { nom: 'Calendrier', titre: 'Calendrier', composant: CalendrierScreen },
+    { nom: 'Voyages', titre: 'Voyages', composant: VoyagesScreen },
+    { nom: 'RepasFamille', titre: 'Repas de famille', composant: RepasFamilleScreen },
   ],
   ecrans: [
     { nom: 'NouveauVoyage', composant: NouveauVoyageScreen, options: { title: 'Proposer' } },

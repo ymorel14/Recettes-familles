@@ -36,7 +36,10 @@ export type TacheProposee = {
 export type EnvieProposee = { titre: string; details: string | null; lien: string | null; prix: number | null };
 export type SouvenirPropose = { titre: string; date: string | null; recit: string | null; personnes: string[] };
 
-export type TypeAction = 'courses' | 'tache' | 'envie' | 'souvenir' | 'recette';
+// cuisiner, ouvrir, rechercher : consignes qui ouvrent un écran (P-3),
+// exécutées tout de suite, sans carte à valider.
+export type TypeAction = 'courses' | 'tache' | 'envie' | 'souvenir' | 'recette' | 'cuisiner' | 'ouvrir' | 'rechercher';
+export const ACTIONS_IMMEDIATES: TypeAction[] = ['cuisiner', 'ouvrir', 'rechercher'];
 export type ActionProposee = {
   type: TypeAction;
   resume: string;
@@ -47,6 +50,8 @@ export type ActionProposee = {
   envie: EnvieProposee | null;
   souvenir: SouvenirPropose | null;
   lien: string | null;
+  cible?: string | null;
+  module?: string | null;
 };
 
 export type ReponsePlus = { actions: ActionProposee[]; question: string | null };
@@ -102,7 +107,7 @@ function decaler(iso: string, jours: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-type PersonneFoyer = { id: string; prenom: string };
+type PersonneFoyer = { id: string; prenom: string; utilisateur_id?: string | null };
 
 // Tâche proposée → champs de quotidien.taches (mêmes règles que
 // TacheFormScreen). Renvoie un message si la tâche ne peut pas être créée
@@ -148,11 +153,31 @@ export async function creerTacheProposee(t: TacheProposee, foyerId: string, pers
   if (typeof ligne === 'string') throw new Error(ligne);
   const { data, error } = await quotidien()
     .from('taches')
-    .insert({ ...ligne, domaine_id: null, foyer_id: foyerId })
+    .insert({ ...ligne, ...champsTypeTache(ligne, personnes), points: 0, domaine_id: null, foyer_id: foyerId })
     .select('id')
     .single();
   if (error) throw error;
   return data.id as string;
+}
+
+// Refonte Quotidien § 2.3 : l'assistant renseigne le type de la tâche.
+// Confiée seulement à des enfants sans compte (utilisateur_id null) :
+//   - tous les jours ou certains jours → obligatoire (chacun la fait) ;
+//   - sans date ni récurrence → coup de main, 1 fois par semaine ;
+// sinon (adultes, tâche datée) → tâche de la maison.
+export function champsTypeTache(
+  ligne: { recurrence: Recurrence; planif: Planif; jours: number[]; personnes: string[] },
+  personnes: PersonneFoyer[]
+): Record<string, unknown> {
+  const enfants =
+    ligne.personnes.length > 0 &&
+    ligne.personnes.every((id) => personnes.find((p) => p.id === id)?.utilisateur_id === null);
+  if (!enfants || ligne.planif !== 'libre') return { type: 'maison' };
+  if (ligne.recurrence === 'quotidienne') {
+    return { type: 'obligatoire', attribution: 'chacun', recurrence: 'hebdomadaire', jours: [1, 2, 3, 4, 5, 6, 7] };
+  }
+  if (ligne.recurrence === 'hebdomadaire') return { type: 'obligatoire', attribution: 'chacun' };
+  return { type: 'coup_de_main', attribution: 'chacun', fois_par_semaine: 1 };
 }
 
 export async function retirerTache(id: string): Promise<void> {

@@ -16,6 +16,7 @@ import AccueilScreen from '../ecrans/AccueilScreen';
 import AgendaScreen from '../ecrans/AgendaScreen';
 import ActiviteScreen from '../ecrans/ActiviteScreen';
 import MoiScreen from '../ecrans/MoiScreen';
+import RechercheScreen from '../ecrans/RechercheScreen';
 import ChangerMotDePasseScreen from '../compte/screens/ChangerMotDePasseScreen';
 import VehiculeFormScreen from '../modules/voyages/screens/VehiculeFormScreen';
 import ConnexionScreen from '../compte/screens/ConnexionScreen';
@@ -58,6 +59,8 @@ function Principal() {
         <Onglets.Screen name="Agenda" component={AgendaScreen} options={{ title: 'Agenda' }} />
         <Onglets.Screen name="Activite" component={ActiviteScreen} options={{ title: 'Activité' }} />
         <Onglets.Screen name="Moi" component={Moi} options={{ title: 'Moi' }} />
+        {/* Recherche globale (P-2) : onglet caché, ouvert par la loupe de l'accueil. */}
+        <Onglets.Screen name="Recherche" component={RechercheScreen} options={{ title: 'Recherche' }} />
         <Onglets.Screen name="Recettes" component={ModuleRecettes} options={{ title: 'Recettes' }} />
         <Onglets.Screen name="Courses" component={ModuleCourses} options={{ title: 'Courses' }} />
         <Onglets.Screen name="Quotidien" component={ModuleQuotidien} options={{ title: 'Quotidien' }} />

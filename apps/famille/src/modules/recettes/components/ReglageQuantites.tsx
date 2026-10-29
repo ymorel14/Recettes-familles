@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, Modal, TextInput, ScrollView } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { normaliserTexte } from '../utils/texte';
 import ZoneClavier from './ZoneClavier';
@@ -96,7 +97,7 @@ export default function ReglageQuantites({ partsDefaut, ingredients, ajustement,
         </Pressable>
         {regroupes.length > 0 && (
           <Pressable onPress={() => setOuvert(true)} hitSlop={6}>
-            <Text style={styles.lien}>⚖️ Adapter à ce que j'ai</Text>
+            <Text style={styles.lien}><IconeGlyphe nom="scale-outline" style={styles.lien} />{' '}Adapter à ce que j'ai</Text>
           </Pressable>
         )}
       </View>

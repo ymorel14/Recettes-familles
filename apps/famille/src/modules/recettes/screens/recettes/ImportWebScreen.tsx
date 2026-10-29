@@ -10,6 +10,7 @@ import { useAppelAssistant } from '../../../../composants/useAppelAssistant';
 import { estLienVideo, recetteLueVersFormulaire, type RecetteLueLien } from '../../../../services/recetteAssistant';
 import type { ResultatImportWeb } from '../../services/importWeb';
 import type { RecetteFormulaire } from '../../services/recettes';
+import { proposerPourFormulaire } from '../../services/classement';
 
 // Import d'une recette depuis une page web (cahier des charges §6, feuille
 // de route §8 — Phase 3) : l'utilisateur colle une URL, l'app récupère les
@@ -90,6 +91,15 @@ export default function ImportWebScreen({ navigation, route }: any) {
         return;
       }
       let formulaire = resultatVersFormulaire(resultat, urlNettoyee);
+      // Pas de catégorie dans la page : l'assistant en propose (R-4), à
+      // vérifier dans le formulaire avant d'enregistrer.
+      if (formulaire.nomsCategories.length === 0) {
+        const proposees = await proposerPourFormulaire(
+          formulaire.titre,
+          formulaire.ingredients.map((i) => i.libelle).filter(Boolean)
+        );
+        if (proposees.length) formulaire = { ...formulaire, nomsCategories: proposees };
+      }
 
       if (resultat.image) {
         // Téléchargée ici plutôt que référencée telle quelle : elle passe

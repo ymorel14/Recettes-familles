@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, FlatList } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { rechercherCategories } from '../services/categories';
 import type { Categorie } from '../types/models';
@@ -44,7 +45,7 @@ export default function SelecteurCategories({ selection, onChange }: Props) {
       <View style={styles.puces}>
         {selection.map((nom) => (
           <Pressable key={nom} style={styles.puce} onPress={() => retirer(nom)}>
-            <Text style={styles.puceTexte}>{nom} ✕</Text>
+            <Text style={styles.puceTexte}>{nom} <IconeGlyphe nom="close" style={styles.puceTexte} /></Text>
           </Pressable>
         ))}
       </View>

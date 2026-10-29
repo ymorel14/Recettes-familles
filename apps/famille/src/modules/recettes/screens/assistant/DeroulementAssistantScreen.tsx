@@ -12,11 +12,12 @@ import {
   obtenirRecette,
   appliquerVariantes,
   choixValides,
-  detecterIngredientsCites,
   resoudreLibelleIngredient,
   resoudreEtapePourAffichage,
 } from '../../services/recettes';
 import type { ChoixVariantes, RecetteComplete } from '../../types/models';
+import { ingredientsDeLEtape, lienAFaire } from '../../services/ingredientsCites';
+import { relierIngredientsEtapes } from '../../services/lienIngredients';
 import ReglageQuantites, { AJUSTEMENT_INITIAL, type AjustementQuantites } from '../../components/ReglageQuantites';
 import { BarreMinuteurs, FenetreMinuteur } from '../../components/Minuteurs';
 import { useEcouteVocale, ecouteDisponible } from '../../hooks/useEcouteVocale';
@@ -47,6 +48,9 @@ import {
   type EchangeCuisine,
 } from '../../../../services/questionCuisine';
 import { ErreurAssistant, messageErreurAssistant } from '../../../../services/assistant';
+import { FeuilleBas } from '../../../../composants/FeuilleBas';
+import { useEcranLarge } from '../../../../theme/theme';
+import { Bouton, Icone, IconeGlyphe } from '../../../../composants/ui';
 
 // Commandes vocales, minuteurs et reprise (étape 1 de l'assistant
 // interactif, sans IA) :
@@ -100,8 +104,9 @@ function decouperEnPhrases(texte: string): string[] {
 type EtatLecture = 'arret' | 'parle' | 'pause';
 
 export default function DeroulementAssistantScreen({ route, navigation }: any) {
+  const large = useEcranLarge();
   // Astuces de la famille active seulement (voir listerEssais).
-  const { foyersFamille } = useAuth();
+  const { foyer, foyersFamille } = useAuth();
   const { recetteId } = route.params;
   // Vrai quand cet écran a été ouvert depuis le lien "Voir la recette" d'une
   // étape d'une AUTRE recette (retour utilisateur : sous-recette, ex. "faire
@@ -111,6 +116,10 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   // d'origine (`navigation.goBack()` : l'écran précédent sur la pile).
   const estSousRecette: boolean = Boolean(route.params?.sousRecette);
   const [modaleTermineeVisible, setModaleTermineeVisible] = useState(false);
+  // « Terminer la recette » (retour de test R-14) : toujours accessible, même
+  // si toutes les étapes ne sont pas cochées ; efface la progression.
+  const [modaleTerminerVisible, setModaleTerminerVisible] = useState(false);
+  const termineeRef = useRef(false);
   const [recette, setRecette] = useState<RecetteComplete | null>(null);
   // Versions retenues des éléments à variantes (gardées avec la progression).
   const variantesRef = useRef<ChoixVariantes>({});
@@ -119,7 +128,10 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   const [ajustement, setAjustement] = useState<AjustementQuantites>(
     route.params?.ajustement ?? AJUSTEMENT_INITIAL
   );
+  // Feuille « Ingrédients » (retour de test R-11) et ingrédients déjà sortis
+  // (cochés au fur et à mesure, pour cette séance).
   const [ingredientsVisibles, setIngredientsVisibles] = useState(false);
+  const [ingredientsPrets, setIngredientsPrets] = useState<Set<string>>(new Set());
   const [etapesCochees, setEtapesCochees] = useState<Set<string>>(new Set());
   // Valeur de départ : le réglage "Lecture vocale automatique" du Profil
   // (coupé par défaut). Le bouton de l'écran ne change que la séance en cours.
@@ -236,11 +248,26 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recetteId]);
 
+  // Lien étapes → ingrédients par l'assistant (retour de test R-12) : une
+  // fois par recette (et après une modification du texte d'une étape), en
+  // arrière-plan ; en attendant, le repérage par mots.
+  const lienDemande = useRef<string | null>(null);
+  useEffect(() => {
+    if (!recette || lienDemande.current === recette.id || !lienAFaire(recette.etapes)) return;
+    lienDemande.current = recette.id;
+    relierIngredientsEtapes(recette, recette.foyer_id === foyer?.id).then((liens) => {
+      if (!liens.size) return;
+      setRecette((r) =>
+        r ? { ...r, etapes: r.etapes.map((e) => (liens.has(e.id) ? { ...e, ingredients_cites: liens.get(e.id) } : e)) } : r
+      );
+    });
+  }, [recette, foyer?.id]);
+
   // Enregistrement de la progression à chaque changement (étapes, quantités,
   // minuteurs). Une recette terminée — ou pas encore commencée — n'est pas
   // gardée.
   useEffect(() => {
-    if (!recette || !progressionChargee) return;
+    if (!recette || !progressionChargee || termineeRef.current) return;
     const enCours = minuteurs.filter((m) => !m.sonne);
     const toutesFaites = recette.etapes.every((e) => etapesCochees.has(e.id));
     if (toutesFaites || (etapesCochees.size === 0 && enCours.length === 0)) {
@@ -426,6 +453,35 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
     restaurer([]);
     setReprise(null);
     effacerProgression(recetteId);
+  };
+
+  // Bouton « Terminer » dans l'en-tête de l'écran.
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          onPress={() => setModaleTerminerVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Terminer la recette"
+          hitSlop={8}
+          style={styles.boutonTerminerEnTete}
+        >
+          <Text style={styles.boutonTerminerEnTeteTexte}>Terminer</Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation]);
+
+  const terminer = (raconter: boolean | 'commenter') => {
+    termineeRef.current = true;
+    setModaleTerminerVisible(false);
+    couperVoix();
+    setEtatLecture('arret');
+    restaurer([]);
+    effacerProgression(recetteId);
+    if (raconter === 'commenter') navigation.replace('DetailRecette', { recetteId, commenter: true });
+    else if (raconter) navigation.replace('EssaiRecette', { recetteId, depuisAssistant: true });
+    else navigation.goBack();
   };
 
   const lancerMinuteur = (nom: string, dureeMs: number, annoncer: boolean) => {
@@ -655,6 +711,36 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
   const nomsElements = new Map((recette?.elements ?? []).map((e) => [e.id, e.nom.trim()] as [string, string]));
   const toutesCochees = indexEtapeActive === -1;
 
+  // Ligne d'ingrédient à cocher (feuille « Ingrédients » ou colonne tablette).
+  const ligneIngredient = (ingredient: (typeof recette.ingredients)[number], enAvant = false) => {
+    const pret = ingredientsPrets.has(ingredient.id);
+    return (
+      <Pressable
+        key={ingredient.id}
+        style={[styles.ligneIngredient, enAvant && !pret && styles.ligneIngredientEnAvant]}
+        onPress={() =>
+          setIngredientsPrets((avant) => {
+            const apres = new Set(avant);
+            if (apres.has(ingredient.id)) apres.delete(ingredient.id);
+            else apres.add(ingredient.id);
+            return apres;
+          })
+        }
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: pret }}
+      >
+        <Icone nom={pret ? 'checkbox' : 'square-outline'} taille={24} couleur={pret ? theme.colors.accent : theme.colors.textMuted} />
+        <Text style={[styles.ingredientListe, enAvant && styles.ingredientEnAvant, pret && styles.ingredientPret]}>
+          {resoudreLibelleIngredient(ingredient, facteurEchelle)}
+        </Text>
+      </Pressable>
+    );
+  };
+  // Tablette (R-10) : les étapes à gauche, les ingrédients toujours visibles à droite.
+  const etapeActive = indexEtapeActive >= 0 ? recette.etapes[indexEtapeActive] : null;
+  const ingredientsEtapeActive = etapeActive ? ingredientsDeLEtape(etapeActive, recette.ingredients) : [];
+  const idsEtapeActive = new Set(ingredientsEtapeActive.map((i) => i.id));
+
   return (
     <View style={styles.container}>
       <View style={styles.partsZone}>
@@ -664,23 +750,26 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
           ajustement={ajustement}
           onChange={setAjustement}
         />
-        {recette.ingredients.length > 0 && (
-          <Pressable onPress={() => setIngredientsVisibles((v) => !v)} hitSlop={6}>
-            <Text style={styles.lienIngredients}>
-              {ingredientsVisibles ? '▴ Masquer les ingrédients' : '▾ Voir tous les ingrédients'}
-            </Text>
-          </Pressable>
-        )}
-        {ingredientsVisibles && (
-          <View style={styles.listeIngredients}>
-            {recette.ingredients.map((ingredient) => (
-              <Text key={ingredient.id} style={styles.ingredientListe}>
-                • {resoudreLibelleIngredient(ingredient, facteurEchelle)}
-              </Text>
-            ))}
-          </View>
+        {recette.ingredients.length > 0 && !large && (
+          <Bouton
+            variante="secondaire"
+            petit
+            icone="list-outline"
+            titre={`Ingrédients (${recette.ingredients.length})`}
+            onPress={() => setIngredientsVisibles(true)}
+            accessibilityLabel={`Voir les ${recette.ingredients.length} ingrédients`}
+          />
         )}
       </View>
+
+      <FeuilleBas
+        visible={ingredientsVisibles}
+        titre={`Ingrédients (${recette.ingredients.length})`}
+        onFermer={() => setIngredientsVisibles(false)}
+      >
+        <Text style={styles.aideIngredients}>Cochez ce qui est sorti ou déjà utilisé.</Text>
+        <View>{recette.ingredients.map((ingredient) => ligneIngredient(ingredient))}</View>
+      </FeuilleBas>
 
       <View style={styles.lectureZone}>
         <Pressable
@@ -688,13 +777,15 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
           onPress={() => setLectureAuto((v) => !v)}
         >
           <Text style={[styles.lectureBoutonTexte, lectureAuto && styles.lectureBoutonTexteActif]}>
-            {lectureAuto ? '🔊 Lecture auto activée' : '🔇 Lecture auto coupée'}
+            <IconeGlyphe nom={lectureAuto ? 'volume-high-outline' : 'volume-mute-outline'} style={[styles.lectureBoutonTexte, lectureAuto && styles.lectureBoutonTexteActif]} />
+            {lectureAuto ? ' Lecture auto activée' : ' Lecture auto coupée'}
           </Text>
         </Pressable>
         {!toutesCochees && (
           <Pressable style={styles.lectureBoutonPause} onPress={basculerPause}>
             <Text style={styles.lectureBoutonPauseTexte}>
-              {etatLecture === 'parle' ? '⏸ Pause' : etatLecture === 'pause' ? '▶️ Reprendre' : '▶️ Écouter'}
+              <IconeGlyphe nom={etatLecture === 'parle' ? 'pause' : 'play'} style={styles.lectureBoutonPauseTexte} />
+              {etatLecture === 'parle' ? ' Pause' : etatLecture === 'pause' ? ' Reprendre' : ' Écouter'}
             </Text>
           </Pressable>
         )}
@@ -708,7 +799,8 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
             accessibilityLabel={ecouteVoulue ? 'Couper le micro' : 'Activer les commandes vocales'}
           >
             <Text style={[styles.lectureBoutonTexte, ecouteVoulue && styles.lectureBoutonTexteActif]}>
-              {ecouteVoulue ? '🎙 Micro activé' : '🎙 Micro'}
+              <IconeGlyphe nom="mic-outline" style={[styles.lectureBoutonTexte, ecouteVoulue && styles.lectureBoutonTexteActif]} />
+              {ecouteVoulue ? ' Micro activé' : ' Micro'}
             </Text>
           </Pressable>
         )}
@@ -717,7 +809,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
           onPress={() => setFenetreMinuteurVisible(true)}
           accessibilityLabel="Lancer un minuteur"
         >
-          <Text style={styles.lectureBoutonTexte}>⏱ Minuteur</Text>
+          <Text style={styles.lectureBoutonTexte}><IconeGlyphe nom="timer-outline" style={styles.lectureBoutonTexte} />{' '}Minuteur</Text>
         </Pressable>
         <Pressable
           style={[styles.lectureBouton, saisieQuestion != null && styles.lectureBoutonActif]}
@@ -778,7 +870,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
               accessibilityRole="button"
               accessibilityLabel="Fermer la réponse"
             >
-              <Text style={styles.bulleFermer}>✕</Text>
+              <IconeGlyphe nom="close" style={styles.bulleFermer} />
             </Pressable>
           </View>
           {question.enCours ? (
@@ -823,7 +915,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
               <Text style={styles.repriseLien}>Recommencer du début</Text>
             </Pressable>
             <Pressable onPress={() => setReprise(null)} hitSlop={6} accessibilityLabel="Masquer">
-              <Text style={styles.repriseFermer}>✕</Text>
+              <IconeGlyphe nom="close" style={styles.repriseFermer} />
             </Pressable>
           </View>
         </View>
@@ -851,11 +943,25 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
         </View>
       )}
 
+      <View style={large ? styles.deuxColonnes : { flex: 1 }}>
+      <View style={large ? styles.colonneEtapes : { flex: 1 }}>
+      {large && !toutesCochees ? (
+        // Tablette (R-10) : l'étape en cours seule, en grand, avec sa progression.
+        <View style={styles.progressionTablette}>
+          <Text style={styles.progressionTabletteTexte}>
+            Étape {indexEtapeActive + 1} sur {recette.etapes.length}
+          </Text>
+          <View style={styles.progressionBarre}>
+            <View style={[styles.progressionRemplie, { width: `${Math.round((indexEtapeActive / recette.etapes.length) * 100)}%` }]} />
+          </View>
+        </View>
+      ) : null}
       <ScrollView contentContainerStyle={styles.liste}>
         {recette.etapes.map((etape, index) => {
+          if (large && !toutesCochees && index !== indexEtapeActive) return null;
           const cochee = etapesCochees.has(etape.id);
           const active = index === indexEtapeActive;
-          const ingredientsCites = detecterIngredientsCites(etape.texte, recette.ingredients).map((ingredient) =>
+          const ingredientsCites = ingredientsDeLEtape(etape, recette.ingredients).map((ingredient) =>
             resoudreLibelleIngredient(ingredient, facteurEchelle)
           );
           // L'étape active peut être cochée, et une étape déjà cochée peut
@@ -883,7 +989,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
               onPress={() => basculerEtape(etape.id, index)}
             >
               <View style={[styles.case, cochee && styles.caseCochee]}>
-                {cochee && <Text style={styles.caseCocheeTexte}>✓</Text>}
+                {cochee && <IconeGlyphe nom="checkmark" style={styles.caseCocheeTexte} />}
               </View>
               <View style={styles.contenuEtape}>
                 <Text style={[styles.numeroEtape, active && styles.numeroEtapeActif]}>Étape {index + 1}</Text>
@@ -896,7 +1002,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
                     ))}
                   </View>
                 )}
-                <Text style={[styles.texteEtape, cochee && styles.texteEtapeCochee]}>
+                <Text style={[styles.texteEtape, large && active && styles.texteEtapeGrand, cochee && styles.texteEtapeCochee]}>
                   {resoudreEtapePourAffichage(etape.texte, recette.ingredients, facteurEchelle)}
                 </Text>
                 {active && (
@@ -910,7 +1016,7 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
                           style={styles.boutonDuree}
                           onPress={() => lancerMinuteur(`Étape ${index + 1}`, duree, false)}
                         >
-                          <Text style={styles.boutonDureeTexte}>⏱ {formaterDureeCourte(duree)}</Text>
+                          <Text style={styles.boutonDureeTexte}><IconeGlyphe nom="timer-outline" style={styles.boutonDureeTexte} />{' '}{formaterDureeCourte(duree)}</Text>
                         </Pressable>
                       )
                     )}
@@ -957,6 +1063,59 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
           );
         })}
       </ScrollView>
+      {large && !toutesCochees ? (
+        <View style={styles.piedTablette}>
+          {recette.etapes[indexEtapeActive + 1] ? (
+            <View style={styles.apercuSuivante}>
+              <Text style={styles.apercuSuivanteTitre}>Ensuite · étape {indexEtapeActive + 2}</Text>
+              <Text style={styles.apercuSuivanteTexte} numberOfLines={3}>
+                {resoudreEtapePourAffichage(recette.etapes[indexEtapeActive + 1].texte, recette.ingredients, facteurEchelle)}
+              </Text>
+            </View>
+          ) : null}
+          <View style={styles.boutonsTablette}>
+            <Pressable
+              style={[styles.boutonTablette, styles.boutonTabletteSecondaire, indexEtapeActive === 0 && { opacity: 0.4 }]}
+              disabled={indexEtapeActive === 0}
+              onPress={() => basculerEtape(recette.etapes[indexEtapeActive - 1].id, indexEtapeActive - 1)}
+              accessibilityRole="button"
+            >
+              <Icone nom="arrow-back" taille={20} couleur={theme.colors.text} />
+              <Text style={styles.boutonTabletteSecondaireTexte}>Précédente</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.boutonTablette, styles.boutonTablettePrincipal]}
+              onPress={() => basculerEtape(recette.etapes[indexEtapeActive].id, indexEtapeActive)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.boutonTablettePrincipalTexte}>
+                {indexEtapeActive === recette.etapes.length - 1 ? 'Dernière étape faite' : 'Étape faite · suivante'}
+              </Text>
+              <Icone nom="arrow-forward" taille={20} couleur={theme.colors.background} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+      </View>
+      {large && recette.ingredients.length > 0 ? (
+        <ScrollView style={styles.colonneIngredients} contentContainerStyle={styles.colonneIngredientsContenu}>
+          <View style={styles.enteteIngredients}>
+            <Text style={styles.titreIngredients}>Ingrédients</Text>
+            <Text style={styles.aideIngredients}>
+              {ingredientsPrets.size} sur {recette.ingredients.length} utilisés
+            </Text>
+          </View>
+          {ingredientsEtapeActive.length > 0 ? (
+            <>
+              <Text style={styles.sousTitreIngredients}>Pour cette étape</Text>
+              {ingredientsEtapeActive.map((ingredient) => ligneIngredient(ingredient, true))}
+              <Text style={[styles.sousTitreIngredients, { color: theme.colors.textMuted }]}>Toute la recette</Text>
+            </>
+          ) : null}
+          {recette.ingredients.filter((i) => !idsEtapeActive.has(i.id)).map((ingredient) => ligneIngredient(ingredient))}
+        </ScrollView>
+      ) : null}
+      </View>
 
       <FenetreMinuteur
         visible={fenetreMinuteurVisible}
@@ -967,6 +1126,26 @@ export default function DeroulementAssistantScreen({ route, navigation }: any) {
           lancerMinuteur(nom, dureeMs, false);
         }}
       />
+
+      <FeuilleBas visible={modaleTerminerVisible} titre="Terminer la recette ?" onFermer={() => setModaleTerminerVisible(false)}>
+        <Text style={styles.modaleTexte}>
+          « {recette.titre} » ne sera plus dans les recettes en cours
+          {toutesCochees ? '.' : ', même si toutes les étapes ne sont pas cochées.'}
+        </Text>
+        {!estSousRecette && (
+          <Bouton titre="Terminer et raconter mon essai" module="recettes" icone="create-outline" onPress={() => terminer(true)} />
+        )}
+        {!estSousRecette && (
+          <Bouton titre="Terminer et laisser un commentaire" variante="secondaire" icone="chatbubble-outline" onPress={() => terminer('commenter')} />
+        )}
+        <Bouton
+          titre={estSousRecette ? 'Terminer' : 'Terminer, raconter plus tard'}
+          variante="secondaire"
+          icone="checkmark-done-outline"
+          onPress={() => terminer(false)}
+        />
+        <Bouton titre="Continuer à cuisiner" variante="lien" onPress={() => setModaleTerminerVisible(false)} />
+      </FeuilleBas>
 
       <Modal visible={modaleTermineeVisible} transparent animationType="fade" onRequestClose={() => setModaleTermineeVisible(false)}>
         <View style={styles.modaleFond}>
@@ -1054,6 +1233,47 @@ const styles = creerStylesThemes(() => ({
   },
   boutonRaconterTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.background },
   container: { flex: 1, backgroundColor: theme.colors.background, paddingTop: theme.spacing.lg },
+  // Tablette (R-10).
+  deuxColonnes: { flex: 1, flexDirection: 'row', gap: theme.spacing.md, paddingRight: theme.spacing.lg },
+  colonneEtapes: { flex: 3 },
+  colonneIngredients: {
+    flex: 2,
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: 20,
+    marginBottom: theme.spacing.lg,
+  },
+  colonneIngredientsContenu: { padding: theme.spacing.lg, gap: 2 },
+  enteteIngredients: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: theme.spacing.sm },
+  titreIngredients: { fontFamily: theme.fontTitleBold, fontSize: 22, color: theme.colors.text },
+  sousTitreIngredients: {
+    fontFamily: theme.fontBodyBold,
+    fontSize: 12,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: theme.colors.accent,
+    marginTop: theme.spacing.sm,
+    marginBottom: 4,
+  },
+  ligneIngredientEnAvant: { backgroundColor: theme.colors.selection, borderRadius: 12, paddingHorizontal: theme.spacing.sm },
+  ingredientEnAvant: { fontFamily: theme.fontBodyBold },
+  texteEtapeGrand: { fontSize: 28, lineHeight: 38 },
+  progressionTablette: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.sm },
+  progressionTabletteTexte: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  progressionBarre: { flex: 1, height: 6, borderRadius: 3, backgroundColor: theme.colors.selection },
+  progressionRemplie: { height: 6, borderRadius: 3, backgroundColor: theme.colors.accent },
+  piedTablette: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.lg, gap: theme.spacing.md },
+  apercuSuivante: { backgroundColor: theme.colors.selection, borderRadius: 18, padding: theme.spacing.md, gap: 4 },
+  apercuSuivanteTitre: { fontFamily: theme.fontBodyBold, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase', color: theme.colors.textMuted },
+  apercuSuivanteTexte: { fontFamily: theme.fontBody, fontSize: 17, lineHeight: 24, color: theme.colors.text },
+  boutonsTablette: { flexDirection: 'row', gap: theme.spacing.md },
+  boutonTablette: { height: 60, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: theme.spacing.sm },
+  boutonTabletteSecondaire: { flex: 1, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
+  boutonTabletteSecondaireTexte: { fontFamily: theme.fontBodyBold, fontSize: 17, color: theme.colors.text },
+  boutonTablettePrincipal: { flex: 1.4, backgroundColor: theme.colors.accent },
+  boutonTablettePrincipalTexte: { fontFamily: theme.fontBodyBold, fontSize: 17, color: theme.colors.background },
   centre: { flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.lg },
   texteVide: { fontFamily: theme.fontBody, color: theme.colors.textMuted, textAlign: 'center' },
   partsZone: {
@@ -1062,9 +1282,17 @@ const styles = creerStylesThemes(() => ({
     marginBottom: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
   },
-  lienIngredients: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.accent },
-  listeIngredients: { alignSelf: 'stretch', gap: 2 },
-  ingredientListe: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
+  aideIngredients: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
+  ligneIngredient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    minHeight: 48,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  ingredientListe: { flex: 1, fontFamily: theme.fontBody, fontSize: 16, color: theme.colors.text },
+  ingredientPret: { color: theme.colors.textMuted, textDecorationLine: 'line-through' },
   partsLabel: { fontFamily: theme.fontBody, color: theme.colors.textMuted },
   partsBouton: { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: 1, borderRadius: theme.radii.sm, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   partsBoutonTexte: { fontFamily: theme.fontBodyBold, color: theme.colors.accent, fontSize: 18 },
@@ -1217,6 +1445,8 @@ const styles = creerStylesThemes(() => ({
   modaleTitre: { fontFamily: theme.fontTitle, fontSize: 20, color: theme.colors.accent },
   modaleTexte: { fontFamily: theme.fontBody, color: theme.colors.text, fontSize: 15, lineHeight: 21 },
   modaleActions: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.xs },
+  boutonTerminerEnTete: { paddingHorizontal: theme.spacing.sm, paddingVertical: 6 },
+  boutonTerminerEnTeteTexte: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.accent },
   modaleBoutonSecondaire: {
     flex: 1,
     borderColor: theme.colors.accent,

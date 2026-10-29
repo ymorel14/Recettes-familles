@@ -1,0 +1,17 @@
+{
+  "description": "« Salez, poivrez », « ajoutez les épices » : sel, poivre, cumin et paprika reliés aux bonnes étapes.",
+  "entree": {
+    "ingredients": [
+      { "id": "a", "libelle": "Sel" },
+      { "id": "b", "libelle": "Poivre" },
+      { "id": "c", "libelle": "Cumin" },
+      { "id": "d", "libelle": "Paprika" },
+      { "id": "e", "libelle": "Oignons" }
+    ],
+    "etapes": [
+      { "id": "x", "texte": "Émincez les oignons et faites-les dorer." },
+      { "id": "y", "texte": "Ajoutez les épices, salez et poivrez." }
+    ]
+  },
+  "attendu": { "etapes": [2] }
+}

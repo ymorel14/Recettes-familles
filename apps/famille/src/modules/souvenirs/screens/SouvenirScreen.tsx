@@ -154,7 +154,9 @@ export default function SouvenirScreen({ route, navigation }: any) {
     }
     if (!famille) return;
     try {
-      setAlbumsDispo(await listerAlbums(famille.id));
+      // Albums de la famille du souvenir (vue unique : elle n'est plus
+      // forcément la famille par défaut).
+      setAlbumsDispo(await listerAlbums(souvenir?.famille_id ?? famille.id));
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Impossible de charger les albums.'));
     }

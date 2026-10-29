@@ -7,11 +7,17 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Avatar } from '@apps-famille/famille';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { ID_SANS_CATEGORIE, listerRecettes, type PorteeRecettes } from '../services/recettes';
+import { ID_SANS_CATEGORIE, listerRecettes, surChangementSuppressions, type PorteeRecettes } from '../services/recettes';
+import { normaliserTexte } from '../utils/texte';
+import { libelleRecetteEnCours, useRecettesEnCours } from '../hooks/useRecettesEnCours';
+import { InterrupteurFamilles, useInclureFamilles } from '../../../composants/InterrupteurFamilles';
 import { supabase } from '../services/supabase';
 import type { RecetteComplete } from '../types/models';
 import {
@@ -48,15 +54,21 @@ type SectionGroupe = {
 export default function CategoriesScreen({ navigation }: any) {
   const { foyer, foyersFamille } = useAuth();
   const [recettes, setRecettes] = useState<RecetteComplete[]>([]);
-  // Recettes de notre foyer seulement, ou de toute la famille (celles des
-  // autres foyers sont en lecture seule).
-  const [portee, setPortee] = useState<PorteeRecettes>('foyer');
+  // Recettes de notre foyer seulement, ou aussi celles de toutes nos
+  // familles, en lecture seule (interrupteur, retour de test R-2).
+  const [inclureFamilles, setInclureFamilles] = useInclureFamilles('recettes');
+  const portee: PorteeRecettes = inclureFamilles ? 'famille' : 'foyer';
   const [chargement, setChargement] = useState(true);
   // Nombre de colonnes et taille des vignettes adaptés à la largeur de
   // l'écran (voir utils/grilleVignettes.ts).
   const { largeurVignette, taillePolice } = useGrilleVignettes();
   // Groupes lus dans la base : un groupe ajouté dans Supabase apparaît ici.
   const { groupes, recharger: rechargerGroupes } = useGroupesCategories();
+  // Recherche (retour de test R-3) : titre, ingrédients et catégories,
+  // sans tenir compte des accents ni des majuscules.
+  const [recherche, setRecherche] = useState('');
+  // Recettes commencées dans le mode assistant (bandeau « Reprendre », R-14).
+  const recettesEnCours = useRecettesEnCours();
   const [categorieARanger, setCategorieARanger] = useState<
     { id: string; nom: string; groupeActuel: string } | null
   >(null);
@@ -75,6 +87,8 @@ export default function CategoriesScreen({ navigation }: any) {
       rechargerGroupes();
     }, [charger, rechargerGroupes])
   );
+  // … et après une suppression programmée ou annulée (« Annuler »).
+  useEffect(() => surChangementSuppressions(charger), [charger]);
 
   // Synchronisation temps réel entre appareils du foyer (§9). Le nom du
   // canal inclut un suffixe aléatoire à chaque montage : avec un nom fixe,
@@ -141,7 +155,7 @@ export default function CategoriesScreen({ navigation }: any) {
       resultat.push({
         id: ID_SANS_CATEGORIE as IdGroupeAffiche,
         nom: 'Sans catégorie',
-        description: 'Ouvrez la recette et choisissez-lui une catégorie avec le crayon ✎.',
+        description: 'L’assistant peut les ranger pour vous, ou ouvrez une recette et choisissez sa catégorie avec « Modifier ».',
         categories: [
           {
             id: ID_SANS_CATEGORIE,
@@ -154,44 +168,117 @@ export default function CategoriesScreen({ navigation }: any) {
     return resultat.filter((section) => section.categories.length > 0);
   }, [recettes, groupes]);
 
+  // Résultats de la recherche : chaque mot tapé doit se retrouver dans le
+  // titre, un ingrédient ou une catégorie.
+  const resultats = useMemo(() => {
+    const mots = normaliserTexte(recherche).split(/\s+/).filter(Boolean);
+    if (mots.length === 0) return null;
+    return recettes
+      .map((recette) => {
+        const titre = normaliserTexte(recette.titre);
+        const categories = recette.categories.map((c) => normaliserTexte(c.nom));
+        const ingredients = recette.ingredients.map((i) => normaliserTexte(i.libelle));
+        const tout = [titre, ...categories, ...ingredients].join(' ');
+        if (!mots.every((m) => tout.includes(m))) return null;
+        // Pour expliquer pourquoi la recette sort : un ingrédient trouvé.
+        const ingredientTrouve = mots.some((m) => titre.includes(m))
+          ? null
+          : recette.ingredients.find((i) => mots.some((m) => normaliserTexte(i.libelle).includes(m)))?.libelle ?? null;
+        return { recette, ingredientTrouve, dansTitre: mots.every((m) => titre.includes(m)) };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .sort((a, b) => Number(b.dansTitre) - Number(a.dansTitre) || a.recette.titre.localeCompare(b.recette.titre, 'fr'));
+  }, [recherche, recettes]);
+
   return (
     <View style={styles.container}>
       <View style={styles.enTete}>
         <Text style={styles.titre}>Nos recettes</Text>
-        <View style={styles.boutonsEnTete}>
-          <Pressable style={styles.boutonScan} onPress={() => navigation.navigate('ScanRecette')}>
-            <Text style={styles.boutonScanTexte}>Scanner</Text>
-          </Pressable>
-          <Pressable style={styles.boutonScan} onPress={() => navigation.navigate('ImportWeb')}>
-            <Text style={styles.boutonScanTexte}>Web</Text>
-          </Pressable>
-          <Pressable style={styles.boutonAjouter} onPress={() => navigation.navigate('CreationRecette')}>
-            <Text style={styles.boutonAjouterTexte}>+ Ajouter</Text>
-          </Pressable>
-        </View>
+        {/* Ajouter une recette (écrire, photo, lien, My Recipe Box) : par le
+            ⊕ de la barre du bas (retour de test R-1). */}
       </View>
 
       <View style={styles.choixPortee}>
-        {(
-          [
-            ['foyer', 'Notre foyer'],
-            ['famille', 'Toute la famille'],
-          ] as [PorteeRecettes, string][]
-        ).map(([valeur, libelle]) => (
+        <InterrupteurFamilles
+          libelle="Inclure les recettes de nos familles"
+          valeur={inclureFamilles}
+          onChange={setInclureFamilles}
+        />
+      </View>
+
+      <View style={styles.champRecherche}>
+        <Ionicons name="search-outline" size={18} color={theme.colors.textMuted} />
+        <TextInput
+          style={styles.champRechercheTexte}
+          value={recherche}
+          onChangeText={setRecherche}
+          placeholder="Rechercher une recette, un ingrédient…"
+          placeholderTextColor={theme.colors.textMuted}
+          returnKeyType="search"
+          autoCorrect={false}
+          accessibilityLabel="Rechercher dans les recettes"
+        />
+        {recherche ? (
+          <Pressable onPress={() => setRecherche('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Effacer la recherche">
+            <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {!resultats &&
+        recettesEnCours.map((r) => (
           <Pressable
-            key={valeur}
-            style={[styles.puccePortee, portee === valeur && styles.puccePorteeActive]}
-            onPress={() => setPortee(valeur)}
+            key={r.recetteId}
+            style={styles.bandeauReprendre}
+            onPress={() => navigation.navigate('AssistantRecette', { recetteId: r.recetteId })}
+            accessibilityRole="button"
+            accessibilityLabel={`Reprendre ${r.titre}, ${libelleRecetteEnCours(r)}`}
           >
-            <Text style={[styles.puccePorteeTexte, portee === valeur && styles.puccePorteeTexteActive]}>
-              {libelle}
-            </Text>
+            {r.photoUrl ? <Image source={{ uri: r.photoUrl }} style={styles.bandeauReprendreImage} /> : null}
+            <View style={styles.bandeauReprendreTextes}>
+              <Text style={styles.bandeauReprendreTitre} numberOfLines={1}>
+                Reprendre · {r.titre}
+              </Text>
+              <Text style={styles.bandeauReprendreDetail}>{libelleRecetteEnCours(r)}</Text>
+            </View>
+            <Ionicons name="play-circle" size={28} color={theme.colors.accent} />
           </Pressable>
         ))}
-      </View>
 
       {chargement ? (
         <ActivityIndicator color={theme.colors.accent} style={{ marginTop: theme.spacing.lg }} />
+      ) : resultats ? (
+        <ScrollView contentContainerStyle={styles.grille} keyboardShouldPersistTaps="handled">
+          <Text style={styles.nbResultats}>
+            {resultats.length === 0
+              ? 'Aucune recette trouvée.'
+              : `${resultats.length} recette${resultats.length > 1 ? 's' : ''}`}
+          </Text>
+          {resultats.map(({ recette, ingredientTrouve }) => (
+            <Pressable
+              key={recette.id}
+              style={styles.ligneResultat}
+              onPress={() => navigation.navigate('DetailRecette', { recetteId: recette.id })}
+            >
+              {recette.photo_url ? (
+                <Image source={{ uri: recette.photo_url }} style={styles.miniature} />
+              ) : (
+                <View style={[styles.miniature, styles.imageVide]} />
+              )}
+              <View style={styles.ligneResultatTextes}>
+                <Text style={styles.ligneResultatTitre} numberOfLines={1}>
+                  {recette.titre}
+                </Text>
+                <Text style={styles.ligneResultatDetail} numberOfLines={1}>
+                  {ingredientTrouve
+                    ? `Avec : ${ingredientTrouve}`
+                    : recette.categories.map((c) => c.nom).join(' · ')}
+                </Text>
+              </View>
+              {recette.cree_par ? <Avatar utilisateurId={recette.cree_par} taille={28} /> : null}
+            </Pressable>
+          ))}
+        </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.grille}>
           {sections.length === 0 && <Text style={styles.vide}>Aucune recette pour l'instant.</Text>}
@@ -232,6 +319,17 @@ export default function CategoriesScreen({ navigation }: any) {
                   </Pressable>
                 ))}
               </View>
+              {section.id === (ID_SANS_CATEGORIE as IdGroupeAffiche) ? (
+                // Classement automatique (retour de test R-4).
+                <Pressable
+                  style={styles.boutonClasser}
+                  onPress={() => navigation.navigate('ClassementRecettes')}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="sparkles-outline" size={18} color={theme.colors.accent} />
+                  <Text style={styles.boutonClasserTexte}>Classer automatiquement</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))}
         </ScrollView>
@@ -258,36 +356,63 @@ const styles = creerStylesThemes(() => ({
     marginBottom: theme.spacing.md,
   },
   titre: { fontFamily: theme.fontTitle, fontSize: 26, color: theme.colors.accent },
-  boutonsEnTete: { flexDirection: 'row', gap: theme.spacing.xs },
-  boutonScan: {
+  grille: { paddingBottom: theme.spacing.xl },
+  boutonClasser: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: theme.spacing.sm,
     borderColor: theme.colors.accent,
     borderWidth: 1,
-    borderRadius: theme.radii.md,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-    justifyContent: 'center',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.md,
   },
-  boutonScanTexte: { fontFamily: theme.fontBodyBold, color: theme.colors.accent },
-  boutonAjouter: {
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.md,
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  boutonAjouterTexte: { fontFamily: theme.fontBodyBold, color: theme.colors.background },
-  grille: { paddingBottom: theme.spacing.xl },
-  section: { marginBottom: theme.spacing.lg },
-  choixPortee: { flexDirection: 'row', gap: theme.spacing.xs, marginBottom: theme.spacing.md },
-  puccePortee: {
+  boutonClasserTexte: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  champRecherche: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
     borderWidth: 1,
     borderRadius: theme.radii.lg,
-    paddingVertical: 5,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    minHeight: 44,
+    marginBottom: theme.spacing.sm,
   },
-  puccePorteeActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
-  puccePorteeTexte: { fontFamily: theme.fontBody, fontSize: 14, color: theme.colors.textMuted },
-  puccePorteeTexteActive: { fontFamily: theme.fontBodyBold, color: theme.colors.background },
+  champRechercheTexte: { flex: 1, fontFamily: theme.fontBody, fontSize: 16, color: theme.colors.text, paddingVertical: 8 },
+  nbResultats: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted, marginBottom: theme.spacing.sm },
+  ligneResultat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+  },
+  miniature: { width: 52, height: 52, borderRadius: theme.radii.sm },
+  ligneResultatTextes: { flex: 1, gap: 2 },
+  ligneResultatTitre: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.text },
+  ligneResultatDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
+  bandeauReprendre: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.selectionTransparent,
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  bandeauReprendreImage: { width: 40, height: 40, borderRadius: theme.radii.sm },
+  bandeauReprendreTextes: { flex: 1, gap: 2 },
+  bandeauReprendreTitre: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
+  bandeauReprendreDetail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.accent },
+  section: { marginBottom: theme.spacing.lg },
+  choixPortee: { marginBottom: theme.spacing.sm },
   titreSection: {
     fontFamily: theme.fontTitle,
     fontSize: 19,

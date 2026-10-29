@@ -10,9 +10,12 @@ import { appliquerMode, modeActuel, type IdModule, type Mode } from '../theme/th
 const CLE_APPARENCE = 'famille.preferences.apparence';
 const CLE_LECTURE_AUTO = 'famille.preferences.lectureAutoAssistant';
 const CLE_NOTIFS = 'famille.preferences.notifications';
+const CLE_HORIZON = 'famille.preferences.horizonAPrevoir';
 
 export type Apparence = 'auto' | 'clair' | 'sombre';
 export const LECTURE_AUTO_ASSISTANT_PAR_DEFAUT = false;
+// « À prévoir » de l'accueil (retour de test G-3) : 7 jours par défaut, ou 14.
+export type HorizonAPrevoir = 7 | 14;
 
 type Valeur = {
   apparence: Apparence;
@@ -23,6 +26,8 @@ type Valeur = {
   // Modules dont on veut les nouveautés (pastilles, Activité).
   notificationsModules: Record<IdModule, boolean>;
   definirNotificationModule: (id: IdModule, actif: boolean) => void;
+  horizonAPrevoir: HorizonAPrevoir;
+  definirHorizonAPrevoir: (h: HorizonAPrevoir) => void;
   // Compatibilité avec le code repris des apps (clé de redessin).
   themeId: string;
 };
@@ -41,18 +46,22 @@ const Contexte = createContext<Valeur | undefined>(undefined);
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const systeme = useColorScheme();
   const [pret, setPret] = useState(false);
-  const [apparence, setApparence] = useState<Apparence>('auto');
+  // Clair par défaut au premier lancement (retour de test G-4 a) ; « auto » et
+  // « sombre » restent au choix dans Moi.
+  const [apparence, setApparence] = useState<Apparence>('clair');
   const [lectureAutoAssistant, setLectureAuto] = useState(LECTURE_AUTO_ASSISTANT_PAR_DEFAUT);
   const [notificationsModules, setNotifs] = useState<Record<IdModule, boolean>>(TOUS_ACTIFS);
+  const [horizonAPrevoir, setHorizon] = useState<HorizonAPrevoir>(7);
 
   useEffect(() => {
-    AsyncStorage.multiGet([CLE_APPARENCE, CLE_LECTURE_AUTO, CLE_NOTIFS])
+    AsyncStorage.multiGet([CLE_APPARENCE, CLE_LECTURE_AUTO, CLE_NOTIFS, CLE_HORIZON])
       .then((valeurs) => {
         const lire = (cle: string) => valeurs.find(([c]) => c === cle)?.[1] ?? null;
         const a = lire(CLE_APPARENCE);
         if (a === 'auto' || a === 'clair' || a === 'sombre') setApparence(a);
         const l = lire(CLE_LECTURE_AUTO);
         if (l != null) setLectureAuto(l === 'true');
+        if (lire(CLE_HORIZON) === '14') setHorizon(14);
         const n = lire(CLE_NOTIFS);
         if (n) {
           try {
@@ -86,6 +95,11 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     });
   }, []);
 
+  const definirHorizonAPrevoir = useCallback((h: HorizonAPrevoir) => {
+    setHorizon(h);
+    AsyncStorage.setItem(CLE_HORIZON, String(h)).catch(() => {});
+  }, []);
+
   const valeur = useMemo<Valeur>(
     () => ({
       apparence,
@@ -95,9 +109,11 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
       definirLectureAutoAssistant,
       notificationsModules,
       definirNotificationModule,
+      horizonAPrevoir,
+      definirHorizonAPrevoir,
       themeId: mode,
     }),
-    [apparence, mode, lectureAutoAssistant, notificationsModules, definirApparence, definirLectureAutoAssistant, definirNotificationModule]
+    [apparence, mode, lectureAutoAssistant, notificationsModules, horizonAPrevoir, definirApparence, definirLectureAutoAssistant, definirNotificationModule, definirHorizonAPrevoir]
   );
 
   if (!pret) return null;

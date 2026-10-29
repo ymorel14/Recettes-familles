@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, Pressable, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { IconeGlyphe, PastilleModifier } from '../../../../composants/ui';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import * as Speech from 'expo-speech';
 import { alerte } from '../../utils/alerte';
@@ -21,12 +22,19 @@ import {
   rechercherAliments,
   extraireRecherche,
   phraseReponse,
+  avecGenres,
+  avecConservation,
+  genreLieu,
+  libelleDateRangement,
   type EtatConservation,
 } from '../../services/congelateur';
 import { useEcouteVocale, ecouteDisponible } from '../../hooks/useEcouteVocale';
 import type { AlimentCongele, Congelateur } from '../../types/models';
 
-// Écran "Congélateur" : ce qu'il y a dans le(s) congélateur(s) du foyer,
+// Écran « Garde-manger » (ex-« Congélateur », retour de test C-1) : ce
+// qu'il y a dans les emplacements du foyer (congélateurs, frigo, placards,
+// cave…). Conservation et alertes seulement au congélateur et au frigo.
+// Avant : ce qu'il y a dans le(s) congélateur(s) du foyer,
 // les aliments les plus urgents en premier. Chaque aliment a une date de
 // mise au congélateur et un type qui fixe sa durée de conservation
 // conseillée (voir services/congelateur.ts) : au-delà, il est signalé
@@ -55,7 +63,7 @@ export default function CongelateurScreen({ navigation }: any) {
     try {
       const [c, a] = await Promise.all([listerCongelateurs(foyer.id), listerAliments(foyer.id)]);
       setCongelateurs(c);
-      setAliments(a);
+      setAliments(avecGenres(a, c));
     } finally {
       setChargement(false);
     }
@@ -145,7 +153,7 @@ export default function CongelateurScreen({ navigation }: any) {
 
   const { etat: etatEcoute, erreur: erreurEcoute } = useEcouteVocale({
     active: ecouteVoulue && estFocalise,
-    motsCles: ['congélateur', 'reste', 'poulet', 'viande', 'poisson', 'steak haché', 'soupe', 'pain'],
+    motsCles: ['congélateur', 'frigo', 'placard', 'reste', 'poulet', 'viande', 'poisson', 'riz', 'pâtes', 'soupe', 'pain'],
     onPhrase: traiterPhrase,
   });
 
@@ -226,13 +234,13 @@ export default function CongelateurScreen({ navigation }: any) {
   if (congelateurs.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.titre}>Congélateur</Text>
+        <Text style={styles.titre}>Garde-manger</Text>
         <View style={styles.carteAccueil}>
           <Text style={styles.texteAccueil}>
-            Listez ce que contient votre congélateur, avec la date de congélation : l'application vous signale les
-            aliments à consommer bientôt et ceux qui ne sont plus consommables.
+            Listez ce que contiennent votre congélateur, votre frigo, vos placards… Au congélateur et au frigo,
+            l'application vous signale les aliments à consommer bientôt et ceux qui ne sont plus consommables.
           </Text>
-          <Text style={styles.label}>Nom du congélateur</Text>
+          <Text style={styles.label}>Commençons par le congélateur</Text>
           <TextInput
             style={styles.champ}
             value={nomPremierCongelateur}
@@ -248,7 +256,7 @@ export default function CongelateurScreen({ navigation }: any) {
               <Text style={styles.boutonPrincipalTexte}>Créer mon congélateur</Text>
             )}
           </Pressable>
-          <Text style={styles.aide}>Vous pourrez en ajouter d'autres ensuite.</Text>
+          <Text style={styles.aide}>Vous pourrez ajouter le frigo, les placards, la cave… ensuite.</Text>
         </View>
       </View>
     );
@@ -257,7 +265,7 @@ export default function CongelateurScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.enTete}>
-        <Text style={styles.titre}>Congélateur</Text>
+        <Text style={styles.titre}>Garde-manger</Text>
         <Pressable
           style={styles.boutonAjouter}
           onPress={() => navigation.navigate('FormulaireAlimentCongele', { congelateurId: filtre ?? undefined })}
@@ -272,12 +280,13 @@ export default function CongelateurScreen({ navigation }: any) {
           <>
             <Puce libelle="Tous" actif={filtre === null} onPress={() => setFiltre(null)} />
             {congelateurs.map((c) => (
-              <Puce key={c.id} libelle={c.nom} actif={filtre === c.id} onPress={() => setFiltre(c.id)} />
+              <Puce key={c.id} icone={genreLieu(c.genre).icone} libelle={c.nom} actif={filtre === c.id} onPress={() => setFiltre(c.id)} />
             ))}
           </>
         )}
         <Puce
-          libelle={congelateurs.length > 1 ? '⚙ Gérer' : `⚙ ${congelateurs[0].nom}`}
+          icone="settings-outline"
+          libelle={congelateurs.length > 1 ? 'Gérer' : congelateurs[0].nom}
           actif={false}
           onPress={() => navigation.navigate('GestionCongelateurs')}
         />
@@ -290,7 +299,7 @@ export default function CongelateurScreen({ navigation }: any) {
         >
           {compteurs.depasse > 0 && (
             <Text style={[styles.bandeauTexte, { color: theme.colors.warning }]}>
-              ⚠ {compteurs.depasse} aliment{compteurs.depasse > 1 ? 's' : ''} à ne plus consommer
+              <IconeGlyphe nom="warning-outline" style={[styles.bandeauTexte, { color: theme.colors.warning }]} />{' '}{compteurs.depasse} aliment{compteurs.depasse > 1 ? 's' : ''} à ne plus consommer
             </Text>
           )}
           {compteurs.bientot > 0 && (
@@ -307,7 +316,7 @@ export default function CongelateurScreen({ navigation }: any) {
       <View style={styles.ligneRecherche}>
         <TextInput
           style={styles.champRecherche}
-          placeholder="Un aliment, ou touchez le micro…"
+          placeholder="Un aliment, dans tout le garde-manger…"
           placeholderTextColor={theme.colors.textMuted}
           value={recherche}
           onChangeText={changerRecherche}
@@ -316,7 +325,7 @@ export default function CongelateurScreen({ navigation }: any) {
         />
         {rechercheEnCours && (
           <Pressable hitSlop={8} onPress={() => changerRecherche('')} accessibilityLabel="Effacer la recherche">
-            <Text style={styles.effacer}>✕</Text>
+            <IconeGlyphe nom="close" style={styles.effacer} />
           </Pressable>
         )}
         <Pressable
@@ -324,7 +333,7 @@ export default function CongelateurScreen({ navigation }: any) {
           onPress={basculerMicro}
           accessibilityLabel={ecouteVoulue ? 'Arrêter l\'écoute' : 'Poser la question à voix haute'}
         >
-          <Text style={[styles.boutonMicroTexte, ecouteVoulue && styles.boutonMicroTexteActif]}>🎙</Text>
+          <IconeGlyphe nom="mic-outline" style={[styles.boutonMicroTexte, ecouteVoulue && styles.boutonMicroTexteActif]} />
         </Pressable>
       </View>
 
@@ -344,9 +353,9 @@ export default function CongelateurScreen({ navigation }: any) {
           {questionEntendue && !ecouteVoulue && <Text style={styles.reponseQuestion}>« {questionEntendue} »</Text>}
           <Text style={[styles.reponseTexte, alimentsAffiches.length === 0 && { color: theme.colors.textMuted }]}>
             {alimentsAffiches.length === 0
-              ? `Pas de « ${recherche.trim()} » dans ${congelateurs.length > 1 ? 'vos congélateurs' : 'le congélateur'}.`
+              ? `Pas de « ${recherche.trim()} » dans le garde-manger.`
               : `Oui : ${alimentsAffiches.length} trouvé${alimentsAffiches.length > 1 ? 's' : ''}${
-                  congelateurs.length > 1 ? ' (tous congélateurs)' : ''
+                  congelateurs.length > 1 ? ' (tout le garde-manger)' : ''
                 }.`}
           </Text>
         </View>
@@ -378,10 +387,14 @@ export default function CongelateurScreen({ navigation }: any) {
   );
 }
 
-function Puce({ libelle, actif, onPress }: { libelle: string; actif: boolean; onPress: () => void }) {
+function Puce({ libelle, actif, onPress, icone }: { libelle: string; actif: boolean; onPress: () => void; icone?: string }) {
   return (
     <Pressable style={[styles.puce, actif && styles.puceActive]} onPress={onPress}>
-      <Text style={[styles.puceTexte, actif && styles.puceTexteActif]}>{libelle}</Text>
+      <Text style={[styles.puceTexte, actif && styles.puceTexteActif]}>
+        {icone ? <IconeGlyphe nom={icone} style={[styles.puceTexte, actif && styles.puceTexteActif]} /> : null}
+        {icone ? ' ' : ''}
+        {libelle}
+      </Text>
     </Pressable>
   );
 }
@@ -398,11 +411,14 @@ function CarteAliment({
   onRetirer: () => void;
 }) {
   const etat: EtatConservation = etatConservation(aliment);
+  const conservation = avecConservation(aliment.genre);
   const limite = formaterDate(versIso(dateLimite(aliment)));
-  const couleurEtat =
-    etat === 'depasse' ? theme.colors.warning : etat === 'bientot' ? theme.colors.accent : theme.colors.success;
-  const texteEtat =
-    etat === 'depasse'
+  const couleurEtat = !conservation
+    ? theme.colors.border
+    : etat === 'depasse' ? theme.colors.warning : etat === 'bientot' ? theme.colors.accent : theme.colors.success;
+  const texteEtat = !conservation
+    ? ''
+    : etat === 'depasse'
       ? `Plus consommable (conseillé jusqu'au ${limite})`
       : etat === 'bientot'
         ? `À consommer avant le ${limite}`
@@ -414,20 +430,21 @@ function CarteAliment({
         <View style={styles.carteTextes}>
           <Text style={styles.carteNom}>{aliment.nom}</Text>
           <Text style={styles.carteDetail}>
-            Congelé le {formaterDate(aliment.date_stockage)} · {ancienneteTexte(aliment.date_stockage)}
+            {libelleDateRangement(aliment.genre).replace(/^Mis au congélateur le$/, 'Congelé le')} {formaterDate(aliment.date_stockage)} · {ancienneteTexte(aliment.date_stockage)}
           </Text>
           <Text style={styles.carteDetail}>
-            {typeAliment(aliment.type).libelle}
-            {nomCongelateur ? ` · ${nomCongelateur}` : ''}
+            {conservation ? typeAliment(aliment.type).libelle : ''}
+            {nomCongelateur ? `${conservation ? ' · ' : ''}${nomCongelateur}` : ''}
           </Text>
-          <Text style={[styles.carteEtat, { color: couleurEtat }, etat === 'ok' && styles.carteEtatDiscret]}>
-            {etat === 'depasse' ? '⚠ ' : ''}
+          {texteEtat ? <Text style={[styles.carteEtat, { color: couleurEtat }, etat === 'ok' && styles.carteEtatDiscret]}>
+            {etat === 'depasse' ? <IconeGlyphe nom="warning-outline" style={[styles.carteEtat, { color: couleurEtat }]} /> : null}
+            {etat === 'depasse' ? ' ' : ''}
             {texteEtat}
-          </Text>
+          </Text> : null}
         </View>
         <View style={styles.carteActions}>
           <Pressable hitSlop={8} onPress={onModifier}>
-            <Text style={styles.carteActionTexte}>✎</Text>
+            <PastilleModifier couleur={theme.colors.accent} petite />
           </Pressable>
           <Pressable hitSlop={8} style={styles.boutonRetirer} onPress={onRetirer}>
             <Text style={styles.boutonRetirerTexte}>Sorti</Text>

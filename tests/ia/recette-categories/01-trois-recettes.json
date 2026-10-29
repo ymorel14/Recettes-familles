@@ -1,0 +1,11 @@
+{
+  "description": "Trois recettes classiques : un plat, un dessert, une soupe ; catégories existantes réutilisées.",
+  "entree": {
+    "recettes": [
+      { "id": "r1", "titre": "Bœuf bourguignon", "ingredients": ["Bœuf à braiser", "Vin rouge", "Lardons", "Carottes", "Oignons"] },
+      { "id": "r2", "titre": "Tarte aux pommes", "ingredients": ["Pâte brisée", "Pommes", "Sucre", "Beurre"] },
+      { "id": "r3", "titre": "Velouté de potimarron", "ingredients": ["Potimarron", "Oignon", "Crème", "Bouillon de légumes"] }
+    ]
+  },
+  "attendu": { "recettes": [3] }
+}

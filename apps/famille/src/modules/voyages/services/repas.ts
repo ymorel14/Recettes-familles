@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { listeFamilles, pourChaqueFamille, type Familles } from '../../../services/familles';
 
 // Repas de famille (migration 20261001100000_voyage_repas.sql) : repas d'un
 // événement, plats par étape, recettes de l'app Cuisine, qui s'occupe de
@@ -182,12 +183,12 @@ export async function chercherRecettes(texte: string): Promise<RecetteResume[]> 
 export type EvenementCadeaux = { id: string; titre: string; type: string; date_evenement: string };
 
 // Événements CadeauCommun de la famille (la base ne renvoie que ceux qu'on a le droit de voir).
-export async function evenementsCadeaux(familleId: string): Promise<EvenementCadeaux[]> {
+export async function evenementsCadeaux(familles: Familles): Promise<EvenementCadeaux[]> {
   const { data, error } = await supabase
     .schema('wishlist')
     .from('evenements')
     .select('id, titre, type, date_evenement')
-    .eq('famille_id', familleId)
+    .in('famille_id', listeFamilles(familles))
     .order('date_evenement');
   if (error) throw error;
   return (data ?? []) as EvenementCadeaux[];

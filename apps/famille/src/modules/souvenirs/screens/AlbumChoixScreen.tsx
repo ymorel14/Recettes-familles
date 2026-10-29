@@ -17,6 +17,7 @@ import { Champ } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { formaterDateSouvenir } from '../utils/dates';
 import { Avatar } from '@apps-famille/famille';
+import { useFamillesVues } from '../../../services/familles';
 
 function normaliser(t: string): string {
   return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -28,6 +29,8 @@ function normaliser(t: string): string {
 export default function AlbumChoixScreen({ route, navigation }: any) {
   const albumId: string = route.params.albumId;
   const { session, famille, foyer } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const { categorie, lignePrenoms, visagesDe } = useFamilleDonnees();
   const moi = session?.user.id;
   const [album, setAlbum] = useState<Album | null>(null);
@@ -40,7 +43,7 @@ export default function AlbumChoixScreen({ route, navigation }: any) {
 
   useEffect(() => {
     if (!famille) return;
-    Promise.all([obtenirAlbum(albumId), listerSouvenirs(famille.id)])
+    Promise.all([obtenirAlbum(albumId), listerSouvenirs(famillesVues)])
       .then(([r, liste]) => {
         setAlbum(r?.album ?? null);
         setDeja(new Set((r?.souvenirs ?? []).map((s) => s.id)));
@@ -50,7 +53,7 @@ export default function AlbumChoixScreen({ route, navigation }: any) {
         setErreur(extraireMessageErreur(e, 'Impossible de charger les souvenirs.'));
         setSouvenirs([]);
       });
-  }, [albumId, famille?.id]);
+  }, [albumId, famille?.id, famillesVues]);
 
   const proposes = useMemo(() => {
     if (!album || !souvenirs) return [];

@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import type { PrecisionDate } from '../utils/dates';
 import { compresserPhoto } from '../utils/compression';
+import { listeFamilles, pourChaqueFamille, type Familles } from '../../../services/familles';
 
 // Accès aux données de SouvenirsFamille (schéma "souvenirs",
 // supabase/migrations/20261001100000_souvenirs.sql). Qui voit et qui modifie
@@ -178,11 +179,11 @@ function premierePhoto(medias: { id: string; chemin: string; type: TypeMedia; or
 
 // Tous les souvenirs visibles de la famille (active), du plus récent au plus
 // ancien ; les souvenirs sans date viennent à la fin.
-export async function listerSouvenirs(familleId: string): Promise<CarteSouvenir[]> {
+export async function listerSouvenirs(familles: Familles): Promise<CarteSouvenir[]> {
   const { data, error } = await supabase
     .from('souvenirs')
     .select(SELECTION_CARTE)
-    .eq('famille_id', familleId)
+    .in('famille_id', listeFamilles(familles))
     .order('date_debut', { ascending: false, nullsFirst: false })
     .order('cree_le', { ascending: false });
   if (error) throw error;
@@ -503,7 +504,8 @@ export async function supprimerCommentaire(id: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export type FiltresRecherche = {
-  familleId?: string | null;
+  // Une famille, ou plusieurs (vue unique : une recherche par famille, fusionnée).
+  familleId?: Familles | null;
   categorie?: string | null;
   personneId?: string | null;
   depuis?: string | null;
@@ -512,9 +514,14 @@ export type FiltresRecherche = {
 };
 
 export async function rechercher(question: string, filtres: FiltresRecherche = {}): Promise<ResultatRecherche[]> {
+  const familles = listeFamilles(filtres.familleId);
+  if (familles.length > 1) {
+    const tous = await pourChaqueFamille(familles, (f) => rechercher(question, { ...filtres, familleId: f }), (r) => r.id);
+    return tous.sort((a, b) => (b.pertinence ?? 0) - (a.pertinence ?? 0)).slice(0, filtres.limite ?? 30);
+  }
   const { data, error } = await supabase.rpc('rechercher', {
     question,
-    id_famille: filtres.familleId ?? null,
+    id_famille: familles[0] ?? null,
     categorie_code: filtres.categorie ?? null,
     id_personne: filtres.personneId ?? null,
     depuis: filtres.depuis ?? null,
@@ -529,10 +536,17 @@ export async function rechercher(question: string, filtres: FiltresRecherche = {
   }));
 }
 
-export async function ceJourLa(jour: string, familleId: string): Promise<Souvenir[]> {
-  const { data, error } = await supabase.rpc('ce_jour_la', { jour, id_famille: familleId });
-  if (error) throw error;
-  return (data as Souvenir[] | null) ?? [];
+export async function ceJourLa(jour: string, familles: Familles): Promise<Souvenir[]> {
+  const liste = await pourChaqueFamille(
+    familles,
+    async (familleId) => {
+      const { data, error } = await supabase.rpc('ce_jour_la', { jour, id_famille: familleId });
+      if (error) throw error;
+      return (data as Souvenir[] | null) ?? [];
+    },
+    (s) => s.id
+  );
+  return liste.sort((a, b) => (b.date_debut ?? '').localeCompare(a.date_debut ?? ''));
 }
 
 export type VoyagePasse = {
@@ -547,12 +561,12 @@ export type VoyagePasse = {
 };
 
 // Voyages de VoyageCommun terminés ou passés, dans la famille active.
-export async function listerVoyagesPasses(familleId: string, aujourdHui: string): Promise<VoyagePasse[]> {
+export async function listerVoyagesPasses(familles: Familles, aujourdHui: string): Promise<VoyagePasse[]> {
   const { data, error } = await supabase
     .schema('voyage')
     .from('voyages')
     .select('id, titre, destination, pays, date_debut, date_fin, annee, statut')
-    .eq('famille_id', familleId)
+    .in('famille_id', listeFamilles(familles))
     .neq('statut', 'annule')
     .order('date_debut', { ascending: false, nullsFirst: false });
   if (error) throw error;
@@ -617,10 +631,17 @@ export type FormulaireAlbum = {
 };
 
 // Albums de la famille (active), avec le nombre de souvenirs visibles.
-export async function listerAlbums(familleId: string): Promise<Album[]> {
-  const { data, error } = await supabase.rpc('lister_albums', { id_famille: familleId });
-  if (error) throw error;
-  return (data as Album[] | null) ?? [];
+export async function listerAlbums(familles: Familles): Promise<Album[]> {
+  const albums = await pourChaqueFamille(
+    familles,
+    async (familleId) => {
+      const { data, error } = await supabase.rpc('lister_albums', { id_famille: familleId });
+      if (error) throw error;
+      return (data as Album[] | null) ?? [];
+    },
+    (a) => a.id
+  );
+  return albums.sort((a, b) => a.titre.localeCompare(b.titre, 'fr'));
 }
 
 export async function obtenirAlbum(id: string): Promise<{ album: Album; souvenirs: CarteSouvenir[] } | null> {

@@ -5,9 +5,13 @@ import { FeuilleBas } from '../composants/FeuilleBas';
 import { Bouton, Icone, PastilleModule, PuceFiltre } from '../composants/ui';
 import { BandeauBrouillon, ChargementAssistant, Etincelle, MessageAssistant } from '../composants/assistant';
 import { ChampAssistant } from '../composants/ChampAssistant';
+import { ResultatsRecherche, ouvrirResultat } from '../composants/ResultatsRecherche';
+import { executerConsigne } from '../services/consignes';
+import { useFamillesVues } from '../services/familles';
 import { useToast } from '../composants/Toast';
 import { arrondis, couleurs, couleursModule, creerStyles, espaces, polices, texte, type IdModule } from '../theme/theme';
-import { ouvrirModule, ouvrirOngletModule } from '../navigation/navigationRef';
+import { apresFermetureFeuille, navigationRef, ouvrirModule, ouvrirOngletModule } from '../navigation/navigationRef';
+import { ID_SANS_CATEGORIE } from '../modules/recettes/services/recettes';
 import { appelerAssistant, ErreurAssistant, messageErreurAssistant } from '../services/assistant';
 import {
   ajouterArticles,
@@ -21,6 +25,7 @@ import {
   tacheVersLigne,
   type ActionProposee,
   type ReponsePlus,
+  ACTIONS_IMMEDIATES,
 } from '../services/actionsAssistant';
 import { listerListes, type ListeResume } from '../modules/courses/services/courses';
 import { listerPersonnes } from '../modules/quotidien/services/personnes';
@@ -32,16 +37,59 @@ import { choisirPhotos, COTE_CLASSEMENT, ErreurPhoto, photoPourAssistant, type P
 // on dit ou écrit ce qu'on veut ajouter ; l'assistant propose une carte par
 // action (couleur du module, case cochée, « Modifier ») ; RIEN n'est créé
 // avant « Tout ajouter ». Puis un toast « 3 ajouts : … » avec « Annuler ».
-// En dessous, les 6 raccourcis de création, sans assistant.
+// En dessous, les 8 raccourcis de création, sans assistant, sur une seule
+// rangée (retour de test P-1) ; « Recette » ouvre un petit choix (écrire,
+// photo, lien, My Recipe Box). Plus de boutons Photo / Galerie ici (P-4) :
+// la photo passe par l'écran qui sait la lire.
 
 const RACCOURCIS: { module: IdModule; titre: string; icone: string; ouvrir: () => void }[] = [
-  { module: 'recettes', titre: 'Une recette', icone: 'restaurant-outline', ouvrir: () => ouvrirModule('recettes', 'CreationRecette') },
-  { module: 'courses', titre: 'Une liste de courses', icone: 'cart-outline', ouvrir: () => ouvrirModule('courses', 'ListeForm') },
-  { module: 'quotidien', titre: 'Une tâche', icone: 'checkbox-outline', ouvrir: () => ouvrirModule('quotidien', 'TacheForm') },
-  { module: 'cadeaux', titre: 'Une envie', icone: 'heart-outline', ouvrir: () => ouvrirOngletModule('cadeaux', 'MesEnvies') },
-  { module: 'voyages', titre: 'Un voyage ou un repas', icone: 'briefcase-outline', ouvrir: () => ouvrirModule('voyages', 'NouveauVoyage') },
-  { module: 'souvenirs', titre: 'Un souvenir', icone: 'images-outline', ouvrir: () => ouvrirModule('souvenirs', 'SouvenirForm') },
+  // « Recette » : remplacé par le petit choix (voir etape 'recette').
+  { module: 'recettes', titre: 'Recette', icone: 'restaurant-outline', ouvrir: () => ouvrirModule('recettes', 'CreationRecette') },
+  { module: 'courses', titre: 'Courses', icone: 'cart-outline', ouvrir: () => ouvrirModule('courses', 'ListeForm') },
+  // Refonte Quotidien § 2.3 : trois raccourcis à la place de « Tâche ».
+  { module: 'quotidien', titre: 'Tâche maison', icone: 'checkbox-outline', ouvrir: () => ouvrirModule('quotidien', 'TacheForm', { type: 'maison' }) },
+  { module: 'quotidien', titre: 'Tâche enfant', icone: 'happy-outline', ouvrir: () => ouvrirModule('quotidien', 'TacheEnfantForm') },
+  { module: 'quotidien', titre: 'Activité', icone: 'football-outline', ouvrir: () => ouvrirModule('quotidien', 'ActiviteForm') },
+  { module: 'cadeaux', titre: 'Envie', icone: 'heart-outline', ouvrir: () => ouvrirOngletModule('cadeaux', 'MesEnvies') },
+  // Refonte Événements § 2.3 : deux raccourcis à la place de « Voyage ».
+  { module: 'voyages', titre: 'Voyage', icone: 'briefcase-outline', ouvrir: () => ouvrirModule('voyages', 'NouveauVoyage', { nature: 'voyage' }) },
+  { module: 'voyages', titre: 'Repas', icone: 'restaurant-outline', ouvrir: () => ouvrirModule('voyages', 'NouveauVoyage', { nature: 'repas' }) },
+  { module: 'souvenirs', titre: 'Souvenir', icone: 'images-outline', ouvrir: () => ouvrirModule('souvenirs', 'SouvenirForm') },
 ];
+
+// « Recette » : comment l'ajouter (retours de test P-1, R-1).
+const CHOIX_RECETTE: { titre: string; detail: string; icone: string; ecran: string }[] = [
+  { titre: 'L’écrire', detail: 'Titre, ingrédients, étapes', icone: 'create-outline', ecran: 'CreationRecette' },
+  { titre: 'Depuis une photo', detail: 'Livre, fiche, carnet…', icone: 'camera-outline', ecran: 'ScanRecette' },
+  { titre: 'Depuis un lien', detail: 'Site de recettes, vidéo', icone: 'link-outline', ecran: 'ImportWeb' },
+  { titre: 'My Recipe Box', detail: 'Importer une sauvegarde', icone: 'archive-outline', ecran: 'ImportMyRecipeBox' },
+];
+
+// Le ⊕ est-il ouvert depuis le module Événements (refonte § 2.3) ? Renvoie
+// l'onglet actif, qui fixe l'ordre des tuiles ; null ailleurs.
+function contexteEvenements(): 'voyage' | 'repas' | null {
+  if (!navigationRef.isReady()) return null;
+  const noms: string[] = [];
+  const parcourir = (etat: any) => {
+    const r = etat?.routes?.[etat.index ?? 0];
+    if (!r) return;
+    noms.push(r.name);
+    parcourir(r.state);
+  };
+  parcourir(navigationRef.getRootState());
+  if (!noms.includes('Voyages')) return null;
+  return noms.includes('RepasFamille') ? 'repas' : 'voyage';
+}
+
+// Catégorie de l'écran d'où le ⊕ est ouvert (retour de test R-15) : ouvert
+// depuis la catégorie « Plats », une nouvelle recette y est pré-rangée.
+function categorieOuverte(): string | undefined {
+  if (!navigationRef.isReady()) return undefined;
+  const r = navigationRef.getCurrentRoute();
+  const p = r?.params as { categorieId?: string; categorieNom?: string } | undefined;
+  if (r?.name !== 'RecettesCategorie' || !p?.categorieNom || p.categorieId === ID_SANS_CATEGORIE) return undefined;
+  return p.categorieNom;
+}
 
 const MODULE_DE: Record<ActionProposee['type'], IdModule> = {
   courses: 'courses',
@@ -49,13 +97,16 @@ const MODULE_DE: Record<ActionProposee['type'], IdModule> = {
   envie: 'cadeaux',
   souvenir: 'souvenirs',
   recette: 'recettes',
+  cuisiner: 'recettes',
+  ouvrir: 'recettes',
+  rechercher: 'recettes',
 };
 const NOM_MODULE: Record<IdModule, string> = {
   recettes: 'Recettes',
   courses: 'Courses',
   quotidien: 'Quotidien',
   cadeaux: 'Cadeaux',
-  voyages: 'Voyages',
+  voyages: 'Événements',
   souvenirs: 'Souvenirs',
 };
 
@@ -70,7 +121,7 @@ type Carte = {
   probleme: string | null; // tâche qui ne peut pas être créée telle quelle
 };
 
-type Etape = 'saisie' | 'lecture' | 'confirmation' | 'photo';
+type Etape = 'saisie' | 'lecture' | 'confirmation' | 'photo' | 'recette' | 'choixCuisine';
 
 // ⊕ avec une photo (§ 4.6.1) : Haiku dit de quoi il s'agit, puis l'écran qui
 // sait la lire s'ouvre avec la photo (lecture par Sonnet, brouillon à vérifier).
@@ -89,7 +140,10 @@ function dateCourte(iso: string | null): string {
 }
 
 export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFermer: () => void }) {
-  const { session, foyer, famille } = useAuth();
+  const { session, foyer, famille, foyersFamille } = useAuth();
+  const famillesVues = useFamillesVues();
+  // « Lance ma recette de… » avec plusieurs recettes possibles (P-3).
+  const [choixCuisine, setChoixCuisine] = useState<{ id: string; titre: string }[]>([]);
   const { afficher } = useToast();
   const [etape, setEtape] = useState<Etape>('saisie');
   const [saisie, setSaisie] = useState('');
@@ -97,18 +151,29 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
   const [question, setQuestion] = useState<string | null>(null);
   const [erreur, setErreur] = useState<ErreurAssistant | null>(null);
   const [listes, setListes] = useState<ListeResume[]>([]);
-  const [personnes, setPersonnes] = useState<{ id: string; prenom: string }[]>([]);
+  const [personnes, setPersonnes] = useState<{ id: string; prenom: string; utilisateur_id: string | null }[]>([]);
   const [enCours, setEnCours] = useState(false);
   const annulation = useRef<AbortController | null>(null);
   const [photo, setPhoto] = useState<PhotoChoisie | null>(null);
   const [classement, setClassement] = useState<{ type: TypePhoto; explication: string } | null>(null);
   const [enfants, setEnfants] = useState<{ id: string; prenom: string }[] | null>(null);
+  // Catégorie à pré-remplir pour une nouvelle recette (R-15).
+  const [categorie, setCategorie] = useState<string | undefined>(undefined);
+  // Ouvert depuis Événements : la feuille ne propose que voyage / repas.
+  const [contexte, setContexte] = useState<'voyage' | 'repas' | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setCategorie(categorieOuverte());
+      setContexte(contexteEvenements());
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || !foyer) return;
     listerListes().then(setListes).catch(() => setListes([]));
     listerPersonnes([foyer.id])
-      .then((ps) => setPersonnes(ps.map((p) => ({ id: p.id, prenom: p.prenom }))))
+      .then((ps) => setPersonnes(ps.map((p) => ({ id: p.id, prenom: p.prenom, utilisateur_id: p.utilisateur_id }))))
       .catch(() => setPersonnes([]));
   }, [visible, foyer?.id]);
 
@@ -125,7 +190,7 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
   const ouvrirLettre = async (enfant: { id: string; prenom: string }, p: PhotoChoisie) => {
     const listeId = await listeDe(enfant.id);
     fermer();
-    ouvrirModule('cadeaux', 'ImportLettre', { listeId, prenom: enfant.prenom, photos: [p] });
+    apresFermetureFeuille(() => ouvrirModule('cadeaux', 'ImportLettre', { listeId, prenom: enfant.prenom, photos: [p] }));
   };
 
   // Ouvre l'écran qui sait lire ce type de photo.
@@ -134,17 +199,17 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     try {
       if (type === 'recette') {
         fermer();
-        ouvrirModule('recettes', 'ScanRecette', { photos: [p] });
+        apresFermetureFeuille(() => ouvrirModule('recettes', 'ScanRecette', { photos: [p] }));
       } else if (type === 'planning') {
         fermer();
-        ouvrirModule('quotidien', 'ImportPlanning', { photos: [p] });
+        apresFermetureFeuille(() => ouvrirModule('quotidien', 'ImportPlanning', { photos: [p] }));
       } else if (type === 'objet') {
         if (!session) return;
         const moi = await obtenirMaPersonne(session.user.id);
         if (!moi) throw new Error('Fiche personne introuvable.');
         const listeId = await listeDe(moi.id);
         fermer();
-        ouvrirModule('cadeaux', 'Souhait', { listeId, photo: p.uri });
+        apresFermetureFeuille(() => ouvrirModule('cadeaux', 'Souhait', { listeId, photo: p.uri }));
       } else {
         // Lettre : la liste d'un enfant sans compte du foyer, gérée par le parent.
         const ps = foyer ? await personnesCadeaux([foyer.id]) : [];
@@ -160,6 +225,10 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     }
   };
 
+  // Classement automatique d'une photo (fonction « photo-classer »). Les
+  // boutons Photo / Galerie ont quitté la feuille (P-4) ; gardé pour plus
+  // tard (consigne vocale « scanne… », P-3).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const envoyerPhoto = async (source: 'camera' | 'galerie') => {
     setErreur(null);
     setQuestion(null);
@@ -214,6 +283,26 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     try {
       const r = await appelerAssistant<ReponsePlus>('plus', { texte: texteSaisi }, { signal: controle.signal });
       if (controle.signal.aborted) return;
+      // Consigne qui ouvre un écran (P-3) : exécutée tout de suite.
+      const immediate = r.actions.find((a) => ACTIONS_IMMEDIATES.includes(a.type));
+      if (immediate && foyer && r.actions.every((a) => ACTIONS_IMMEDIATES.includes(a.type))) {
+        const issue = await executerConsigne(immediate, { foyerId: foyer.id, foyersFamille, familles: famillesVues });
+        if (controle.signal.aborted) return;
+        if (issue.type === 'ouvrir') {
+          fermer();
+          apresFermetureFeuille(() => ouvrirResultat(issue.resultat));
+        } else if (issue.type === 'choisir') {
+          setChoixCuisine(issue.recettes);
+          setEtape('choixCuisine');
+        } else if (issue.type === 'rechercher') {
+          setSaisie(issue.texte);
+          setEtape('saisie');
+        } else {
+          setQuestion(issue.texte);
+          setEtape('saisie');
+        }
+        return;
+      }
       if (!r.actions.length) {
         setQuestion(r.question ?? 'Je n’ai pas compris quoi ajouter. Pouvez-vous préciser ?');
         setEtape('saisie');
@@ -287,7 +376,7 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     } else if (nb > 0) {
       afficher(`${nb === 1 ? '1 ajout' : `${nb} ajouts`} : ${modules.join(', ')}`, annulations.length ? { annuler: () => annulations.forEach((f) => f()) } : undefined);
     }
-    if (recetteAOuvrir) ouvrirModule('recettes', 'ImportWeb', { url: recetteAOuvrir });
+    if (recetteAOuvrir) apresFermetureFeuille(() => ouvrirModule('recettes', 'ImportWeb', { url: recetteAOuvrir }));
   };
 
   // Ajout aux courses sans assistant (pas de réseau, pause du plafond…).
@@ -319,11 +408,12 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     setCartes((cs) => cs.filter((x) => x.cle !== c.cle));
     if (cartes.length <= 1) fermer();
     else onFermer();
-    ouvrirModule('quotidien', 'TacheForm', { brouillon: { ...c.action.tache, libelle: c.titre } });
+    const brouillon = { ...c.action.tache, libelle: c.titre };
+    apresFermetureFeuille(() => ouvrirModule('quotidien', 'TacheForm', { brouillon }));
   };
 
   return (
-    <FeuilleBas visible={visible} titre={etape === 'confirmation' ? 'Vérifiez avant d’ajouter' : 'Ajouter'} onFermer={fermer}>
+    <FeuilleBas visible={visible} titre={etape === 'confirmation' ? 'Vérifiez avant d’ajouter' : contexte && etape === 'saisie' ? 'Ajouter dans Événements' : 'Ajouter'} onFermer={fermer}>
       {etape === 'lecture' ? (
         <ChargementAssistant
           etapes={photo ? ['Je regarde la photo…', 'Je cherche où la ranger…'] : ['Je lis votre demande…', 'Je range par module…', 'Presque fini…']}
@@ -334,14 +424,44 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
         />
       ) : null}
 
-      {etape === 'saisie' ? (
+      {etape === 'saisie' && contexte ? (
         <>
+          {(contexte === 'repas' ? (['repas', 'voyage'] as const) : (['voyage', 'repas'] as const)).map((nature) => (
+            <Pressable
+              key={nature}
+              onPress={() => {
+                fermer();
+                apresFermetureFeuille(() => ouvrirModule('voyages', 'NouveauVoyage', { nature }));
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={nature === 'repas' ? 'Créer : un repas de famille' : 'Créer : un voyage'}
+              style={({ pressed }) => [styles.tuileEvenement, pressed && { opacity: 0.7 }]}
+            >
+              <PastilleModule module="voyages" icone={nature === 'repas' ? 'restaurant-outline' : 'briefcase-outline'} taille={44} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.tuileEvenementTitre}>{nature === 'repas' ? 'Un repas de famille' : 'Un voyage'}</Text>
+                <Text style={styles.tuileEvenementDetail}>
+                  {nature === 'repas' ? 'Noël, anniversaire, dimanche chez Mamie…' : 'Une destination ou juste une période'}
+                </Text>
+              </View>
+              <Icone nom="chevron-forward" taille={20} couleur={couleurs.encreDouce} />
+            </Pressable>
+          ))}
+          <Bouton variante="lien" titre="Autre chose (assistant, recette, courses…)" onPress={() => setContexte(null)} />
+        </>
+      ) : null}
+
+      {etape === 'saisie' && !contexte ? (
+        <>
+          {/* Un seul champ (P-1) : on cherche pendant la frappe (P-2), « Entrée »
+              ou le bouton envoie la phrase à l'assistant ; grand bouton
+              « Assistant » pour parler (P-3). */}
           <ChampAssistant
             valeur={saisie}
             onChange={setSaisie}
             onValider={envoyer}
-            placeholder="Dites ou écrivez ce que vous voulez ajouter"
-            exemples={['Ajoute du lait et des œufs', 'Rappelle-moi le dentiste jeudi', 'Note que Léo a gagné son match']}
+            placeholder="Rechercher ou demander… (« lance le bourguignon »)"
+            grandMicro
           />
           {question ? (
             <View style={styles.question}>
@@ -359,36 +479,75 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
           {erreur && listes.length ? (
             <Bouton variante="secondaire" petit icone="cart-outline" titre="Ajouter aux courses tel quel" onPress={ajouterTelQuel} enCours={enCours} />
           ) : null}
-          <Bouton
-            titre="Envoyer à l’assistant"
-            icone="arrow-up"
-            onPress={envoyer}
-            desactive={!saisie.trim()}
-          />
-          <View style={styles.lignePhoto}>
-            <Bouton variante="secondaire" petit icone="camera-outline" titre="Photo" onPress={() => envoyerPhoto('camera')} style={{ flex: 1 }} />
-            <Bouton variante="secondaire" petit icone="images-outline" titre="Galerie" onPress={() => envoyerPhoto('galerie')} style={{ flex: 1 }} />
-          </View>
+          {saisie.trim() ? (
+            <Bouton titre="Envoyer à l’assistant" icone="arrow-up" onPress={envoyer} />
+          ) : null}
+          {saisie.trim().length >= 2 && !erreur && !question ? (
+            <ResultatsRecherche
+              texte={saisie}
+              onOuvrir={(r) => {
+                fermer();
+                apresFermetureFeuille(() => ouvrirResultat(r));
+              }}
+            />
+          ) : null}
 
           <Text style={styles.sousTitre}>Créer</Text>
-          <View style={styles.grille}>
-            {RACCOURCIS.map((r) => (
+          {/* 9 raccourcis : une rangée de 5 et une de 4. */}
+          {[RACCOURCIS.slice(0, 5), RACCOURCIS.slice(5)].map((rangee, numero) => (
+          <View key={numero} style={styles.rangee}>
+            {rangee.map((r) => (
               <Pressable
                 key={r.titre}
                 onPress={() => {
+                  if (r.module === 'recettes') return setEtape('recette');
                   fermer();
-                  r.ouvrir();
+                  apresFermetureFeuille(r.ouvrir);
                 }}
                 accessibilityRole="button"
-                style={({ pressed }) => [styles.raccourci, pressed && { opacity: 0.8 }]}
+                accessibilityLabel={`Créer : ${r.titre}`}
+                style={({ pressed }) => [styles.raccourciCompact, pressed && { opacity: 0.7 }]}
               >
-                <PastilleModule module={r.module} icone={r.icone} taille={40} />
-                <Text style={styles.raccourciTexte} numberOfLines={2}>
+                <PastilleModule module={r.module} icone={r.icone} taille={44} />
+                <Text style={styles.raccourciCompactTexte} numberOfLines={1}>
                   {r.titre}
                 </Text>
               </Pressable>
             ))}
           </View>
+          ))}
+        </>
+      ) : null}
+
+      {etape === 'recette' ? (
+        <>
+          <Text style={styles.sousTitre}>Nouvelle recette{categorie ? ` · ${categorie}` : ''}</Text>
+          <View style={{ gap: espaces.s }}>
+            {CHOIX_RECETTE.map((c) => (
+              <Pressable
+                key={c.ecran}
+                onPress={() => {
+                  fermer();
+                  apresFermetureFeuille(() =>
+                    ouvrirModule(
+                      'recettes',
+                      c.ecran,
+                      c.ecran === 'CreationRecette' && categorie ? { categoriePreselectionnee: categorie } : undefined
+                    )
+                  );
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.raccourci, styles.choixRecette, pressed && { opacity: 0.8 }]}
+              >
+                <PastilleModule module="recettes" icone={c.icone} taille={40} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.raccourciTexte}>{c.titre}</Text>
+                  <Text style={styles.carteDetail}>{c.detail}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+          <Bouton variante="lien" titre="Retour" onPress={() => setEtape('saisie')} />
         </>
       ) : null}
 
@@ -433,6 +592,29 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
             </>
           )}
           <Bouton variante="secondaire" titre="Annuler" onPress={recommencer} />
+        </>
+      ) : null}
+
+      {etape === 'choixCuisine' ? (
+        <>
+          <Text style={styles.sousTitre}>Quelle recette ?</Text>
+          <View style={{ gap: espaces.s }}>
+            {choixCuisine.map((r) => (
+              <Pressable
+                key={r.id}
+                onPress={() => {
+                  fermer();
+                  apresFermetureFeuille(() => ouvrirModule('recettes', 'AssistantRecette', { recetteId: r.id }));
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.raccourci, styles.choixRecette, pressed && { opacity: 0.8 }]}
+              >
+                <PastilleModule module="recettes" icone="restaurant-outline" taille={40} />
+                <Text style={styles.raccourciTexte}>{r.titre}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Bouton variante="lien" titre="Retour" onPress={() => setEtape('saisie')} />
         </>
       ) : null}
 
@@ -586,7 +768,23 @@ function CarteAction({
 
 const styles = creerStyles(() => ({
   sousTitre: { ...texte.libelleSection(), marginTop: espaces.s },
-  lignePhoto: { flexDirection: 'row', gap: espaces.s },
+  tuileEvenement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: espaces.m,
+    padding: espaces.m,
+    minHeight: 64,
+    borderRadius: arrondis.carte,
+    borderWidth: 1,
+    borderColor: couleurs.ligneCarte,
+    backgroundColor: couleurs.surface,
+  },
+  tuileEvenementTitre: { fontFamily: polices.texteGras, fontSize: 16, color: couleurs.encre },
+  tuileEvenementDetail: { fontFamily: polices.texte, fontSize: 13, color: couleurs.encreDouce },
+  rangee: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },
+  raccourciCompact: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 6, borderRadius: arrondis.champ },
+  raccourciCompactTexte: { fontFamily: polices.texteDemiGras, fontSize: 12, color: couleurs.encre },
+  choixRecette: { flexBasis: 'auto', flexGrow: 0 },
   choixPhoto: { flexDirection: 'row', flexWrap: 'wrap', gap: espaces.s },
   grille: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   raccourci: {

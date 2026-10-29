@@ -12,6 +12,8 @@ export type Groupe = {
   nom: string;
   zone_vacances: ZoneVacances | null;
   cree_par: string;
+  // Groupe privé du foyer (« Notre foyer ») : non null = pas un groupe de covoiturage.
+  foyer_prive?: string | null;
 };
 
 export type ZoneVacances = 'A' | 'B' | 'C' | 'Corse';
@@ -38,6 +40,13 @@ export type Activite = {
   heure_fin: string;
   date_debut: string;
   date_fin: string;
+  // Responsables par défaut (personnes du foyer) ; *_alt : une semaine sur deux.
+  aller_par?: string | null;
+  retour_par?: string | null;
+  aller_par_alt?: string | null;
+  retour_par_alt?: string | null;
+  // Temps entre le départ de l'aller et le début, en texte d'intervalle SQL ('20 minutes').
+  avance_aller?: string;
 };
 
 export type Trajet = {
@@ -100,7 +109,7 @@ export function libelleJour(iso: string): string {
 // ---------------------------------------------------------------------------
 
 export async function listerGroupes(): Promise<Groupe[]> {
-  const { data, error } = await supabase.from('groupes').select('id, nom, zone_vacances, cree_par').order('cree_le');
+  const { data, error } = await supabase.from('groupes').select('id, nom, zone_vacances, cree_par, foyer_prive').order('cree_le');
   if (error) throw error;
   return (data as Groupe[]) ?? [];
 }
@@ -246,7 +255,9 @@ export async function listerActivites(groupes: string[]): Promise<Activite[]> {
   if (!groupes.length) return [];
   const { data, error } = await supabase
     .from('activites')
-    .select('id, groupe_id, nom, lieu, jour_semaine, heure_debut, heure_fin, date_debut, date_fin')
+    .select(
+      'id, groupe_id, nom, lieu, jour_semaine, heure_debut, heure_fin, date_debut, date_fin, aller_par, retour_par, aller_par_alt, retour_par_alt'
+    )
     .in('groupe_id', groupes)
     .order('jour_semaine');
   if (error) throw error;
@@ -254,9 +265,16 @@ export async function listerActivites(groupes: string[]): Promise<Activite[]> {
 }
 
 // Crée l'activité puis ses séances (vacances sautées) ; renvoie le nombre de séances.
-export async function creerActivite(activite: Omit<Activite, 'id'>): Promise<number> {
+export async function creerActivite(activite: Omit<Activite, 'id'>, enfants: string[] = []): Promise<number> {
   const { data, error } = await supabase.from('activites').insert(activite).select('id').single();
   if (error) throw error;
+  // Les enfants concernés sont inscrits d'office aux trajets des séances.
+  if (enfants.length) {
+    const { error: e1 } = await supabase
+      .from('activite_enfants')
+      .insert(enfants.map((enfant_id) => ({ activite_id: data.id, enfant_id })));
+    if (e1) throw e1;
+  }
   const { data: nb, error: e2 } = await supabase.rpc('generer_seances', { id_activite: data.id });
   if (e2) throw e2;
   return nb as number;
@@ -438,5 +456,115 @@ export async function ajouterIndisponibiliteInvite(jeton: string, du: string, au
 
 export async function retirerIndisponibiliteInvite(jeton: string, id: string): Promise<void> {
   const { error } = await supabase.rpc('retirer_indisponibilite_invite', { jeton_invite: jeton, id_indisponibilite: id });
+  if (error) throw error;
+}
+
+
+// ---------------------------------------------------------------------------
+// Activités du foyer (refonte Quotidien § 5)
+// ---------------------------------------------------------------------------
+
+// Groupe privé de mon foyer (créé au premier appel) : il porte les activités
+// qui ne sont pas partagées avec d'autres familles.
+export async function groupeDuFoyer(): Promise<string> {
+  const { data, error } = await supabase.rpc('groupe_du_foyer');
+  if (error) throw error;
+  return data as string;
+}
+
+export type TrajetSemaine = {
+  id: string;
+  sens: 'aller' | 'retour';
+  heure: string;
+  propose: boolean;
+  // Adulte de MON foyer qui s'en occupe (prénom jamais donné pour un autre foyer).
+  responsable_id: string | null;
+  responsable: string | null;
+  moi: boolean;
+  // Famille d'un groupe partagé qui conduit, ou participant de mon foyer.
+  conducteur_id: string | null;
+  conducteur: string | null;
+  // Pris par mon foyer sans adulte précisé (ancien covoiturage).
+  foyer: boolean | null;
+  vide: boolean;
+};
+
+export type SeanceSemaine = {
+  seance_id: string;
+  date: string;
+  heure_debut: string;
+  heure_fin: string;
+  statut: 'prevue' | 'annulee';
+  activite_id: string;
+  activite: string;
+  lieu: string | null;
+  groupe_id: string;
+  partage: boolean;
+  enfants: string[];
+  trajets: TrajetSemaine[];
+};
+
+// Séances de la semaine (lundi → dimanche) de mes enfants, avec le
+// responsable de chaque trajet.
+export async function activitesSemaine(lundi: string): Promise<SeanceSemaine[]> {
+  const { data, error } = await supabase.rpc('activites_semaine', { lundi });
+  if (error) throw error;
+  return (data as SeanceSemaine[]) ?? [];
+}
+
+// Qui s'occupe de ce trajet : un adulte de mon foyer (personneId), une
+// famille du groupe (participantId), ou personne (aucun des deux).
+export async function definirResponsable(
+  idTrajet: string,
+  choix: { personneId?: string | null; participantId?: string | null }
+): Promise<void> {
+  const { error } = await supabase.rpc('definir_responsable', {
+    id_trajet: idTrajet,
+    id_personne: choix.personneId ?? null,
+    id_participant: choix.participantId ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function modifierResponsablesActivite(
+  idActivite: string,
+  r: { aller: string | null; retour: string | null; allerAlt: string | null; retourAlt: string | null }
+): Promise<void> {
+  const { error } = await supabase.rpc('modifier_responsables_activite', {
+    id_activite: idActivite,
+    p_aller: r.aller,
+    p_retour: r.retour,
+    p_aller_alt: r.allerAlt,
+    p_retour_alt: r.retourAlt,
+  });
+  if (error) throw error;
+}
+
+// Prénoms des enfants de chaque activité (clé : id de l'activité).
+export async function enfantsDesActivites(ids: string[]): Promise<Record<string, string[]>> {
+  if (!ids.length) return {};
+  const { data, error } = await supabase
+    .from('activite_enfants')
+    .select('activite_id, enfants(id, prenom)')
+    .in('activite_id', ids);
+  if (error) throw error;
+  const res: Record<string, string[]> = {};
+  for (const l of (data as any[]) ?? []) {
+    if (l.enfants?.prenom) (res[l.activite_id] ??= []).push(l.enfants.prenom);
+  }
+  return res;
+}
+
+// Enfants (inscrits dans le groupe) concernés par une activité.
+export async function idsEnfantsDeActivite(idActivite: string): Promise<string[]> {
+  const { data, error } = await supabase.from('activite_enfants').select('enfant_id').eq('activite_id', idActivite);
+  if (error) throw error;
+  return ((data as any[]) ?? []).map((l) => l.enfant_id as string);
+}
+
+// Nom et lieu d'une activité (les horaires et la période ne se changent pas :
+// les séances sont déjà créées).
+export async function modifierActivite(id: string, champs: { nom?: string; lieu?: string | null }): Promise<void> {
+  const { error } = await supabase.from('activites').update(champs).eq('id', id);
   if (error) throw error;
 }

@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  StyleSheet,
   Switch,
   Text,
   View,
@@ -30,6 +31,36 @@ export type NomIcone = keyof typeof Ionicons.glyphMap;
 
 export function Icone({ nom, taille = 24, couleur, style }: { nom: string; taille?: number; couleur?: string; style?: any }) {
   return <Ionicons name={nom as NomIcone} size={taille} color={couleur ?? couleurs.encre} style={style} />;
+}
+
+// Icône à la place d'un caractère (✕ ✓ ✎ ⏱…, retour de test R-9) : reprend
+// la couleur et la taille du style de texte qu'elle remplace, et peut se
+// placer dans un <Text>.
+export function IconeGlyphe({ nom, style }: { nom: string; style?: StyleProp<TextStyle> }) {
+  const s = (StyleSheet.flatten(style) ?? {}) as TextStyle;
+  return <Ionicons name={nom as NomIcone} size={s.fontSize ?? 16} color={(s.color as string) ?? couleurs.encre} />;
+}
+
+// Pastille « Modifier » (retour de test R-9), à la place du crayon seul.
+// À placer dans un Pressable ; `couleur` = couleur du module.
+export function PastilleModifier({ couleur, petite }: { couleur: string; petite?: boolean }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        borderColor: couleur,
+        borderWidth: 1,
+        borderRadius: 999,
+        paddingVertical: petite ? 3 : 5,
+        paddingHorizontal: petite ? 8 : 10,
+      }}
+    >
+      <Ionicons name="create-outline" size={petite ? 14 : 16} color={couleur} />
+      <Text style={{ fontFamily: polices.texteGras, fontSize: petite ? 12 : 14, color: couleur }}>Modifier</Text>
+    </View>
+  );
 }
 
 // --- Boutons ---------------------------------------------------------------
@@ -122,7 +153,8 @@ export function BoutonPilule({
 }: {
   titre: string;
   onPress: () => void;
-  ton?: 'accent' | 'encre' | 'module' | 'contour';
+  // 'doux' : ton principal du module, texte foncé (palette G-4).
+  ton?: 'accent' | 'encre' | 'module' | 'contour' | 'doux';
   module?: IdModule;
 }) {
   const fond =
@@ -132,8 +164,11 @@ export function BoutonPilule({
         ? couleurs.encre
         : ton === 'module' && module
           ? couleursModule(module).encre
-          : couleurs.surface;
-  const encre = ton === 'accent' ? couleurs.surAccent : ton === 'contour' ? couleurs.encre : couleurs.fond;
+          : ton === 'doux'
+            ? module ? couleursModule(module).principal : couleurs.marque
+            : couleurs.surface;
+  const encre =
+    ton === 'accent' ? couleurs.surAccent : ton === 'contour' ? couleurs.encre : ton === 'doux' ? '#2B2420' : couleurs.fond;
   return (
     <Pressable
       onPress={onPress}

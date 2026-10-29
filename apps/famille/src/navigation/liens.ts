@@ -29,12 +29,20 @@ function sansBase(chemin: string): string {
   return reste.startsWith('/') ? reste : `/${reste}`;
 }
 
+// Anciennes adresses redirigées (refonte Quotidien § 2.1).
+function redirige(chemin: string): string {
+  return chemin
+    .replace(/^\/quotidien\/trajets(?=$|[/?#])/, '/quotidien/activites')
+    // Refonte Événements : l'onglet Calendrier a disparu (doublon de l'Agenda).
+    .replace(/^\/voyages\/calendrier(?=$|[/?#])/, '/agenda');
+}
+
 const versBooleen = (v: string) => v === 'true';
 
 export const liens: LinkingOptions<any> = {
   enabled: Platform.OS === 'web',
   prefixes: ['famille://'],
-  getStateFromPath: (chemin, options) => getStateFromPath(sansBase(chemin), options),
+  getStateFromPath: (chemin, options) => getStateFromPath(redirige(sansBase(chemin)), options),
   getPathFromState: (etat, options) => `${BASE_WEB}${getPathFromState(paramsSimples(etat), options)}`,
   config: <any>{
     screens: {
@@ -46,6 +54,7 @@ export const liens: LinkingOptions<any> = {
           Accueil: '',
           Agenda: 'agenda',
           Activite: 'activite',
+          Recherche: 'recherche',
           Moi: { initialRouteName: 'MoiAccueil', screens: { MoiAccueil: 'moi', MotDePasse: 'moi/mot-de-passe' } },
           Recettes: {
             path: 'cuisine',
@@ -53,7 +62,7 @@ export const liens: LinkingOptions<any> = {
             screens: {
               Onglets: {
                 path: '',
-                screens: { Recettes: '', Congelateur: 'congelateur', Assistant: 'assistant', AideMemoire: 'aide-memoire' },
+                screens: { Recettes: '', Congelateur: 'congelateur', AideMemoire: 'aide-memoire' },
               },
               RecettesCategorie: 'categorie/:categorieId',
               DetailRecette: 'recette/:recetteId',
@@ -90,7 +99,7 @@ export const liens: LinkingOptions<any> = {
             screens: {
               Onglets: {
                 path: '',
-                screens: { Aujourdhui: '', Trajets: 'trajets', Taches: 'taches', ArgentPoche: 'argent-de-poche', Inventaires: 'inventaires' },
+                screens: { Taches: '', ArgentPoche: 'argent-de-poche/:personneId?', Activites: 'activites', Inventaires: 'inventaires' },
               },
               Groupe: 'groupe/:id',
               GroupeForm: 'groupe-nouveau',
@@ -98,6 +107,9 @@ export const liens: LinkingOptions<any> = {
               ImportPlanning: 'importer-planning',
               TacheForm: 'tache',
               Domaines: 'domaines',
+              TacheEnfantForm: 'tache-enfant',
+              TachesEnfant: 'taches-enfant/:personneId',
+              Bilan: 'bilan/:lundi',
               Tirelire: 'tirelire/:personneId',
               Inventaire: 'inventaire/:id',
               Objet: 'objet/:id',
@@ -121,7 +133,7 @@ export const liens: LinkingOptions<any> = {
             path: 'voyages',
             initialRouteName: 'Onglets',
             screens: {
-              Onglets: { path: '', screens: { Voyages: '', Calendrier: 'calendrier' } },
+              Onglets: { path: '', screens: { Voyages: '', RepasFamille: 'repas' } },
               NouveauVoyage: 'proposer',
               Voyage: 'voyage/:voyageId',
               Dates: 'voyage/:voyageId/dates',

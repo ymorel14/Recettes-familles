@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,6 @@ import {
   obtenirRecette,
   resoudreEtapePourAffichage,
   resoudreLibelleIngredient,
-  supprimerRecette,
   etatSurprise,
   revelerRecette,
 } from '../../services/recettes';
@@ -37,6 +36,11 @@ import { useEnvoiCourses } from '../../hooks/useEnvoiCourses';
 import type { ChoixVariantes, EssaiComplet, RecetteComplete } from '../../types/models';
 import { Avatar } from '@apps-famille/famille';
 import ReglageQuantites, { AJUSTEMENT_INITIAL, type AjustementQuantites } from '../../components/ReglageQuantites';
+import FeuilleAjoutCourses from '../../components/FeuilleAjoutCourses';
+import Commentaires from '../../components/Commentaires';
+import { Icone, IconeGlyphe } from '../../../../composants/ui';
+import { apresFermetureFeuille } from '../../../../navigation/navigationRef';
+import type { Ingredient } from '../../types/models';
 
 function formaterDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -100,10 +104,10 @@ function CarteEssai({
         return (
           <View key={point.id} style={styles.pointEssai}>
             {numero && <Text style={styles.etiquetteEtape}>Étape {numero}</Text>}
-            {point.souci ? <Text style={styles.texteEssai}>⚠️ {point.souci}</Text> : null}
+            {point.souci ? <Text style={styles.texteEssai}><IconeGlyphe nom="warning-outline" style={styles.texteEssai} />{' '}{point.souci}</Text> : null}
             {point.reponses.map((r) => (
               <Text key={r.id} style={styles.texteEssai}>
-                {r.nature === 'changement' ? '✏️ ' : '💡 '}
+                <IconeGlyphe nom={r.nature === 'changement' ? 'create-outline' : 'bulb-outline'} style={styles.texteEssai} />{' '}
                 {r.texte}
               </Text>
             ))}
@@ -133,11 +137,12 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const { session, foyer, foyersFamille } = useAuth();
   const [recette, setRecette] = useState<RecetteComplete | null>(null);
   const [chargement, setChargement] = useState(true);
-  const [suppression, setSuppression] = useState(false);
   // Envoi des ingrédients dans une liste de l'app Courses.
   const envoiCourses = useEnvoiCourses();
   const ajoutListe = envoiCourses.enCours;
   const [revelation, setRevelation] = useState(false);
+  // Feuille « Ajouter aux courses » (icône caddie de l'en-tête, R-6).
+  const [feuilleCourses, setFeuilleCourses] = useState(false);
   const [essais, setEssais] = useState<EssaiComplet[]>([]);
   // Quantités adaptées au moment de faire la recette (parts, ou "ce que
   // j'ai" — ex. 6 œufs au lieu de 8) ; transmises au mode assistant.
@@ -150,7 +155,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const largeurPhoto = largeurFenetre - 2 * theme.spacing.md;
 
   // Recharge à chaque retour sur l'écran, notamment après modification de la
-  // recette (crayon ✎ ci-dessous) : sans ça, la fiche resterait figée sur
+  // recette (bouton « Modifier » de l'en-tête) : sans ça, la fiche resterait figée sur
   // l'ancienne version tant qu'on ne quitte pas complètement l'écran.
   useFocusEffect(
     useCallback(() => {
@@ -175,6 +180,45 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     }, [recetteId, foyersFamille])
   );
 
+  // En-tête (retours de test R-6 et R-9) : caddie pour choisir les
+  // ingrédients à ajouter aux courses, et « Modifier » pour les recettes de
+  // son foyer.
+  const modifiable = !!recette && recette.foyer_id === foyer?.id;
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () =>
+        recette ? (
+          <View style={styles.actionsEnTete}>
+            <Pressable
+              onPress={() => setFeuilleCourses(true)}
+              disabled={ajoutListe}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter des ingrédients aux courses"
+              hitSlop={8}
+              style={styles.boutonIcone}
+            >
+              {ajoutListe ? (
+                <ActivityIndicator color={theme.colors.accent} />
+              ) : (
+                <Icone nom="cart-outline" taille={24} couleur={theme.colors.accent} />
+              )}
+            </Pressable>
+            {modifiable ? (
+              <Pressable
+                onPress={() => navigation.navigate('CreationRecette', { recetteId: recette.id })}
+                accessibilityRole="button"
+                hitSlop={6}
+                style={styles.boutonModifier}
+              >
+                <Icone nom="create-outline" taille={18} couleur={theme.colors.accent} />
+                <Text style={styles.boutonModifierTexte}>Modifier</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null,
+    });
+  }, [navigation, recette, modifiable, ajoutListe]);
+
   if (chargement) {
     return (
       <View style={styles.centre}>
@@ -191,11 +235,8 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     );
   }
 
-  // Seul le créateur de la recette peut la supprimer (retour utilisateur) —
-  // le bouton n'apparaît donc que pour lui ; la politique RLS côté base
-  // (supabase/setup.sql) refuse de toute façon la suppression à quiconque
-  // d'autre, ce contrôle d'affichage n'est qu'un confort.
-  const estCreateur = session?.user.id === recette.cree_par;
+  // La suppression se fait depuis « Modifier » (retour de test R-8), par
+  // le créateur seulement (voir RecetteFormScreen).
   // Recette d'un autre foyer de la famille : visible, mais non modifiable.
   const estDeMonFoyer = recette.foyer_id === foyer?.id;
   // Recette surprise encore cachée (null si visible de toute la famille).
@@ -210,24 +251,18 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
   const aVariantes = elementsAVariantes(recette);
   const affichee = appliquerVariantes(recette, choixVariantes);
 
-  const demanderSuppression = () => {
-    alerte(
-      'Supprimer cette recette ?',
-      `"${recette.titre}" sera définitivement supprimée. Cette action est irréversible.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Supprimer', style: 'destructive', onPress: confirmerSuppression },
-      ]
-    );
-  };
-
   // Envoie cette recette (aux parts choisies, dans la version choisie) dans
   // une liste de l'app Courses — la liste de courses a quitté Recettes. La
   // sélection de plusieurs recettes reste possible (bouton panier de
   // l'onglet Recettes).
-  const ajouterALaListeDeCourses = () => {
-    if (!recette || !foyer) return;
-    envoiCourses.envoyer([{ recette: affichee, partsSouhaitees: recette.parts_defaut * ajustement.facteur }]);
+  // Seuls les ingrédients cochés dans la feuille partent dans la liste.
+  const ajouterALaListeDeCourses = (choisis: Ingredient[]) => {
+    if (!recette || !foyer || choisis.length === 0) return;
+    setFeuilleCourses(false);
+    const selection = { ...affichee, ingredients: choisis };
+    apresFermetureFeuille(() =>
+      envoiCourses.envoyer([{ recette: selection, partsSouhaitees: recette.parts_defaut * ajustement.facteur }])
+    );
   };
 
   // Recette surprise : la rendre visible de toute la famille dès maintenant.
@@ -251,25 +286,6 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
     ]);
   };
 
-  const confirmerSuppression = async () => {
-    setSuppression(true);
-    try {
-      await supprimerRecette(recette.id);
-      navigation.goBack();
-    } catch (e) {
-      alerte('Échec de la suppression', e instanceof Error ? e.message : 'Veuillez réessayer.');
-      setSuppression(false);
-    }
-  };
-
-  if (suppression) {
-    return (
-      <View style={styles.centre}>
-        <ActivityIndicator color={theme.colors.accent} />
-      </View>
-    );
-  }
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contenu}>
       {recette.photos.length > 0 && (
@@ -288,24 +304,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
         <Text style={styles.compteurPhotos}>{recette.photos.length} photos — faites glisser pour les voir</Text>
       )}
 
-      <View style={styles.enTeteTitre}>
-        <Text style={styles.titre}>{recette.titre}</Text>
-        <View style={styles.actionsTitre}>
-          {estDeMonFoyer && (
-            <Pressable
-              hitSlop={8}
-              onPress={() => navigation.navigate('CreationRecette', { recetteId: recette.id })}
-            >
-              <Text style={styles.crayonTitre}>✎</Text>
-            </Pressable>
-          )}
-          {estCreateur && estDeMonFoyer && (
-            <Pressable hitSlop={8} onPress={demanderSuppression}>
-              <Text style={styles.corbeilleTitre}>🗑</Text>
-            </Pressable>
-          )}
-        </View>
-      </View>
+      <Text style={styles.titre}>{recette.titre}</Text>
 
       {!estDeMonFoyer && recette.foyer?.nom && (
         <Text style={styles.foyerOrigine}>Recette de {recette.foyer.nom}</Text>
@@ -313,7 +312,7 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
 
       {surprise && (
         <View style={styles.bandeauSurprise}>
-          <Text style={styles.bandeauSurpriseTitre}>🤫 Recette surprise</Text>
+          <Text style={styles.bandeauSurpriseTitre}><IconeGlyphe nom="eye-off-outline" style={styles.bandeauSurpriseTitre} />{' '}Recette surprise</Text>
           <Text style={styles.bandeauSurpriseTexte}>
             {surprise.portee === 'moi'
               ? cacheeParMoi
@@ -408,26 +407,17 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
         </View>
       )}
 
+      {/* Un seul bouton principal (retour de test R-6) : les courses passent
+          par le caddie de l'en-tête, l'essai par « Nos essais » plus bas. */}
       <Pressable
         style={styles.boutonPrincipal}
         onPress={() =>
           navigation.navigate('AssistantRecette', { recetteId: recette.id, ajustement, variantes: choixVariantes })
         }
+        accessibilityRole="button"
       >
-        <Text style={styles.boutonPrincipalTexte}>Lancer le mode assistant</Text>
-      </Pressable>
-      <Pressable style={styles.boutonSecondaire} onPress={ajouterALaListeDeCourses} disabled={ajoutListe}>
-        {ajoutListe ? (
-          <ActivityIndicator color={theme.colors.accent} />
-        ) : (
-          <Text style={styles.boutonSecondaireTexte}>Ajouter à la liste de courses</Text>
-        )}
-      </Pressable>
-      <Pressable
-        style={styles.boutonSecondaire}
-        onPress={() => navigation.navigate('EssaiRecette', { recetteId: recette.id })}
-      >
-        <Text style={styles.boutonSecondaireTexte}>Je l’ai faite : raconter mon essai</Text>
+        <Icone nom="restaurant-outline" taille={20} couleur={theme.colors.background} />
+        <Text style={styles.boutonPrincipalTexte}>Commencer à cuisiner</Text>
       </Pressable>
 
       <Text style={styles.section}>Ingrédients</Text>
@@ -496,7 +486,16 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
         </Pressable>
       )}
 
-      <Text style={styles.section}>Nos essais</Text>
+      <View style={styles.enTeteSection}>
+        <Text style={[styles.section, styles.sectionDansLigne]}>Nos essais</Text>
+        <Pressable
+          onPress={() => navigation.navigate('EssaiRecette', { recetteId: recette.id })}
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Text style={styles.lienRaconter}>Raconter le mien</Text>
+        </Pressable>
+      </View>
       {essais.length === 0 ? (
         <Text style={styles.aucunEssai}>
           Personne n’a encore raconté son essai. Soyez le premier après l’avoir réalisée !
@@ -512,7 +511,17 @@ export default function RecetteDetailScreen({ route, navigation }: any) {
           />
         ))
       )}
+      {/* Commentaires libres, en dernier (retour de test R-7). */}
+      <Commentaires recetteId={recette.id} utilisateurId={session?.user.id} autoFocus={!!route.params?.commenter} />
+
       {envoiCourses.fenetre}
+      <FeuilleAjoutCourses
+        visible={feuilleCourses}
+        ingredients={affichee.ingredients}
+        facteur={ajustement.facteur}
+        onFermer={() => setFeuilleCourses(false)}
+        onAjouter={ajouterALaListeDeCourses}
+      />
     </ScrollView>
   );
 }
@@ -555,11 +564,23 @@ const styles = creerStylesThemes(() => ({
     textAlign: 'center',
     marginTop: -theme.spacing.xs,
   },
-  enTeteTitre: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titre: { fontFamily: theme.fontTitle, fontSize: 26, color: theme.colors.accent, flexShrink: 1 },
-  actionsTitre: { flexDirection: 'row', alignItems: 'center' },
-  crayonTitre: { fontSize: 22, color: theme.colors.accent, paddingHorizontal: 4 },
-  corbeilleTitre: { fontSize: 20, color: theme.colors.warning, paddingHorizontal: 4 },
+  actionsEnTete: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
+  boutonIcone: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  boutonModifier: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderColor: theme.colors.accent,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  boutonModifierTexte: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  enTeteSection: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: theme.spacing.md },
+  sectionDansLigne: { marginTop: 0 },
+  lienRaconter: { fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
   puces: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs },
   puce: { backgroundColor: theme.colors.selection, borderRadius: theme.radii.sm, paddingVertical: 3, paddingHorizontal: theme.spacing.sm },
   puceTexte: { fontFamily: theme.fontBody, fontSize: 12, color: theme.colors.text },
@@ -603,10 +624,16 @@ const styles = creerStylesThemes(() => ({
   commentaireEssai: { fontFamily: theme.fontBody, fontStyle: 'italic', fontSize: 15, color: theme.colors.text, marginTop: theme.spacing.xs },
   photoEssai: { width: '100%', height: 160, borderRadius: theme.radii.md, marginTop: theme.spacing.xs },
   lienModifier: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.accent, textDecorationLine: 'underline', marginTop: theme.spacing.xs },
-  boutonPrincipal: { backgroundColor: theme.colors.accent, borderRadius: theme.radii.md, paddingVertical: theme.spacing.md, alignItems: 'center' },
+  boutonPrincipal: {
+    flexDirection: 'row',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.md,
+    paddingVertical: theme.spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   boutonPrincipalTexte: { fontFamily: theme.fontBodyBold, fontSize: 16, color: theme.colors.background },
-  boutonSecondaire: { borderColor: theme.colors.accent, borderWidth: 1, borderRadius: theme.radii.md, paddingVertical: theme.spacing.md, alignItems: 'center' },
-  boutonSecondaireTexte: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.accent },
   section: { fontFamily: theme.fontTitle, fontSize: 18, color: theme.colors.accent, marginTop: theme.spacing.md },
   groupeElement: { gap: theme.spacing.sm },
   blocVariantes: {

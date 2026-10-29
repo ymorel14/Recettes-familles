@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { listeFamilles, pourChaqueFamille, type Familles } from '../../../services/familles';
 
 // Calendrier commun des disponibilités (table voyage.disponibilites). La
 // lecture passe par la fonction voyage.calendrier(), qui masque le motif
@@ -26,10 +27,19 @@ export const ETATS: { id: EtatDispo; libelle: string }[] = [
   { id: 'indisponible', libelle: 'Indisponible' },
 ];
 
-export async function lireCalendrier(debut: string, fin: string, familleId: string): Promise<PeriodeDispo[]> {
-  const { data, error } = await supabase.rpc('calendrier', { debut, fin, id_famille: familleId });
-  if (error) throw error;
-  return (data ?? []) as PeriodeDispo[];
+// Une famille à la fois côté base : on lit chacune de mes familles et on
+// fusionne (vue unique, G-2) ; une même période n'apparaît qu'une fois.
+export async function lireCalendrier(debut: string, fin: string, familles: Familles): Promise<PeriodeDispo[]> {
+  const periodes = await pourChaqueFamille(
+    familles,
+    async (familleId) => {
+      const { data, error } = await supabase.rpc('calendrier', { debut, fin, id_famille: familleId });
+      if (error) throw error;
+      return (data ?? []) as PeriodeDispo[];
+    },
+    (p) => p.id
+  );
+  return periodes.sort((a, b) => a.date_debut.localeCompare(b.date_debut));
 }
 
 export type FormulaireDispo = {

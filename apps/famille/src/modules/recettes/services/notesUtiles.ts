@@ -7,14 +7,19 @@ import type { NoteUtile } from '../types/models';
 // une info qui ne dépend pas d'une recette précise n'a pas sa place dans le
 // champ "notes" d'une recette, dupliquée partout où elle serait utile.
 
-export async function listerNotesUtiles(foyerId: string): Promise<NoteUtile[]> {
-  const { data, error } = await supabase
-    .from('notes_utiles')
-    .select('*')
-    .eq('foyer_id', foyerId)
-    .order('titre', { ascending: true });
+// Fiches de son foyer, ou aussi celles des autres foyers de nos familles
+// (`foyersFamilles`, lecture seule — retour de test M-1, migration
+// 20261027100000_recettes_aide_memoire_familles.sql ; sans elle, la base ne
+// renvoie que les fiches de son foyer).
+export async function listerNotesUtiles(foyerId: string, foyersFamilles?: string[]): Promise<NoteUtile[]> {
+  const foyers = Array.from(new Set([foyerId, ...(foyersFamilles ?? [])]));
+  const lire = (selection: string) =>
+    supabase.from('notes_utiles').select(selection).in('foyer_id', foyers).order('titre', { ascending: true });
+  let { data, error } = await lire('*, foyer:foyers(id, nom)');
+  // Nom du foyer indisponible : on lit les fiches sans lui.
+  if (error) ({ data, error } = await lire('*'));
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as unknown as NoteUtile[];
 }
 
 export async function obtenirNoteUtile(id: string): Promise<NoteUtile> {

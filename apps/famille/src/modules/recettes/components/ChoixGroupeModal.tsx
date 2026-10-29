@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Modal } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { alerte } from '../utils/alerte';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { classerCategorie, useGroupesCategories } from '../services/categories';
@@ -50,7 +51,7 @@ export default function ChoixGroupeModal({ categorie, onFermer, onClassee }: Pro
                 disabled={enCours || actuel}
               >
                 <Text style={styles.choixTexte}>{g.nom}</Text>
-                {actuel && <Text style={styles.coche}>✓</Text>}
+                {actuel && <IconeGlyphe nom="checkmark" style={styles.coche} />}
               </Pressable>
             );
           })}

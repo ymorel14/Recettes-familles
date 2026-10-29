@@ -13,6 +13,7 @@ import Filtres, { AUCUN_FILTRE, appliquerFiltres, type FiltresActifs } from '../
 import { Chargement, MessageVide } from '../components/ui';
 import { anneeDe, MOIS } from '../utils/dates';
 import { SANS_DATE } from './SouvenirsScreen';
+import { useFamillesVues } from '../../../services/familles';
 
 const DANS_L_ANNEE = 'Au fil de l’année';
 
@@ -25,6 +26,8 @@ function majuscule(t: string): string {
 // l'année précédente ou suivante.
 export default function AnneeScreen({ route, navigation }: any) {
   const { famille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const { categorie, lignePrenoms, visagesDe, completer } = useFamilleDonnees();
   const [annee, setAnnee] = useState<string>(route.params.annee);
   const [filtres, setFiltres] = useState<FiltresActifs>(route.params.filtres ?? AUCUN_FILTRE);
@@ -34,14 +37,14 @@ export default function AnneeScreen({ route, navigation }: any) {
   const charger = useCallback(async () => {
     if (!famille) return;
     try {
-      const liste = await listerSouvenirs(famille.id);
+      const liste = await listerSouvenirs(famillesVues);
       setTous(liste);
       completer(liste.flatMap((s) => s.personnes.map((p) => p.personne_id))).catch(() => {});
     } catch (e) {
       setErreur(extraireMessageErreur(e, 'Impossible de charger les souvenirs.'));
       setTous((t) => t ?? []);
     }
-  }, [famille?.id, completer]);
+  }, [famille?.id, famillesVues, completer]);
 
   useFocusEffect(
     useCallback(() => {

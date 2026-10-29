@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Compteur, Icone } from '../composants/ui';
 import { couleurs, creerStyles, hauteurs, polices } from '../theme/theme';
 import { useNotifications } from '../contexts/NotificationsContext';
+import { Avatar, useAuth } from '@apps-famille/famille';
 
 // Barre du bas (charte § 6) : Accueil · Agenda · ⊕ · Activité · Moi,
 // identique partout, y compris dans les modules. Les modules sont des
@@ -21,6 +22,7 @@ const ENTREES: { nom: string; libelle: string; icone: string; iconeActive: strin
 export function BarreDuBas({ state, navigation, onAjouter }: BottomTabBarProps & { onAjouter: () => void }) {
   const insets = useSafeAreaInsets();
   const { nonLues } = useNotifications();
+  const { session } = useAuth();
   const [clavier, setClavier] = useState(false);
 
   // Sur Android, la barre se cache quand le clavier est ouvert.
@@ -50,13 +52,13 @@ export function BarreDuBas({ state, navigation, onAjouter }: BottomTabBarProps &
                 accessibilityLabel="Ajouter"
                 style={({ pressed }) => [styles.plus, pressed && { transform: [{ scale: 0.96 }] }]}
               >
-                <Icone nom="add" taille={30} couleur={couleurs.fond} />
+                <Icone nom="add" taille={30} couleur={couleurs.surMarque} />
               </Pressable>
             </View>
           );
         }
         const estActif = actif === e.nom;
-        const couleur = estActif ? couleurs.encre : couleurs.encreInactive;
+        const couleur = estActif ? couleurs.accent : couleurs.encreInactive;
         return (
           <Pressable
             key={e.nom}
@@ -74,7 +76,16 @@ export function BarreDuBas({ state, navigation, onAjouter }: BottomTabBarProps &
             style={styles.entree}
           >
             <View>
-              <Icone nom={estActif ? e.iconeActive : e.icone} taille={24} couleur={couleur} />
+              {e.nom === 'Moi' && session ? (
+                // Photo de profil à la place de l'icône (retour de test G-1).
+                <Avatar
+                  utilisateurId={session.user.id}
+                  taille={26}
+                  style={estActif ? { borderWidth: 2, borderColor: couleurs.encre } : undefined}
+                />
+              ) : (
+                <Icone nom={estActif ? e.iconeActive : e.icone} taille={24} couleur={couleur} />
+              )}
               {e.nom === 'Activite' ? <Compteur nombre={nonLues} style={styles.compteur} /> : null}
             </View>
             <Text style={[styles.libelle, { color: couleur }, estActif && { fontFamily: polices.texteGras }]}>{e.libelle}</Text>
@@ -100,16 +111,11 @@ const styles = creerStyles(() => ({
   plus: {
     width: hauteurs.plus,
     height: hauteurs.plus,
-    borderRadius: 20,
-    backgroundColor: couleurs.encre,
+    borderRadius: 18,
+    backgroundColor: couleurs.marque,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
   },
   compteur: { position: 'absolute', top: -6, right: -12 },
 }));

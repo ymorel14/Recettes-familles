@@ -21,6 +21,8 @@ import { ToastProvider } from './src/composants/Toast';
 import Navigation from './src/navigation/Navigation';
 import { useNotificationsTelephone } from './src/services/notificationsTelephone';
 import { couleurs, LARGEUR_MAX_WEB } from './src/theme/theme';
+import * as Device from 'expo-device';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 // App « Famille » (V1 de l'app unique, spécification « V1-specification-dev.md ») :
 // les six apps réunies, une seule navigation, le thème « Famille » de la charte.
@@ -28,6 +30,16 @@ import { couleurs, LARGEUR_MAX_WEB } from './src/theme/theme';
 
 const BASE_WEB = process.env.EXPO_PUBLIC_BASE_WEB;
 const EST_WEB = Platform.OS === 'web';
+
+// Orientation (retour de test G-5) : libre sur tablette (app.json
+// « default »), portrait sur téléphone.
+if (!EST_WEB) {
+  Device.getDeviceTypeAsync()
+    .then((type) => {
+      if (type !== Device.DeviceType.TABLET) return ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    })
+    .catch(() => {});
+}
 // Police des icônes : sur le site commun, servie à une adresse simple (voir
 // scripts/construire-site.mjs), comme pour les autres apps.
 const POLICE_ICONES: Record<string, any> = EST_WEB && BASE_WEB ? { ionicons: `${BASE_WEB}/polices/Ionicons.ttf` } : Ionicons.font;

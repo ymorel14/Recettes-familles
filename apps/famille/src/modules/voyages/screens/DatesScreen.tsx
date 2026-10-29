@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -41,6 +42,7 @@ import { Aide, Champ, Erreur, Libelle, Puces } from '../components/formulaire';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
 import { GroupeNoms, NomAvecAvatar } from '@apps-famille/famille';
 import SyntheseDates from '../components/SyntheseDates';
+import DatesInvite from '../components/DatesInvite';
 import { regrouperProches } from '../services/syntheseDates';
 import { MentionAssistant } from '../../../composants/assistant';
 import { proposesParAssistant } from '../../../services/brouillonVoyage';
@@ -65,6 +67,8 @@ export default function DatesScreen({ route }: any) {
   const [debut, setDebut] = useState('');
   const [fin, setFin] = useState('');
   const [enCours, setEnCours] = useState(false);
+  const [modeComplet, setModeComplet] = useState(false);
+  const [envoye, setEnvoye] = useState(false);
   // Propositions faites par l'assistant (brouillon de voyage).
   const [parAssistant, setParAssistant] = useState<Set<string>>(new Set());
 
@@ -134,10 +138,38 @@ export default function DatesScreen({ route }: any) {
     }
   };
 
+  // Invité : vue simple « Je suis dispo », tant que les dates ne sont pas fixées.
+  if (!organisateur && !modeComplet && !(voyage.date_debut && voyage.date_fin) && propositions.length > 0 && mesVotants.length > 0) {
+    return (
+      <ScrollView style={styles.flex} contentContainerStyle={styles.contenu}>
+        {envoye ? (
+          <View style={[styles.bloc, styles.blocRetenu]}>
+            <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
+            <Text style={[styles.texte, { flex: 1 }]}>Merci, vos disponibilités sont envoyées. Vous pouvez encore les modifier.</Text>
+          </View>
+        ) : null}
+        <DatesInvite
+          propositions={propositions}
+          votants={mesVotants.map((m) => ({ personneId: m.personne_id, prenom: nom(m.personne_id) }))}
+          plage={plage}
+          enCours={enCours}
+          onProposerAutre={() => setModeComplet(true)}
+          onEnvoyer={(choix) =>
+            agir(async () => {
+              for (const c of choix) await voter(c.propositionId, c.personneId, c.reponse);
+              setEnvoye(true);
+            })
+          }
+        />
+        <Erreur texte={erreur} />
+      </ScrollView>
+    );
+  }
+
   const proposerSaisie = () => {
     const d = lireDateSaisie(debut);
     const f = repas && !fin.trim() ? d : lireDateSaisie(fin);
-    if (!d || !f) return setErreur('Dates invalides (JJ/MM/AAAA).');
+    if (!d || !f) return setErreur('Choisissez les dates.');
     if (repas ? f < d : f <= d) return setErreur('Le départ doit être après l’arrivée.');
     agir(async () => {
       await proposerDates(voyage.id, d, f);
@@ -304,11 +336,11 @@ export default function DatesScreen({ route }: any) {
       <View style={styles.ligne}>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-arrivee">{repas ? 'Jour' : 'Arrivée'}</Libelle>
-          <Champ value={debut} onChangeText={setDebut} placeholder="JJ/MM/AAAA" accessibilityLabelledBy="libelle-arrivee" />
+          <ChampDate value={debut} onChangeText={setDebut} placeholder="Choisir" accessibilityLabel={repas ? 'Jour' : 'Arrivée'} couleur={theme.colors.accent} />
         </View>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-depart">{repas ? 'Jusqu’au (facultatif)' : 'Départ'}</Libelle>
-          <Champ value={fin} onChangeText={setFin} placeholder="JJ/MM/AAAA" accessibilityLabelledBy="libelle-depart" />
+          <ChampDate value={fin} onChangeText={setFin} placeholder="Choisir" accessibilityLabel={repas ? 'Jusqu’au' : 'Départ'} couleur={theme.colors.accent} />
         </View>
       </View>
       <Erreur texte={erreur} />

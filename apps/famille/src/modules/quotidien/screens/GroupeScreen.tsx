@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
@@ -161,7 +162,7 @@ export default function GroupeScreen({ route, navigation }: any) {
     const du = lireDateSaisie(indispoDu);
     const au = indispoAu.trim() ? lireDateSaisie(indispoAu) : du;
     if (!du || !au || au < du) {
-      alerte('Dates à vérifier', 'Dates attendues au format JJ/MM/AAAA, la seconde après la première.');
+      alerte('Dates à vérifier', 'Choisissez les dates, la seconde après la première.');
       return;
     }
     agir('indispo', async () => {
@@ -293,24 +294,12 @@ export default function GroupeScreen({ route, navigation }: any) {
               </View>
             ))}
             <View style={styles.ligneSaisie}>
-              <TextInput
-                style={[styles.champ, { flex: 1 }]}
-                value={indispoDu}
-                onChangeText={setIndispoDu}
-                placeholder="Du (JJ/MM/AAAA)"
-                placeholderTextColor={theme.colors.textMuted}
-                keyboardType="numbers-and-punctuation"
-                accessibilityLabel="Indisponible à partir du"
-              />
-              <TextInput
-                style={[styles.champ, { flex: 1 }]}
-                value={indispoAu}
-                onChangeText={setIndispoAu}
-                placeholder="Au (facultatif)"
-                placeholderTextColor={theme.colors.textMuted}
-                keyboardType="numbers-and-punctuation"
-                accessibilityLabel="Indisponible jusqu'au"
-              />
+              <View style={{ flex: 1 }}>
+                <ChampDate style={styles.champ} value={indispoDu} onChangeText={setIndispoDu} placeholder="Du" accessibilityLabel="Indisponible à partir du" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ChampDate style={styles.champ} value={indispoAu} onChangeText={setIndispoAu} placeholder="Au (facultatif)" accessibilityLabel="Indisponible jusqu'au" />
+              </View>
             </View>
             <Bouton
               variante="contour"

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { AlimentCongele, Congelateur } from '../types/models';
+import type { AlimentCongele, Congelateur, GenreLieu } from '../types/models';
 
 // Service "Congélateur" (voir supabase/congelateur.sql) : inventaire simple
 // du contenu d'un ou plusieurs congélateurs du foyer — un aliment, son type
@@ -15,7 +15,54 @@ import type { AlimentCongele, Congelateur } from '../types/models';
 // si besoin (la base ne stocke que la clé).
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Garde-manger (retour de test C-1) : chaque emplacement a un genre. La
+// conservation et les alertes ne concernent que le congélateur et le frigo.
+// ---------------------------------------------------------------------------
+
+export const GENRES_LIEU: { cle: GenreLieu; libelle: string; icone: string }[] = [
+  { cle: 'congelateur', libelle: 'Congélateur', icone: 'snow-outline' },
+  { cle: 'frigo', libelle: 'Frigo', icone: 'thermometer-outline' },
+  { cle: 'placard', libelle: 'Placard', icone: 'file-tray-stacked-outline' },
+  { cle: 'cave', libelle: 'Cave', icone: 'wine-outline' },
+  { cle: 'autre', libelle: 'Autre', icone: 'cube-outline' },
+];
+
+export function genreLieu(cle: string | null | undefined) {
+  return GENRES_LIEU.find((g) => g.cle === cle) ?? GENRES_LIEU[0];
+}
+
+export function avecConservation(genre: GenreLieu | null | undefined): boolean {
+  return (genre ?? 'congelateur') === 'congelateur' || genre === 'frigo';
+}
+
+// « Mis au congélateur le », « Mis au frigo le », « Rangé le ».
+export function libelleDateRangement(genre: GenreLieu | null | undefined): string {
+  const g = genre ?? 'congelateur';
+  return g === 'congelateur' ? 'Mis au congélateur le' : g === 'frigo' ? 'Mis au frigo le' : 'Rangé le';
+}
+
+// Recopie le genre de son emplacement sur chaque aliment.
+export function avecGenres(aliments: AlimentCongele[], lieux: Congelateur[]): AlimentCongele[] {
+  const genres = new Map(lieux.map((l) => [l.id, l.genre ?? 'congelateur']));
+  return aliments.map((a) => ({ ...a, genre: genres.get(a.congelateur_id) ?? 'congelateur' }));
+}
+
 export type TypeAliment = { cle: string; libelle: string; mois: number };
+
+// Au frigo : durées conseillées en jours, par type (même clé qu'au congélateur).
+const JOURS_FRIGO: Record<string, number> = {
+  viande: 3,
+  porc: 3,
+  hache: 1,
+  volaille: 2,
+  poissonMaigre: 1,
+  poissonGras: 1,
+  plat: 3,
+  legumes: 7,
+  pain: 4,
+  autre: 5,
+};
 
 export const TYPES_ALIMENTS: TypeAliment[] = [
   { cle: 'viande', libelle: 'Viande (bœuf, veau, agneau, gibier)', mois: 12 },
@@ -153,15 +200,25 @@ export function ancienneteTexte(iso: string): string {
 // depasse : limite dépassée → plus consommable.
 export type EtatConservation = 'ok' | 'bientot' | 'depasse';
 
-export function dateLimite(aliment: Pick<AlimentCongele, 'type' | 'date_stockage'>): Date {
+type AlimentDate = Pick<AlimentCongele, 'type' | 'date_stockage' | 'genre'>;
+
+export function dateLimite(aliment: AlimentDate): Date {
+  if (aliment.genre === 'frigo') {
+    const d = versDate(aliment.date_stockage);
+    d.setDate(d.getDate() + (JOURS_FRIGO[aliment.type] ?? JOURS_FRIGO.autre));
+    return d;
+  }
   return ajouterMois(versDate(aliment.date_stockage), typeAliment(aliment.type).mois);
 }
 
-export function etatConservation(aliment: Pick<AlimentCongele, 'type' | 'date_stockage'>): EtatConservation {
+// Placard, cave, autre : jamais d'alerte.
+export function etatConservation(aliment: AlimentDate): EtatConservation {
+  if (!avecConservation(aliment.genre)) return 'ok';
   const limite = dateLimite(aliment);
   const jour = aujourdhui();
   if (jour > limite) return 'depasse';
-  if (jour >= ajouterMois(limite, -1)) return 'bientot';
+  const avant = aliment.genre === 'frigo' ? new Date(limite.getTime() - 86400000) : ajouterMois(limite, -1);
+  if (jour >= avant) return 'bientot';
   return 'ok';
 }
 
@@ -186,7 +243,7 @@ const MOTS_QUESTION = new Set(
   (
     "est ce que qu quoi il ils elle y a t reste restent encore toujours on nous avons ai as j je tu vous " +
     'des du de la le les l d un une au aux en dans mon ma mes notre nos ton ta tes votre vos ce cet cette ces ' +
-    'congelateur congelateurs congelo congelos frigo quelque chose peu combien avoir sont est-ce ' +
+    'congelateur congelateurs congelo congelos frigo frigos placard placards cave garde manger quelque chose peu combien avoir sont est-ce ' +
     'cherche chercher trouve trouver voir montre montrer dis moi liste lister please stp svp oui non'
   ).split(' ')
 );
@@ -268,16 +325,17 @@ export function phraseReponse(
   nomsCongelateurs: Map<string, string>
 ): string {
   if (!recherche.trim()) return "Je n'ai pas compris quel aliment vous cherchez.";
-  if (trouves.length === 0) return `Non, il n'y a pas de ${recherche} dans vos congélateurs.`;
+  if (trouves.length === 0) return `Non, il n'y a pas de ${recherche} dans le garde-manger.`;
   const plusieursCongelateurs = nomsCongelateurs.size > 1;
   const details = trierParUrgence(trouves)
     .slice(0, 5)
     .map((a) => {
-      const ou = plusieursCongelateurs ? `, dans ${nomsCongelateurs.get(a.congelateur_id) ?? 'le congélateur'}` : '';
+      const ou = plusieursCongelateurs ? `, dans ${nomsCongelateurs.get(a.congelateur_id) ?? 'le garde-manger'}` : '';
+      const verbe = a.genre === 'congelateur' || !a.genre ? 'congelé' : 'rangé';
       const etat = etatConservation(a);
       const alerteEtat =
         etat === 'depasse' ? ', attention, plus consommable' : etat === 'bientot' ? ', à consommer bientôt' : '';
-      return `${a.nom}${ou}, congelé ${ancienneteTexte(a.date_stockage)}${alerteEtat}`;
+      return `${a.nom}${ou}, ${verbe} ${ancienneteTexte(a.date_stockage)}${alerteEtat}`;
     });
   const suite = trouves.length > 5 ? `, et ${trouves.length - 5} autres` : '';
   return `Oui, ${trouves.length === 1 ? 'un' : trouves.length} : ${details.join(' ; ')}${suite}.`;
@@ -297,18 +355,28 @@ export async function listerCongelateurs(foyerId: string): Promise<Congelateur[]
   return data ?? [];
 }
 
-export async function creerCongelateur(foyerId: string, utilisateurId: string, nom: string): Promise<string> {
+export async function creerCongelateur(
+  foyerId: string,
+  utilisateurId: string,
+  nom: string,
+  genre: GenreLieu = 'congelateur'
+): Promise<string> {
+  // Genre « congélateur » : pas besoin de la colonne (marche aussi avant la migration).
+  const ligne: Record<string, unknown> = { foyer_id: foyerId, nom: nom.trim(), cree_par: utilisateurId };
+  if (genre !== 'congelateur') ligne.genre = genre;
   const { data, error } = await supabase
     .from('congelateurs')
-    .insert({ foyer_id: foyerId, nom: nom.trim(), cree_par: utilisateurId })
+    .insert(ligne)
     .select()
     .single();
   if (error) throw error;
   return data.id as string;
 }
 
-export async function renommerCongelateur(id: string, nom: string): Promise<void> {
-  const { error } = await supabase.from('congelateurs').update({ nom: nom.trim() }).eq('id', id);
+export async function renommerCongelateur(id: string, nom: string, genre?: GenreLieu): Promise<void> {
+  const maj: Record<string, unknown> = { nom: nom.trim() };
+  if (genre) maj.genre = genre;
+  const { error } = await supabase.from('congelateurs').update(maj).eq('id', id);
   if (error) throw error;
 }
 

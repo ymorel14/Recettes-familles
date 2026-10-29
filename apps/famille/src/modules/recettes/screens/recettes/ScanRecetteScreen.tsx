@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { IconeGlyphe } from '../../../../composants/ui';
 import { Image as ImageExpo } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -598,7 +599,7 @@ export default function ScanRecetteScreen({ navigation, route }: any) {
                     Zone {index + 1} — {zone.champ ? CHAMPS.find((c) => c.cle === zone.champ)?.libelle : 'à étiqueter'}
                   </Text>
                   <Pressable hitSlop={8} onPress={() => supprimerZoneEnAttente(zone.id)}>
-                    <Text style={styles.ligneZoneAttenteSuppr}>✕</Text>
+                    <IconeGlyphe nom="close" style={styles.ligneZoneAttenteSuppr} />
                   </Pressable>
                 </Pressable>
               ))}
@@ -619,7 +620,7 @@ export default function ScanRecetteScreen({ navigation, route }: any) {
                 <View style={styles.enTeteCarteChamp}>
                   <Text style={styles.sousLabel}>{champ.libelle}</Text>
                   <Pressable hitSlop={8} onPress={() => ouvrirEditionGlobale(champ.cle)}>
-                    <Text style={styles.crayon}>✎</Text>
+                    <IconeGlyphe nom="create-outline" style={styles.crayon} />
                   </Pressable>
                 </View>
                 <Text style={styles.apercuChamp} numberOfLines={3}>

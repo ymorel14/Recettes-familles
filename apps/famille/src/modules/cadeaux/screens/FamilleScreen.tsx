@@ -15,6 +15,7 @@ import {
   type Personne,
 } from '../services/wishlist';
 import { Bouton, Chargement, MessageVide } from '../components/ui';
+import { useFamillesVues } from '../../../services/familles';
 
 // Un foyer de la famille et ses membres.
 type Groupe = { cle: string; titre: string; membres: Personne[] };
@@ -26,6 +27,8 @@ type Groupe = { cle: string; titre: string; membres: Personne[] };
 // à ces personnes (la base ne les envoie jamais à leurs destinataires).
 export default function FamilleScreen({ navigation }: any) {
   const { session, famille, foyersFamille } = useAuth();
+  // Toutes les familles du foyer (vue unique, retour de test G-2).
+  const famillesVues = useFamillesVues();
   const [personnes, setPersonnes] = useState<Personne[] | null>(null);
   const [communes, setCommunes] = useState<Liste[]>([]);
   const [moi, setMoi] = useState<Personne | null>(null);
@@ -39,7 +42,7 @@ export default function FamilleScreen({ navigation }: any) {
       const [p, m, c, masquees] = await Promise.all([
         listerPersonnes(foyersFamille),
         obtenirMaPersonne(session.user.id),
-        famille ? listesCommunes(famille.id) : Promise.resolve([]),
+        listesCommunes(famillesVues),
         personnesMasqueesFamilleActive(),
       ]);
       // Enfants masqués dans la famille affichée (famille recomposée) : la
@@ -51,7 +54,7 @@ export default function FamilleScreen({ navigation }: any) {
       setErreur(extraireMessageErreur(e, 'Chargement impossible.'));
       setPersonnes([]);
     }
-  }, [session, famille?.id, foyersFamille]);
+  }, [session, famille?.id, foyersFamille, famillesVues]);
 
   useFocusEffect(
     useCallback(() => {

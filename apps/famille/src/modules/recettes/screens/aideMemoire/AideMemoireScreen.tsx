@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, TextInput, ActivityIndicator } from 'react-native';
+import { IconeGlyphe, PastilleModifier } from '../../../../composants/ui';
 import { alerte } from '../../utils/alerte';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme, creerStylesThemes } from '../../theme/theme';
@@ -8,6 +9,7 @@ import { supabase } from '../../services/supabase';
 import { listerNotesUtiles, supprimerNoteUtile, themesUtilises } from '../../services/notesUtiles';
 import { normaliserTexte } from '../../utils/texte';
 import type { NoteUtile } from '../../types/models';
+import { InterrupteurFamilles, useInclureFamilles } from '../../../../composants/InterrupteurFamilles';
 
 // Écran "Aide-mémoire" : fiches pratiques transversales (températures à
 // cœur des viandes, congélation, conversions...), indépendantes des
@@ -16,7 +18,9 @@ import type { NoteUtile } from '../../types/models';
 // défaut (on ouvre celle qu'on veut lire, comme le détail par recette dans
 // la liste de courses).
 export default function AideMemoireScreen({ navigation }: any) {
-  const { foyer, session } = useAuth();
+  const { foyer, session, foyersFamille } = useAuth();
+  // Fiches de nos familles en plus des nôtres, en lecture seule (M-1).
+  const [inclureFamilles, setInclureFamilles] = useInclureFamilles('aideMemoire');
   const [notes, setNotes] = useState<NoteUtile[]>([]);
   const [chargement, setChargement] = useState(true);
   const [recherche, setRecherche] = useState('');
@@ -25,10 +29,10 @@ export default function AideMemoireScreen({ navigation }: any) {
 
   const charger = useCallback(async () => {
     if (!foyer) return;
-    const chargees = await listerNotesUtiles(foyer.id);
+    const chargees = await listerNotesUtiles(foyer.id, inclureFamilles ? foyersFamille : undefined);
     setNotes(chargees);
     setChargement(false);
-  }, [foyer]);
+  }, [foyer, inclureFamilles, foyersFamille]);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,6 +115,12 @@ export default function AideMemoireScreen({ navigation }: any) {
         </Pressable>
       </View>
 
+      <InterrupteurFamilles
+        libelle="Inclure l’aide-mémoire de nos familles"
+        valeur={inclureFamilles}
+        onChange={setInclureFamilles}
+      />
+
       <TextInput
         style={styles.champRecherche}
         placeholder="Rechercher..."
@@ -155,26 +165,31 @@ export default function AideMemoireScreen({ navigation }: any) {
         renderItem={({ item }) => {
           const depliee = fichesDepliees.has(item.id);
           const estCreateur = session?.user.id === item.cree_par;
+          // Fiche d'un autre foyer de nos familles : lecture seule.
+          const deMonFoyer = item.foyer_id === foyer?.id;
           return (
             <Pressable style={styles.carte} onPress={() => basculerFiche(item.id)}>
               <View style={styles.carteEnTete}>
                 <View style={styles.carteTextes}>
                   <Text style={styles.carteTitre}>{item.titre}</Text>
                   {item.theme.trim() !== '' && <Text style={styles.carteTheme}>{item.theme}</Text>}
+                  {!deMonFoyer && item.foyer?.nom ? <Text style={styles.carteFoyer}>{item.foyer.nom}</Text> : null}
                 </View>
+                {deMonFoyer && (
                 <View style={styles.carteActions}>
                   <Pressable
                     hitSlop={8}
                     onPress={() => navigation.navigate('FormulaireNoteUtile', { noteId: item.id })}
                   >
-                    <Text style={styles.carteActionTexte}>✎</Text>
+                    <PastilleModifier couleur={theme.colors.accent} petite />
                   </Pressable>
                   {estCreateur && (
                     <Pressable hitSlop={8} onPress={() => demanderSuppression(item)}>
-                      <Text style={[styles.carteActionTexte, styles.carteActionSupprimer]}>✕</Text>
+                      <IconeGlyphe nom="close" style={[styles.carteActionTexte, styles.carteActionSupprimer]} />
                     </Pressable>
                   )}
                 </View>
+                )}
               </View>
               {depliee && item.contenu.trim() !== '' && (
                 <Text style={styles.carteContenu}>{item.contenu}</Text>
@@ -243,6 +258,7 @@ const styles = creerStylesThemes(() => ({
   carteTextes: { flex: 1, gap: 2 },
   carteTitre: { fontFamily: theme.fontBodyBold, color: theme.colors.text, fontSize: 16 },
   carteTheme: { fontFamily: theme.fontBody, color: theme.colors.accent, fontSize: 12 },
+  carteFoyer: { fontFamily: theme.fontManuscrit, color: theme.colors.textMuted, fontSize: 15 },
   carteActions: { flexDirection: 'row', gap: theme.spacing.sm },
   carteActionTexte: { color: theme.colors.textMuted, fontSize: 16, paddingHorizontal: 2 },
   carteActionSupprimer: { color: theme.colors.warning },

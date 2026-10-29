@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, View, Text, TextInput, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { normaliserTexte } from '../utils/texte';
 import type { RecetteLiee } from '../types/models';
@@ -54,7 +55,7 @@ export default function SelecteurRecetteLieeModal({ visible, recettes, lienActue
                   setRecherche('');
                 }}
               >
-                <Text style={styles.ligneRetirerTexte}>✕ Retirer le lien vers « {lienActuel.titre} »</Text>
+                <Text style={styles.ligneRetirerTexte}><IconeGlyphe nom="close" style={styles.ligneRetirerTexte} />{' '}Retirer le lien vers « {lienActuel.titre} »</Text>
               </Pressable>
             )}
             {recettesFiltrees.length === 0 ? (

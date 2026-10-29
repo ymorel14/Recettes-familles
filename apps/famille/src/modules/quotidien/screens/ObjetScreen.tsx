@@ -1,5 +1,6 @@
 import React, { useCallback, useLayoutEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { theme, creerStylesThemes } from '../theme/theme';
@@ -134,9 +135,9 @@ export default function ObjetScreen({ route, navigation }: any) {
     const emprunteur = personne ? personne.prenom : autre.trim();
     if (!emprunteur) return alerte('Prêt', 'Choisissez à qui vous le prêtez, ou tapez son nom.');
     const le = lireDateSaisie(preteLe);
-    if (!le) return alerte('Date du prêt', 'Date attendue au format JJ/MM/AAAA.');
+    if (!le) return alerte('Date du prêt', 'Choisissez une date.');
     const prevu = retour.trim() ? lireDateSaisie(retour) : null;
-    if (retour.trim() && !prevu) return alerte('Retour prévu', 'Date attendue au format JJ/MM/AAAA.');
+    if (retour.trim() && !prevu) return alerte('Retour prévu', 'Choisissez une date.');
     if (prevu && prevu < le) return alerte('Retour prévu', 'Le retour doit suivre la date du prêt.');
     const q = objet.quantite > 1 ? Number(quantite || '1') : 1;
     if (!Number.isInteger(q) || q < 1) return alerte('Quantité', 'Indiquez combien vous en prêtez.');
@@ -292,14 +293,8 @@ export default function ObjetScreen({ route, navigation }: any) {
               keyboardType="number-pad"
             />
           )}
-          <Champ libelle="Prêté le" value={preteLe} onChangeText={setPreteLe} placeholder="JJ/MM/AAAA" keyboardType="numbers-and-punctuation" />
-          <Champ
-            libelle="Retour prévu le (facultatif)"
-            value={retour}
-            onChangeText={setRetour}
-            placeholder="JJ/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-          />
+          <ChampDate libelle="Prêté le" value={preteLe} onChangeText={setPreteLe} facultatif={false} couleur={theme.colors.accent} />
+          <ChampDate libelle="Retour prévu le (facultatif)" value={retour} onChangeText={setRetour} couleur={theme.colors.accent} />
           <Champ libelle="Note (facultatif)" value={note} onChangeText={setNote} placeholder="ex. avec la mallette d’embouts" />
           <View style={[sf.ligne, { marginTop: theme.spacing.sm }]}>
             <View style={{ flex: 1 }}>

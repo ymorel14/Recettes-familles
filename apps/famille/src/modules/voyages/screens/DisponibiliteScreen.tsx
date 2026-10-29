@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, ScrollView } from 'react-native';
+import { ChampDate } from '../../../composants/ChampDate';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { alerte } from '../utils/alerte';
@@ -57,8 +58,8 @@ export default function DisponibiliteScreen({ route, navigation }: any) {
     const d = lireDateSaisie(debut);
     const f = fin.trim() ? lireDateSaisie(fin) : d;
     if (!personneId) return setErreur('Choisissez pour qui.');
-    if (!d) return setErreur('Date de début invalide (JJ/MM/AAAA).');
-    if (!f) return setErreur('Date de fin invalide (JJ/MM/AAAA).');
+    if (!d) return setErreur('Choisissez la date de début.');
+    if (!f) return setErreur('Choisissez la date de fin.');
     if (f < d) return setErreur('La fin doit être après le début.');
     const donnees = {
       personne_id: personneId,
@@ -117,23 +118,11 @@ export default function DisponibiliteScreen({ route, navigation }: any) {
       <View style={styles.ligne}>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-debut">Du</Libelle>
-          <Champ
-            value={debut}
-            onChangeText={setDebut}
-            placeholder="JJ/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-            accessibilityLabelledBy="libelle-debut"
-          />
+          <ChampDate value={debut} onChangeText={setDebut} placeholder="Choisir" accessibilityLabel="Du" facultatif={false} couleur={theme.colors.accent} />
         </View>
         <View style={styles.colonne}>
           <Libelle nativeID="libelle-fin">Au (inclus)</Libelle>
-          <Champ
-            value={fin}
-            onChangeText={setFin}
-            placeholder="JJ/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-            accessibilityLabelledBy="libelle-fin"
-          />
+          <ChampDate value={fin} onChangeText={setFin} placeholder="Choisir" accessibilityLabel="Au (inclus)" facultatif={false} couleur={theme.colors.accent} />
         </View>
       </View>
       <Aide>Pour un seul jour, laissez la fin vide.</Aide>

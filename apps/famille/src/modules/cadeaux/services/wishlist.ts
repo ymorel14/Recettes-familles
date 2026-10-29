@@ -2,6 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { Platform } from 'react-native';
 import { supabase, schemaFamille } from './supabase';
+import { listeFamilles, pourChaqueFamille, type Familles } from '../../../services/familles';
 
 // Espace de stockage des photos de cadeaux (migration 5).
 const BUCKET_PHOTOS_CADEAUX = 'cadeaux-photos';
@@ -328,7 +329,8 @@ export async function obtenirListe(id: string): Promise<Liste & { evenement: Eve
 
 // Les listes communes de la famille affichée. La base ne renvoie jamais à
 // quelqu'un une liste dont il est destinataire.
-export async function listesCommunes(familleId: string): Promise<Liste[]> {
+export async function listesCommunes(familles: Familles): Promise<Liste[]> {
+  const ids = listeFamilles(familles);
   const { data, error } = await supabase
     .from('listes')
     .select('*, destinataires:liste_destinataires(personne_id), familles:liste_familles(famille_id)')
@@ -336,7 +338,7 @@ export async function listesCommunes(familleId: string): Promise<Liste[]> {
     .order('cree_le', { ascending: true });
   if (error) throw error;
   return ((data ?? []) as any[]).filter((l) =>
-    (l.familles ?? []).some((f: { famille_id: string }) => f.famille_id === familleId)
+    (l.familles ?? []).some((f: { famille_id: string }) => ids.includes(f.famille_id))
   );
 }
 

@@ -14,39 +14,14 @@ import { infosModule } from '../theme/jetons';
 // Navigateur « onglets du haut » d'un module (spécification § 2.2) : les
 // onglets de l'ancienne barre du bas passent en haut, défilables, sous
 // l'en-tête teinté de la couleur du module. La barre du bas de l'app reste
-// visible : jamais deux barres du bas l'une sur l'autre.
+// visible : jamais deux barres du bas l'une sur l'autre. Plus de lien « ‹ Accueil »
+// au-dessus du titre (refonte Quotidien § 2.2) : le retour passe par la barre du bas.
 
 export type ActionModule = {
   libelle: string;
   icone: string;
   onPress: (navigation: any) => void;
 };
-
-const TITRES_RETOUR: Record<string, string> = {
-  Accueil: 'Accueil',
-  Agenda: 'Agenda',
-  Activite: 'Activité',
-  Moi: 'Moi',
-  Recettes: 'Recettes',
-  Courses: 'Courses',
-  Quotidien: 'Quotidien',
-  Cadeaux: 'Cadeaux',
-  Voyages: 'Voyages',
-  Souvenirs: 'Souvenirs',
-};
-
-// D'où vient-on ? Dernier onglet de l'app visité avant ce module.
-function origine(navigationOnglets: any): { nom: string; titre: string } | null {
-  const barre = navigationOnglets?.getParent?.()?.getParent?.();
-  const etat = barre?.getState?.();
-  if (!etat?.history) return null;
-  const actuelle = etat.routes[etat.index]?.key;
-  const historique: any[] = etat.history.filter((h: any) => h.type === 'route' && h.key !== actuelle);
-  const derniere = historique[historique.length - 1];
-  const route = derniere ? etat.routes.find((r: any) => r.key === derniere.key) : null;
-  if (!route) return null;
-  return { nom: route.name, titre: TITRES_RETOUR[route.name] ?? 'Retour' };
-}
 
 function OngletsModuleNavigator({
   id,
@@ -73,26 +48,9 @@ function OngletsModuleNavigator({
     setCharges((avant) => (avant.includes(cleActive) ? avant : [...avant, cleActive]));
   }, [cleActive]);
 
-  const retour = origine(navigation) ?? { nom: 'Accueil', titre: 'Accueil' };
-  const revenir = () => {
-    const barre = navigation.getParent()?.getParent();
-    if (barre?.canGoBack()) barre.goBack();
-    else barre?.navigate('Accueil');
-  };
-
   return (
     <NavigationContent>
       <View style={[styles.entete, { backgroundColor: c.fond, paddingTop: insets.top + espaces.s }]}>
-        <Pressable
-          onPress={revenir}
-          accessibilityRole="button"
-          accessibilityLabel={`Retour vers ${retour.titre}`}
-          hitSlop={8}
-          style={styles.retour}
-        >
-          <Icone nom="chevron-back" taille={20} couleur={c.encre} />
-          <Text style={[styles.retourTexte, { color: c.encre }]}>{retour.titre}</Text>
-        </Pressable>
         <View style={styles.ligneTitre}>
           <View style={styles.carreIcone}>
             <Icone nom={infos.icone} taille={24} couleur={c.encre} />
@@ -181,8 +139,6 @@ export const creerOngletsModule = createNavigatorFactory(OngletsModuleNavigator)
 
 const styles = creerStyles(() => ({
   entete: { paddingHorizontal: margePage, gap: espaces.m },
-  retour: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', minHeight: 32, marginLeft: -4 },
-  retourTexte: { fontFamily: polices.texteDemiGras, fontSize: 15 },
   ligneTitre: { flexDirection: 'row', alignItems: 'center', gap: espaces.m },
   carreIcone: {
     width: 44,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { useAuth } from '../contexts/AuthContext';
 import SelecteurFamilleModal from './SelecteurFamilleModal';
@@ -45,7 +46,8 @@ export default function EnTeteFamille({ titre }: { titre?: string }) {
       maxFontSizeMultiplier={1.15}
     >
       {libelle}
-      {plusieursFamilles ? ' ▾' : ''}
+      {plusieursFamilles ? ' ' : ''}
+      {plusieursFamilles ? <IconeGlyphe nom="chevron-down" style={styles.manuscrit} /> : null}
     </Text>
   );
 

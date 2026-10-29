@@ -26,6 +26,8 @@
 //   doublons        articles de courses ambigus : même produit ? (§ 4.2.3)
 //   cuisine-question  question pendant le mode assistant en cuisine (§ 4.1.4)
 //   voyage-brouillon  « Organise-nous un week-end… » → brouillon de voyage (§ 4.5.1)
+//   recette-categories  classement automatique des recettes (retour de test R-4)
+//   recette-ingredients lien étapes → ingrédients d'une recette (retour de test R-12)
 import { servirIA } from '../_partage/ia.ts';
 import { essai } from './routes/essai.ts';
 import { plus } from './routes/plus.ts';
@@ -43,6 +45,8 @@ import { resumeMatin } from './routes/resume-matin.ts';
 import { doublons } from './routes/doublons.ts';
 import { cuisineQuestion } from './routes/cuisine-question.ts';
 import { voyageBrouillon } from './routes/voyage-brouillon.ts';
+import { recetteCategories } from './routes/recette-categories.ts';
+import { recetteIngredients } from './routes/recette-ingredients.ts';
 
 servirIA({
   essai,
@@ -61,4 +65,6 @@ servirIA({
   doublons,
   'cuisine-question': cuisineQuestion,
   'voyage-brouillon': voyageBrouillon,
+  'recette-categories': recetteCategories,
+  'recette-ingredients': recetteIngredients,
 });

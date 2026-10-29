@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, Modal, TextInput } from 'react-native';
+import { IconeGlyphe } from '../../../composants/ui';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { formaterCompteARebours } from '../services/durees';
 import type { Minuteur } from '../hooks/useMinuteurs';
@@ -25,15 +26,15 @@ export function BarreMinuteurs({
       {minuteurs.map((m) =>
         m.sonne ? (
           <Pressable key={m.id} style={[styles.puce, styles.puceSonne]} onPress={onAcquitter}>
-            <Text style={styles.puceSonneTexte}>⏰ {m.nom} : terminé · OK</Text>
+            <Text style={styles.puceSonneTexte}><IconeGlyphe nom="alarm-outline" style={styles.puceSonneTexte} />{' '}{m.nom} : terminé · OK</Text>
           </Pressable>
         ) : (
           <View key={m.id} style={styles.puce}>
             <Text style={styles.puceTexte}>
-              ⏱ {m.nom} · <Text style={styles.puceTemps}>{formaterCompteARebours(m.finA - maintenant)}</Text>
+              <IconeGlyphe nom="timer-outline" style={styles.puceTexte} />{' '}{m.nom} · <Text style={styles.puceTemps}>{formaterCompteARebours(m.finA - maintenant)}</Text>
             </Text>
             <Pressable onPress={() => onRetirer(m.id)} hitSlop={8} accessibilityLabel={`Annuler le minuteur ${m.nom}`}>
-              <Text style={styles.puceFermer}>✕</Text>
+              <IconeGlyphe nom="close" style={styles.puceFermer} />
             </Pressable>
           </View>
         )
