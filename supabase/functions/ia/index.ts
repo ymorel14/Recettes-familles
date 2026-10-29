@@ -28,6 +28,9 @@
 //   voyage-brouillon  « Organise-nous un week-end… » → brouillon de voyage (§ 4.5.1)
 //   recette-categories  classement automatique des recettes (retour de test R-4)
 //   recette-ingredients lien étapes → ingrédients d'une recette (retour de test R-12)
+//   idees-etape     idées de logement, de trajet ou d'activités selon la destination (refonte Événements § 5.6)
+//   menu-repas      menu complet d'un repas de famille (refonte Événements § 5.6, § 10.4)
+//   evenement-suggestion  panneau assistant d'une page d'événement (refonte Événements § 8.1)
 import { servirIA } from '../_partage/ia.ts';
 import { essai } from './routes/essai.ts';
 import { plus } from './routes/plus.ts';
@@ -47,6 +50,9 @@ import { cuisineQuestion } from './routes/cuisine-question.ts';
 import { voyageBrouillon } from './routes/voyage-brouillon.ts';
 import { recetteCategories } from './routes/recette-categories.ts';
 import { recetteIngredients } from './routes/recette-ingredients.ts';
+import { ideesEtape } from './routes/idees-etape.ts';
+import { menuRepas } from './routes/menu-repas.ts';
+import { evenementSuggestion } from './routes/evenement-suggestion.ts';
 
 servirIA({
   essai,
@@ -67,4 +73,7 @@ servirIA({
   'voyage-brouillon': voyageBrouillon,
   'recette-categories': recetteCategories,
   'recette-ingredients': recetteIngredients,
+  'idees-etape': ideesEtape,
+  'menu-repas': menuRepas,
+  'evenement-suggestion': evenementSuggestion,
 });

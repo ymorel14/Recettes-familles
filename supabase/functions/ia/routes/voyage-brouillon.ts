@@ -15,7 +15,13 @@ const PERIODES = ['printemps', 'ete', 'automne', 'toussaint', 'noel', 'hiver', '
 const TYPES_HEBERGEMENT = ['airbnb', 'gites_de_france', 'abritel', 'booking', 'hotel', 'camping', 'location', 'chez_famille', 'autre'];
 const CATEGORIES = ['visite', 'chateau', 'musee', 'parc_attraction', 'parc_animalier', 'restaurant', 'nature', 'plage', 'sport', 'spectacle', 'marche', 'autre'];
 
+const NATURES = ['voyage', 'repas'];
+const OCCASIONS = ['repas', 'noel', 'nouvel_an', 'paques', 'anniversaire'];
+
 const Schema = z.object({
+  nature: z.string(),
+  occasion: z.string().nullable(),
+  fete_prenom: z.string().nullable(),
   titre: z.string(),
   destination: z.string().nullable(),
   pays: z.string().nullable(),
@@ -93,11 +99,11 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
   // --- Contexte, avec les droits de la personne -------------------------
   const famille = ctx.client.schema('famille');
   const choisis: string[] = Array.isArray(corps?.personnes) ? corps.personnes.filter((x: any) => typeof x === 'string').slice(0, 60) : [];
-  let personnes: { id: string; date_naissance: string | null; utilisateur_id: string | null }[] = [];
+  let personnes: { id: string; prenom: string | null; date_naissance: string | null; utilisateur_id: string | null }[] = [];
   if (choisis.length) {
-    const { data } = await famille.from('personnes').select('id, date_naissance, utilisateur_id').in('id', choisis);
+    const { data } = await famille.from('personnes').select('id, prenom, date_naissance, utilisateur_id').in('id', choisis);
     personnes = (data as any[]) ?? [];
-    const { data: moi } = await famille.from('personnes').select('id, date_naissance, utilisateur_id').eq('utilisateur_id', ctx.utilisateurId).maybeSingle();
+    const { data: moi } = await famille.from('personnes').select('id, prenom, date_naissance, utilisateur_id').eq('utilisateur_id', ctx.utilisateurId).maybeSingle();
     if (moi && !personnes.some((p) => p.id === (moi as any).id)) personnes.push(moi as any);
   } else {
     const [{ data: foyers }, { data: masquees }] = await Promise.all([
@@ -107,7 +113,7 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
     const idsFoyers = ((foyers as any[]) ?? []).map((f) => (typeof f === 'string' ? f : Object.values(f)[0]));
     const caches = new Set(((masquees as any[]) ?? []).map((m) => (typeof m === 'string' ? m : Object.values(m)[0])));
     if (idsFoyers.length) {
-      const { data } = await famille.from('personnes').select('id, date_naissance, utilisateur_id').in('foyer_id', idsFoyers);
+      const { data } = await famille.from('personnes').select('id, prenom, date_naissance, utilisateur_id').in('foyer_id', idsFoyers);
       personnes = ((data as any[]) ?? []).filter((p) => !caches.has(p.id));
     }
   }
@@ -181,7 +187,8 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
     .filter((d, i, t) => t.findIndex((x) => x.debut === d.debut && x.fin === d.fin) === i)
     .slice(0, 3)
     .map((d) => ({ debut: d.debut, fin: d.fin, raison: d.raison?.trim() || null }));
-  const hebergements = b.hebergements
+  // Un repas n'a ni logement ni activités.
+  const hebergements = (b.nature === 'repas' ? [] : b.hebergements)
     .map((h) => ({ ...h, lien: lienSur(h.lien) }))
     .filter((h): h is typeof h & { lien: string } => !!h.lien && !!h.nom.trim())
     .slice(0, 3)
@@ -196,7 +203,7 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
       prix_nuit: h.prix_nuit != null && h.prix_nuit >= 0 ? Math.round(h.prix_nuit * 100) / 100 : null,
       description: h.description?.trim().slice(0, 500) || null,
     }));
-  const activites = b.activites
+  const activites = (b.nature === 'repas' ? [] : b.activites)
     .filter((a) => a.titre.trim())
     .slice(0, 6)
     .map((a) => ({
@@ -208,8 +215,21 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
       prix_enfant: a.prix_enfant != null && a.prix_enfant >= 0 ? a.prix_enfant : null,
     }));
 
+  // Nature de l'événement, occasion et personne fêtée (refonte Événements :
+  // « Un repas : Les 50 ans de Tata Sophie… »). La personne fêtée n'est
+  // reconnue que si son prénom désigne UNE seule personne parmi les invités
+  // visibles ; sinon fete_personne_id = null et l'app laisse choisir.
+  const nature = NATURES.includes(b.nature) ? b.nature : 'voyage';
+  const occasion = nature === 'repas' ? (OCCASIONS.includes(b.occasion ?? '') ? b.occasion : 'repas') : null;
+  const prenomFete = occasion === 'anniversaire' ? b.fete_prenom?.trim().toLowerCase() : null;
+  const candidats = prenomFete ? personnes.filter((p) => p.prenom?.trim().toLowerCase() === prenomFete) : [];
+  const fetePersonneId = candidats.length === 1 ? candidats[0].id : null;
+
   return {
-    titre: b.titre.trim().slice(0, 80) || 'Voyage',
+    nature,
+    occasion,
+    fete_personne_id: fetePersonneId,
+    titre: b.titre.trim().slice(0, 80) || (nature === 'repas' ? 'Repas de famille' : 'Voyage'),
     destination: b.destination?.trim() || null,
     pays: b.pays?.trim() || null,
     type_sejour: TYPES_SEJOUR.includes(b.type_sejour) ? b.type_sejour : 'autre',
@@ -229,7 +249,7 @@ export const voyageBrouillon: Route = async (corps, ctx) => {
     // Ce qui a été écarté par les contrôles (lien introuvable, date prise).
     ecartes: {
       dates: b.dates.length - dates.length,
-      hebergements: Math.min(b.hebergements.length, 3) - hebergements.length,
+      hebergements: (nature === 'repas' ? 0 : Math.min(b.hebergements.length, 3)) - hebergements.length,
     },
   };
 };

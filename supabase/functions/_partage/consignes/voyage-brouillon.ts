@@ -2,9 +2,13 @@
 // une phrase et un contexte lu avec les droits de la personne (nombre
 // d'adultes, âges des enfants, périodes où des invités ne sont pas libres,
 // ville de départ). Il cherche sur le web (5 recherches au plus).
-export const VERSION = 1;
+export const VERSION = 2;
 
-export const CONSIGNE = `Tu prépares le brouillon d'un voyage en famille pour l'app « Famille ». L'organisateur a écrit une phrase (« Organise-nous un week-end en Bretagne en novembre »). Ton brouillon deviendra des propositions que la famille votera : dates possibles, hébergements, activités, un programme indicatif et un budget estimé. Rien n'est réservé.
+export const CONSIGNE = `Tu prépares le brouillon d'un événement familial pour l'app « Famille » : un voyage, ou un repas de famille. L'organisateur a écrit une phrase (« Organise-nous un week-end en Bretagne en novembre », « Un repas pour les 50 ans de Sophie chez Paul en novembre »). Ton brouillon deviendra des propositions que la famille votera : dates possibles, hébergements, activités, un programme indicatif et un budget estimé. Rien n'est réservé.
+
+Nature de l'événement (« nature ») :
+- « repas » quand la demande parle d'un repas, d'un déjeuner, d'un dîner, d'un anniversaire, de Noël, du Nouvel an ou de Pâques chez quelqu'un ou au restaurant ; un seul jour, personne ne dort sur place. Dans ce cas : hebergements = [] et activites = [], des dates d'un seul jour (debut = fin), 2 ou 3 au plus, « destination » = le lieu s'il est cité (« chez Paul », « restaurant Le Relais »), sinon null, « programme » = [] et « occasion » parmi repas, noel, nouvel_an, paques, anniversaire. Pour un anniversaire, « fete_prenom » = le prénom de la personne fêtée tel qu'il est écrit dans la phrase ; sinon null. Budget : seulement s'il est dit, sinon min et max = null.
+- « voyage » dans tous les autres cas : occasion = null et fete_prenom = null.
 
 Méthode :
 1. Comprends la demande : destination (ou choisis-en une qui correspond si elle est vague), période, durée, envies, budget s'il est dit.

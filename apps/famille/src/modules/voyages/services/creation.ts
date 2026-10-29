@@ -50,6 +50,7 @@ export type Idee = {
   type: string | null; // type de logement déduit du lien
   mode: ModeTransport | null; // trajet
   lecture: boolean; // lien en cours de lecture
+  assistant?: boolean; // idée proposée par l'assistant
 };
 
 export type Decision = 'vote' | 'decide';
@@ -326,11 +327,20 @@ export async function lireLien(idee: Idee): Promise<Idee> {
   if (!idee.lien) return { ...idee, lecture: false };
   try {
     const a = await lireAnnonce(idee.lien);
-    const morceaux = [a.ville ? `Lieu : ${a.ville}` : null, a.prix != null ? `Prix : ${euros(a.prix)}` : null].filter(Boolean);
+    const depart = a.ville_depart ?? null;
+    const arrivee = a.ville_arrivee ?? null;
+    const trajet = depart && arrivee ? `${depart} → ${arrivee}` : depart ? `Départ : ${depart}` : arrivee ? `Arrivée : ${arrivee}` : null;
+    const morceaux = [
+      trajet ?? (a.ville ? `Lieu : ${a.ville}` : null),
+      a.prix != null ? `Prix : ${euros(a.prix)}` : null,
+    ].filter(Boolean);
     return {
       ...idee,
       nom: a.titre?.trim() || idee.nom,
-      ville: a.ville,
+      // Trajet : le moyen lu sur la page l'emporte sur le moyen choisi ou
+      // déduit du site.
+      mode: idee.mode && a.mode ? a.mode : idee.mode,
+      ville: a.ville ?? arrivee,
       prix: a.prix,
       image: a.image,
       capacite: a.capacite,
@@ -427,6 +437,9 @@ export async function creerEvenement(
 
   const id = await creerVoyage(formulaire, b.participation === 'famille' ? [] : b.invites);
 
+  // Propositions venues de l'assistant : marquées à part (voyage.proposes_assistant).
+  const marques: { objet_id: string; voyage_id: string; nature: string }[] = [];
+
   // 1. Surprise : avant tout le reste.
   if (b.surprise) {
     for (const p of b.cachees) await definirSecret(id, p, 'cache').catch(() => {});
@@ -459,6 +472,7 @@ export async function creerEvenement(
         .select('id')
         .single();
       if (data) idsLogements[l.cle] = (data as any).id;
+      if (data && l.assistant) marques.push({ objet_id: (data as any).id, voyage_id: id, nature: 'hebergement' });
     }
     if (decisionEffective(b.logements.length, b.decisions.logement) === 'decide' && b.logements.length) {
       const choisi = idsLogements[b.retenus.logement ?? b.logements[0].cle] ?? Object.values(idsLogements)[0];
@@ -481,6 +495,7 @@ export async function creerEvenement(
         .select('id')
         .single();
       if (data) idsTrajets[t.cle] = (data as any).id;
+      if (data && t.assistant) marques.push({ objet_id: (data as any).id, voyage_id: id, nature: 'trajet' });
     }
     if (decisionEffective(b.trajets.length, b.decisions.trajet) === 'decide' && b.trajets.length) {
       const choisi = idsTrajets[b.retenus.trajet ?? b.trajets[0].cle] ?? Object.values(idsTrajets)[0];
@@ -504,6 +519,7 @@ export async function creerEvenement(
         })
         .select('id')
         .single();
+      if (data && a.assistant) marques.push({ objet_id: (data as any).id, voyage_id: id, nature: 'activite' });
       if (data && retenir) await supabase.from('activites').update({ statut: 'retenu' }).eq('id', (data as any).id);
     }
   } else {
@@ -536,6 +552,11 @@ export async function creerEvenement(
         /* liaison facultative : modifiable ensuite depuis l'événement */
       }
     }
+  }
+
+  for (const nature of ['hebergement', 'trajet', 'activite']) {
+    const lot = marques.filter((m) => m.nature === nature);
+    if (lot.length) await supabase.from('proposes_assistant').insert(lot);
   }
 
   const invitesReels = b.participation === 'famille' ? ctx.personnes.filter((p) => p.utilisateur_id).length - 1 : b.invites.length;

@@ -1,7 +1,7 @@
 import { creerModule } from '../creerModule';
 import VoyagesScreen from '../../modules/voyages/screens/VoyagesScreen';
 import RepasFamilleScreen from '../../modules/voyages/screens/RepasFamilleScreen';
-import NouveauVoyageScreen from '../../modules/voyages/screens/NouveauVoyageScreen';
+import NouveauEvenementScreen from '../../modules/voyages/screens/NouveauEvenementScreen';
 import VoyageScreen from '../../modules/voyages/screens/VoyageScreen';
 import DisponibiliteScreen from '../../modules/voyages/screens/DisponibiliteScreen';
 import DatesScreen from '../../modules/voyages/screens/DatesScreen';
@@ -33,7 +33,8 @@ export default creerModule({
     { nom: 'RepasFamille', titre: 'Repas de famille', composant: RepasFamilleScreen },
   ],
   ecrans: [
-    { nom: 'NouveauVoyage', composant: NouveauVoyageScreen, options: { title: 'Proposer' } },
+    // Nom de route conservé (« + » et liens l'utilisent) ; lit params.nature ('voyage' ou 'repas').
+    { nom: 'NouveauVoyage', composant: NouveauEvenementScreen, options: { title: 'Proposer' } },
     { nom: 'Voyage', composant: VoyageScreen, options: { title: 'Voyage' } },
     { nom: 'Disponibilite', composant: DisponibiliteScreen, options: { title: 'Période' } },
     { nom: 'Dates', composant: DatesScreen, options: { title: 'Dates' } },

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
+import { couleurs } from '../../../theme/theme';
 import { Bouton, Pastille } from './ui';
 import type { ActionAFaire, EnAttente, TypeAction } from '../services/evenement';
 import type { ReponseInvite } from '../services/voyage';
@@ -72,7 +73,7 @@ export function AFaire({
       <View style={styles.entete}>
         <Text style={styles.titre}>À faire pour vous</Text>
         {actions.length > 0 ? (
-          <Pastille texte={`${actions.length} à faire`} ton="accent" />
+          <Pastille texte={`${actions.length} à faire`} ton="attention" />
         ) : (
           <Pastille texte="À jour" ton="succes" />
         )}
@@ -174,12 +175,12 @@ const styles = creerStylesThemes(() => ({
     padding: theme.spacing.md,
     borderRadius: theme.radii.lg,
     borderWidth: 1,
-    borderColor: theme.colors.warning,
-    backgroundColor: theme.colors.accentTransparent,
+    borderColor: couleurs.attention,
+    backgroundColor: couleurs.attentionFond,
   },
-  carteVerte: { borderColor: theme.colors.success, backgroundColor: theme.colors.surface },
+  carteVerte: { borderColor: couleurs.succes, backgroundColor: couleurs.succesFond },
   carteNeutre: { borderColor: theme.colors.border, backgroundColor: theme.colors.surface },
-  surtitre: { fontFamily: theme.fontBodyBold, fontSize: 11, letterSpacing: 1.2, color: theme.colors.warning },
+  surtitre: { fontFamily: theme.fontBodyBold, fontSize: 11, letterSpacing: 1.2, color: couleurs.attention },
   texte: { fontFamily: theme.fontBody, fontSize: 15, color: theme.colors.text },
   petit: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
   ligne: { flexDirection: 'row', gap: theme.spacing.sm },

@@ -53,6 +53,7 @@ import {
   type Envie,
 } from '../services/evenement';
 import { AFaire, OnAttend } from '../components/AFaire';
+import { PanneauAssistant } from '../components/PanneauAssistant';
 import { Synthese } from '../components/Synthese';
 import { donnerAvisActivite } from '../services/activites';
 import { Champ } from '../components/formulaire';
@@ -435,6 +436,26 @@ export default function VoyageScreen({ route, navigation }: any) {
           <Text style={styles.lienDiscret}>Partager sur WhatsApp</Text>
         </Pressable>
       </View>
+
+      {/* Assistant : trois suggestions selon la nature (refonte § 8.1) */}
+      <PanneauAssistant
+        nature={voyage.nature === 'repas' ? 'repas' : 'voyage'}
+        voyageId={voyage.id}
+        repasId={etat.repas[0]?.id ?? null}
+        organisateur={organisateur}
+        onAjoute={charger}
+        contexte={{
+          titre: voyage.titre,
+          destination: voyage.destination ?? null,
+          dateDebut: voyage.date_debut ?? null,
+          dateFin: voyage.date_fin ?? null,
+          nbPersonnes: Math.max(partants, attendus, 1),
+          activites: etat.activites.filter((a) => a.statut !== 'ecarte').map((a) => a.titre),
+          logement: retenus[0]?.nom ?? null,
+          budgetTotal: budget.total,
+          plats: etat.repas.flatMap((r) => r.plats.map((x) => ({ titre: x.titre, categorie: x.etape }))),
+        }}
+      />
 
       {/* Surprise : pour qui, et ce qu'il ne faut pas dire */}
       {voyage.secrets.length > 0 ? (

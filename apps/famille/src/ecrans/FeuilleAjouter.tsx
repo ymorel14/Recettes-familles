@@ -13,6 +13,7 @@ import { arrondis, couleurs, couleursModule, creerStyles, espaces, polices, text
 import { apresFermetureFeuille, navigationRef, ouvrirModule, ouvrirOngletModule } from '../navigation/navigationRef';
 import { ID_SANS_CATEGORIE } from '../modules/recettes/services/recettes';
 import { appelerAssistant, ErreurAssistant, messageErreurAssistant } from '../services/assistant';
+import { demanderBrouillon, type BrouillonVoyage } from '../services/brouillonVoyage';
 import {
   ajouterArticles,
   creerEnvieProposee,
@@ -139,6 +140,24 @@ function dateCourte(iso: string | null): string {
   return new Date(a, m - 1, j).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
+// Carte de proposition de l'assistant (refonte Événements § 2.3) : « Un repas :
+// Les 50 ans de Tata Sophie · Chez Tonton Paul · 3 dates proposées d'après les
+// agendas ». Seulement ce que le brouillon contient.
+function descriptionProposition(p: BrouillonVoyage): string {
+  const repas = p.nature === 'repas';
+  const quand =
+    p.dates.length > 1
+      ? `${p.dates.length} dates proposées d’après les agendas`
+      : p.dates.length === 1
+        ? dateCourte(p.dates[0].debut)
+        : p.annee
+          ? `${p.periode !== 'autre' ? `${p.periode} ` : ''}${p.annee}`.trim()
+          : null;
+  return [repas ? 'Un repas' : 'Un voyage', [p.titre, p.destination && p.destination !== p.titre ? p.destination : null, quand].filter(Boolean).join(' · ')]
+    .filter(Boolean)
+    .join(' : ');
+}
+
 export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFermer: () => void }) {
   const { session, foyer, famille, foyersFamille } = useAuth();
   const famillesVues = useFamillesVues();
@@ -161,6 +180,13 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
   const [categorie, setCategorie] = useState<string | undefined>(undefined);
   // Ouvert depuis Événements : la feuille ne propose que voyage / repas.
   const [contexte, setContexte] = useState<'voyage' | 'repas' | null>(null);
+  // « Ou laissez l'assistant organiser » (Événements) : une phrase → une
+  // proposition à vérifier ; rien n'est créé avant « Proposer » dans l'assistant pas à pas.
+  const [demandeEvt, setDemandeEvt] = useState('');
+  const [propositionEvt, setPropositionEvt] = useState<BrouillonVoyage | null>(null);
+  const [chargementEvt, setChargementEvt] = useState(false);
+  const [erreurEvt, setErreurEvt] = useState<ErreurAssistant | null>(null);
+  const annulationEvt = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -178,6 +204,11 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
   }, [visible, foyer?.id]);
 
   const recommencer = () => {
+    annulationEvt.current?.abort();
+    setDemandeEvt('');
+    setPropositionEvt(null);
+    setChargementEvt(false);
+    setErreurEvt(null);
     setEtape('saisie');
     setCartes([]);
     setQuestion(null);
@@ -332,6 +363,38 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
     }
   };
 
+  const preparerEvenement = async () => {
+    const phrase = demandeEvt.trim();
+    if (phrase.length < 8) {
+      setErreurEvt(new ErreurAssistant('entree', 'Décrivez ce que vous voulez organiser : quoi, quand, avec qui.'));
+      return;
+    }
+    const controle = new AbortController();
+    annulationEvt.current = controle;
+    setChargementEvt(true);
+    setErreurEvt(null);
+    setPropositionEvt(null);
+    try {
+      const r = await demanderBrouillon(phrase, [], controle.signal);
+      if (controle.signal.aborted) return;
+      setPropositionEvt(r);
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      setErreurEvt(e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)));
+    } finally {
+      if (!controle.signal.aborted) setChargementEvt(false);
+    }
+  };
+
+  // « Vérifier et créer » : l'assistant pas à pas s'ouvre pré-rempli.
+  const verifierEtCreer = () => {
+    if (!propositionEvt) return;
+    const nature = propositionEvt.nature === 'repas' ? 'repas' : 'voyage';
+    const brouillonAssistant = propositionEvt;
+    fermer();
+    apresFermetureFeuille(() => ouvrirModule('voyages', 'NouveauVoyage', { nature, brouillonAssistant }));
+  };
+
   const changer = (cle: string, maj: Partial<Carte>) => setCartes((cs) => cs.map((c) => (c.cle === cle ? { ...c, ...maj } : c)));
 
   const aAjouter = cartes.filter(
@@ -447,6 +510,48 @@ export function FeuilleAjouter({ visible, onFermer }: { visible: boolean; onFerm
               <Icone nom="chevron-forward" taille={20} couleur={couleurs.encreDouce} />
             </Pressable>
           ))}
+          <Text style={styles.sousTitre}>Ou laissez l’assistant organiser</Text>
+          {chargementEvt ? (
+            <ChargementAssistant
+              etapes={['Je lis votre demande…', 'Je regarde les agendas…', 'Je prépare une proposition…']}
+              onAnnuler={() => {
+                annulationEvt.current?.abort();
+                setChargementEvt(false);
+              }}
+            />
+          ) : (
+            <>
+              <TextInput
+                value={demandeEvt}
+                onChangeText={setDemandeEvt}
+                placeholder="Dites ce que vous voulez organiser"
+                placeholderTextColor={couleurs.encreDouce}
+                multiline
+                accessibilityLabel="Dites ce que vous voulez organiser"
+                style={styles.champEvenement}
+              />
+              {propositionEvt ? (
+                <View style={styles.propositionEvenement}>
+                  <View style={styles.question}>
+                    <Etincelle />
+                    <Text style={styles.questionTexte}>{descriptionProposition(propositionEvt)}</Text>
+                  </View>
+                  {propositionEvt.question ? <Text style={styles.tuileEvenementDetail}>{propositionEvt.question}</Text> : null}
+                  <Text style={styles.tuileEvenementDetail}>Rien n’est créé sans votre validation : vous vérifiez chaque étape.</Text>
+                  <Bouton titre="Vérifier et créer" icone="arrow-forward" onPress={verifierEtCreer} />
+                </View>
+              ) : (
+                <Bouton variante="secondaire" titre="Préparer une proposition" onPress={preparerEvenement} desactive={demandeEvt.trim().length < 8} />
+              )}
+              {erreurEvt ? (
+                <MessageAssistant
+                  message={erreurEvt.message}
+                  pause={erreurEvt.code === 'plafond'}
+                  onReessayer={erreurEvt.code === 'reseau' || erreurEvt.code === 'indisponible' ? preparerEvenement : undefined}
+                />
+              ) : null}
+            </>
+          )}
           <Bouton variante="lien" titre="Autre chose (assistant, recette, courses…)" onPress={() => setContexte(null)} />
         </>
       ) : null}
@@ -778,6 +883,26 @@ const styles = creerStyles(() => ({
     borderWidth: 1,
     borderColor: couleurs.ligneCarte,
     backgroundColor: couleurs.surface,
+  },
+  champEvenement: {
+    minHeight: 56,
+    paddingHorizontal: espaces.m,
+    paddingVertical: espaces.s,
+    borderRadius: arrondis.champ,
+    borderWidth: 1,
+    borderColor: couleurs.ligneCarte,
+    backgroundColor: couleurs.surface,
+    fontFamily: polices.texte,
+    fontSize: 15,
+    color: couleurs.encre,
+  },
+  propositionEvenement: {
+    gap: espaces.s,
+    padding: espaces.m,
+    borderRadius: arrondis.carte,
+    borderWidth: 1,
+    borderColor: couleursModule('voyages').principal,
+    backgroundColor: couleursModule('voyages').fond,
   },
   tuileEvenementTitre: { fontFamily: polices.texteGras, fontSize: 16, color: couleurs.encre },
   tuileEvenementDetail: { fontFamily: polices.texte, fontSize: 13, color: couleurs.encreDouce },

@@ -32,6 +32,11 @@ export type ActiviteProposee = {
 };
 
 export type BrouillonVoyage = {
+  // Refonte Événements : voyage ou repas de famille (route voyage-brouillon v2).
+  // Absents d'une ancienne version de la fonction : lire avec « ?? 'voyage' ».
+  nature?: 'voyage' | 'repas';
+  occasion?: 'repas' | 'noel' | 'nouvel_an' | 'paques' | 'anniversaire' | null;
+  fete_personne_id?: string | null;
   titre: string;
   destination: string | null;
   pays: string | null;

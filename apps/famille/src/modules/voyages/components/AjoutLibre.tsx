@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
 import { Aide, Champ, Puces } from './formulaire';
 import { Bouton, Pastille } from './ui';
+import { BoutonAssistant, ChargementAssistant, Etincelle, MessageAssistant } from '../../../composants/assistant';
+import { ErreurAssistant, messageErreurAssistant } from '../../../services/assistant';
+import { demanderIdees, ideeDepuisAssistant, type IdeeAssistant } from '../services/idees';
 import {
   decisionEffective,
   lireLien,
@@ -17,6 +20,17 @@ import {
 // un texte libre (« Randonnée », « Chez Mamie ») ou un lien dont le nom, le
 // lieu et le prix sont lus sur la page. Pour un trajet, on choisit d'abord le
 // moyen. Sous la liste : « Soumettre au vote » ou « C'est décidé » (§ 5.5).
+// Avec `contexteIdees`, un bloc « Idées de l'assistant » propose 2 ou 3 idées
+// selon la destination (§ 5.6) ; sans destination, il invite à la renseigner.
+export type ContexteIdees = {
+  destination: string;
+  dateDebut: string | null;
+  dateFin: string | null;
+  nbPersonnes: number;
+  villesFoyers: string[];
+  onIndiquerDestination: () => void;
+};
+
 export function AjoutLibre({
   genre,
   items,
@@ -29,6 +43,7 @@ export function AjoutLibre({
   onMode,
   placeholder,
   aideVote = true,
+  contexteIdees,
 }: {
   genre: 'hebergement' | 'trajet' | 'activite';
   items: Idee[];
@@ -41,8 +56,59 @@ export function AjoutLibre({
   onMode?: (m: ModeTransport) => void;
   placeholder: string;
   aideVote?: boolean;
+  contexteIdees?: ContexteIdees;
 }) {
   const [texte, setTexte] = useState('');
+
+  // Idées de l'assistant : demandées à la demande (chaque appel a un coût),
+  // gardées en mémoire par destination, dates et nombre de personnes ; si la
+  // destination change, elles sont recalculées sur demande (les propositions
+  // déjà ajoutées restent).
+  const [idees, setIdees] = useState<IdeeAssistant[]>([]);
+  const [cleIdees, setCleIdees] = useState('');
+  const [chargementIdees, setChargementIdees] = useState(false);
+  const [erreurIdees, setErreurIdees] = useState<ErreurAssistant | null>(null);
+  const annulation = useRef<AbortController | null>(null);
+  const cleActuelle = contexteIdees
+    ? `${genre}|${contexteIdees.destination.trim().toLowerCase()}|${contexteIdees.dateDebut ?? ''}|${contexteIdees.nbPersonnes}`
+    : '';
+  useEffect(() => () => annulation.current?.abort(), []);
+
+  const chercherIdees = async () => {
+    if (!contexteIdees) return;
+    const controle = new AbortController();
+    annulation.current = controle;
+    setChargementIdees(true);
+    setErreurIdees(null);
+    try {
+      const r = await demanderIdees({
+        etape: genre === 'activite' ? 'activites' : genre,
+        destination: contexteIdees.destination.trim(),
+        dateDebut: contexteIdees.dateDebut,
+        dateFin: contexteIdees.dateFin,
+        nbPersonnes: contexteIdees.nbPersonnes,
+        villesFoyers: contexteIdees.villesFoyers,
+        signal: controle.signal,
+      });
+      if (controle.signal.aborted) return;
+      setIdees(r);
+      setCleIdees(cleActuelle);
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      setErreurIdees(e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)));
+    } finally {
+      if (!controle.signal.aborted) setChargementIdees(false);
+    }
+  };
+
+  const ajouterIdee = (i: IdeeAssistant) => {
+    onChange([...items, ideeDepuisAssistant(i, genre)]);
+    setIdees((l) => l.filter((x) => x !== i));
+  };
+
+  const destinationConnue = !!contexteIdees && contexteIdees.destination.trim().length >= 2;
+  const ideesAJour = cleIdees === cleActuelle;
+  const ideesVisibles = ideesAJour ? idees.filter((i) => !items.some((it) => it.nom === i.nom)) : [];
   const effective = decisionEffective(items.length, decision);
   // Activités : « C'est décidé » les retient toutes ; sinon un seul choix.
   const choixUnique = genre !== 'activite';
@@ -82,6 +148,73 @@ export function AjoutLibre({
         <Bouton titre="Ajouter" variante="contour" onPress={ajouter} desactive={!texte.trim()} />
       </View>
       <Aide>Écrivez simplement, ou collez un lien : le nom, le lieu et le prix sont récupérés sur la page.</Aide>
+
+      {contexteIdees ? (
+        <View style={styles.idees}>
+          <View style={styles.ideesEntete}>
+            <Etincelle couleur={theme.colors.accent} />
+            <Text style={styles.ideesTitre}>
+              {destinationConnue
+                ? `Idées de l’assistant · ${contexteIdees.destination.trim()} · ${contexteIdees.nbPersonnes} pers.`
+                : 'Idées de l’assistant'}
+            </Text>
+          </View>
+
+          {!destinationConnue ? (
+            <>
+              <Aide>
+                {genre === 'hebergement'
+                  ? 'Indiquez une destination à l’étape 1 : l’assistant proposera des logements sur place.'
+                  : genre === 'trajet'
+                    ? 'Indiquez une destination à l’étape 1 : l’assistant proposera des façons d’y aller.'
+                    : 'Indiquez une destination à l’étape 1 : l’assistant proposera des activités sur place.'}
+              </Aide>
+              <Bouton titre="Indiquer la destination" variante="contour" onPress={contexteIdees.onIndiquerDestination} />
+            </>
+          ) : chargementIdees ? (
+            <ChargementAssistant
+              etapes={
+                genre === 'trajet'
+                  ? ['Je regarde les villes de départ…', 'Je cherche des façons d’y aller…']
+                  : genre === 'hebergement'
+                    ? ['Je cherche des logements sur place…', 'Je vérifie les liens…']
+                    : ['Je cherche des activités sur place…', 'Je vérifie les liens…']
+              }
+              couleur={theme.colors.accent}
+              onAnnuler={() => {
+                annulation.current?.abort();
+                setChargementIdees(false);
+              }}
+            />
+          ) : (
+            <>
+              {ideesVisibles.map((i) => (
+                <View key={`${i.nom}|${i.lien ?? ''}`} style={styles.carteIdee}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.titre}>{i.nom}</Text>
+                    <Text style={styles.detail}>{i.detail}</Text>
+                    {i.lien ? (
+                      <Text style={styles.lien} onPress={() => Linking.openURL(i.lien!)} accessibilityRole="link">
+                        Voir la page
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Bouton titre="+ Ajouter" variante="contour" onPress={() => ajouterIdee(i)} accessibilityLabel={`Ajouter ${i.nom}`} />
+                </View>
+              ))}
+              {ideesAJour && idees.length === 0 && !erreurIdees && cleIdees ? (
+                <Aide>Pas d’idée pour le moment. Précisez la destination ou ajoutez vos propres propositions.</Aide>
+              ) : null}
+              <BoutonAssistant
+                titre={ideesAJour && cleIdees ? 'Proposer d’autres idées' : 'Proposer des idées'}
+                onPress={chercherIdees}
+                couleur={theme.colors.accent}
+              />
+            </>
+          )}
+          {erreurIdees ? <MessageAssistant message={erreurIdees.message} pause={erreurIdees.code === 'plafond'} /> : null}
+        </View>
+      ) : null}
 
       {items.map((it) => {
         const estRetenu = choixUnique && effective === 'decide' && items.length > 1 && (retenu ?? items[0].cle) === it.cle;
@@ -162,6 +295,26 @@ const styles = creerStylesThemes(() => ({
     backgroundColor: theme.colors.surface,
   },
   carteRetenue: { borderColor: theme.colors.success },
+  idees: {
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radii.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.accentTransparent,
+  },
+  ideesEntete: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32 },
+  ideesTitre: { flex: 1, fontFamily: theme.fontBodyBold, fontSize: 14, color: theme.colors.accent },
+  carteIdee: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.sm,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
   titre: { fontFamily: theme.fontBodyBold, fontSize: 15, color: theme.colors.text },
   detail: { fontFamily: theme.fontBody, fontSize: 13, color: theme.colors.textMuted },
   etiquettes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },

@@ -15,7 +15,12 @@ export type Annonce = {
   devise: string | null;
   capacite: number | null;
   chambres: number | null;
-  genre: 'hebergement' | 'restaurant' | 'parc' | 'musee' | 'chateau' | 'spectacle' | 'activite' | null;
+  genre: 'hebergement' | 'restaurant' | 'parc' | 'musee' | 'chateau' | 'spectacle' | 'activite' | 'transport' | null;
+  // Pages de transport (fonction lire-annonce étendue). Absents tant que la
+  // fonction n'est pas redéployée : toujours les lire avec « ?? null ».
+  mode?: 'voiture' | 'moto' | 'train' | 'avion' | 'bateau' | 'bus' | 'velo' | 'autre' | null;
+  ville_depart?: string | null;
+  ville_arrivee?: string | null;
 };
 
 export async function lireAnnonce(url: string): Promise<Annonce> {

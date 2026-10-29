@@ -1,6 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { theme, creerStylesThemes } from '../theme/theme';
+import { couleurs } from '../../../theme/theme';
 
 // Petits éléments d’interface communs aux écrans de VoyageCommun, aux
 // couleurs du thème choisi (theme.colors.*).
@@ -67,14 +68,31 @@ export function MessageVide({ titre, texte }: { titre: string; texte?: string })
 }
 
 // Pastille (compte à rebours, statut…).
-export function Pastille({ texte, ton = 'accent' }: { texte: string; ton?: 'accent' | 'neutre' | 'succes' }) {
+// Tons : « succes » (vert, décidé), « attention » (orange, à faire / à choisir),
+// « neutre », « accent » (encre du module). Couleurs prises dans les jetons de
+// la charte, jamais en dur.
+export function Pastille({
+  texte,
+  ton = 'accent',
+}: {
+  texte: string;
+  ton?: 'accent' | 'neutre' | 'succes' | 'attention';
+}) {
   return (
-    <View style={[styles.pastille, ton === 'neutre' && styles.pastilleNeutre, ton === 'succes' && styles.pastilleSucces]}>
+    <View
+      style={[
+        styles.pastille,
+        ton === 'neutre' && styles.pastilleNeutre,
+        ton === 'succes' && styles.pastilleSucces,
+        ton === 'attention' && styles.pastilleAttention,
+      ]}
+    >
       <Text
         style={[
           styles.pastilleTexte,
           ton === 'neutre' && { color: theme.colors.textMuted },
-          ton === 'succes' && { color: theme.colors.success },
+          ton === 'succes' && { color: couleurs.succes },
+          ton === 'attention' && { color: couleurs.attention },
         ]}
       >
         {texte}
@@ -115,6 +133,7 @@ const styles = creerStylesThemes(() => ({
     backgroundColor: theme.colors.accentTransparent,
   },
   pastilleNeutre: { backgroundColor: theme.colors.selectionTransparent, borderWidth: 1, borderColor: theme.colors.border },
-  pastilleSucces: { backgroundColor: theme.colors.selectionTransparent },
+  pastilleSucces: { backgroundColor: couleurs.succesFond },
+  pastilleAttention: { backgroundColor: couleurs.attentionFond },
   pastilleTexte: { fontFamily: theme.fontBodyBold, fontSize: 13, color: theme.colors.accent },
 }));

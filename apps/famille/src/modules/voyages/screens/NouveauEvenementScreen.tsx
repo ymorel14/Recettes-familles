@@ -12,8 +12,9 @@ import { ChoixDates } from '../components/ChoixDates';
 import { AjoutLibre } from '../components/AjoutLibre';
 import { BoutonAssistant, ChargementAssistant, Etincelle, MessageAssistant } from '../../../composants/assistant';
 import { ErreurAssistant, messageErreurAssistant } from '../../../services/assistant';
-import { demanderBrouillon } from '../../../services/brouillonVoyage';
+import { demanderBrouillon, type BrouillonVoyage } from '../../../services/brouillonVoyage';
 import { formaterPlage } from '../services/personnes';
+import { appliquerBrouillonAssistant, demanderMenu, villesDesFoyers } from '../services/idees';
 import {
   brouillonUtile,
   brouillonVide,
@@ -27,7 +28,6 @@ import {
   OCCASIONS,
   prochainAnniversaire,
   titreAutomatique,
-  typeLogementDepuisLien,
   type Brouillon,
   type Decision,
   type Idee,
@@ -90,6 +90,14 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
 
   // Brouillon retrouvé sur l'appareil : Reprendre / Recommencer.
   useEffect(() => {
+    // Venu de « Ou laissez l'assistant organiser » (feuille ⊕) : l'assistant
+    // pas à pas s'ouvre pré-rempli, à vérifier étape par étape.
+    const deLAssistant = route?.params?.brouillonAssistant as BrouillonVoyage | undefined;
+    if (deLAssistant) {
+      setB((x) => appliquerBrouillonAssistant(x, deLAssistant));
+      setPhase('saisie');
+      return;
+    }
     lireBrouillonLocal(nature).then((l) => {
       if (l && brouillonUtile(l)) {
         setLocal(l);
@@ -147,6 +155,71 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
   // Invités effectifs (pour le secret) : toute la famille, ou la sélection.
   const personnesInvitables = b.participation === 'famille' ? autres : autres.filter((p) => b.invites.includes(p.id));
 
+  // Contexte des idées de l'assistant (§ 5.6) : nombre de personnes et villes
+  // de départ des foyers concernés (villes seulement, jamais d'adresse).
+  const nbParticipants = Math.max(1, personnesInvitables.length + (maPersonne ? 1 : 0));
+  const idsFoyersConcernes = [...new Set([...(maPersonne ? [maPersonne] : []), ...personnesInvitables].map((p) => p.foyer_id).filter(Boolean) as string[])].sort();
+  const [villesFoyers, setVillesFoyers] = useState<string[]>([]);
+  const cleFoyers = idsFoyersConcernes.join(',');
+  useEffect(() => {
+    if (!cleFoyers) return setVillesFoyers([]);
+    let actif = true;
+    villesDesFoyers(cleFoyers.split(',')).then((v) => actif && setVillesFoyers(v));
+    return () => {
+      actif = false;
+    };
+  }, [cleFoyers]);
+
+  // Menu complet proposé par l'assistant (repas, étape Menu).
+  const [menuEnCours, setMenuEnCours] = useState(false);
+  const [erreurMenu, setErreurMenu] = useState<ErreurAssistant | null>(null);
+  const [infoMenu, setInfoMenu] = useState<string | null>(null);
+  const annulationMenu = useRef<AbortController | null>(null);
+  useEffect(() => () => annulationMenu.current?.abort(), []);
+
+  const proposerMenu = async () => {
+    const controle = new AbortController();
+    annulationMenu.current = controle;
+    setMenuEnCours(true);
+    setErreurMenu(null);
+    setInfoMenu(null);
+    try {
+      const r = await demanderMenu({
+        occasion: b.occasion,
+        nbInvites: nbParticipants,
+        date: b.plages[0]?.debut ?? null,
+        moment: b.moment,
+        plats: b.plats.map((p) => ({ titre: p.titre, categorie: p.etape })),
+        signal: controle.signal,
+      });
+      if (controle.signal.aborted) return;
+      if (!r.plats.length) {
+        setInfoMenu(r.question ?? 'Rien à ajouter : le menu semble déjà complet.');
+        return;
+      }
+      // Les plats proposés n'ont personne : ils seront proposés aux invités.
+      setB((x) => ({
+        ...x,
+        plats: [...x.plats, ...r.plats.map((p) => ({ cle: cle(), titre: p.titre, etape: p.categorie, moi: false }))],
+      }));
+      setInfoMenu(`${r.plats.length} plat${r.plats.length > 1 ? 's' : ''} ajouté${r.plats.length > 1 ? 's' : ''}, sans personne. Retirez ce qui ne vous convient pas.`);
+    } catch (e) {
+      if (controle.signal.aborted) return;
+      setErreurMenu(e instanceof ErreurAssistant ? e : new ErreurAssistant('indisponible', messageErreurAssistant(e)));
+    } finally {
+      if (!controle.signal.aborted) setMenuEnCours(false);
+    }
+  };
+
+  const idees = (): React.ComponentProps<typeof AjoutLibre>['contexteIdees'] => ({
+    destination: b.aChoisir ? '' : b.destination,
+    dateDebut: b.plages[0]?.debut ?? null,
+    dateFin: b.plages[0]?.fin ?? null,
+    nbPersonnes: nbParticipants,
+    villesFoyers,
+    onIndiquerDestination: () => allerA(0),
+  });
+
   const basculerInvite = (id: string) => {
     setB((x) => {
       if (x.participation === 'amoureux') return { ...x, invites: x.invites.includes(id) ? [] : [id], cachees: [] };
@@ -203,49 +276,7 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
     try {
       const r = await demanderBrouillon(texte, b.participation === 'famille' ? [] : b.invites, controle.signal);
       if (controle.signal.aborted) return;
-      const logements: Idee[] = r.hebergements.map((h) => ({
-        cle: cle(),
-        nom: h.nom,
-        detail: [h.ville ? `Lieu : ${h.ville}` : null, h.prix_total != null ? `Prix : ${h.prix_total} €` : h.prix_nuit != null ? `Prix : ${h.prix_nuit} € la nuit` : null].filter(Boolean).join(' · ') || 'Idée de l’assistant',
-        lien: h.lien,
-        site: null,
-        ville: h.ville,
-        prix: h.prix_total,
-        image: null,
-        capacite: h.capacite,
-        chambres: h.nb_chambres,
-        type: h.type ?? typeLogementDepuisLien(h.lien),
-        mode: null,
-        lecture: false,
-      }));
-      const activites: Idee[] = r.activites.map((a) => ({
-        cle: cle(),
-        nom: a.titre,
-        detail: a.description ?? 'Idée de l’assistant',
-        lien: a.lien,
-        site: null,
-        ville: null,
-        prix: a.prix_adulte,
-        image: null,
-        capacite: null,
-        chambres: null,
-        type: null,
-        mode: null,
-        lecture: false,
-      }));
-      setB((x) => ({
-        ...x,
-        destination: r.destination ?? x.destination,
-        aChoisir: r.destination ? false : x.aChoisir,
-        plages: r.dates.length ? r.dates.map((d) => ({ debut: d.debut, fin: d.fin })) : x.plages,
-        periode: PERIODES.some((p) => p.id === r.periode) ? (r.periode as Periode) : x.periode,
-        anneePeriode: r.annee ?? x.anneePeriode,
-        typeSejour: TYPES_SEJOUR.some((t) => t.id === r.type_sejour) ? (r.type_sejour as TypeSejour) : x.typeSejour,
-        logements: logements.length ? logements : x.logements,
-        activites: activites.length ? activites : x.activites,
-        titre: r.titre || x.titre,
-        titreModifie: !!r.titre || x.titreModifie,
-      }));
+      setB((x) => appliquerBrouillonAssistant(x, r));
       setOuvertAssistant(false);
     } catch (e) {
       if (controle.signal.aborted) return;
@@ -570,6 +601,7 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
             retenu={b.retenus.logement}
             onRetenir={(c) => maj({ retenus: { ...b.retenus, logement: c } })}
             placeholder="Chez Mamie, ou collez un lien d’annonce"
+            contexteIdees={idees()}
           />
         </>
       );
@@ -589,6 +621,7 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
             mode={b.modeTrajet}
             onMode={(m) => maj({ modeTrajet: m })}
             placeholder="Départ de Rennes à 7 h, ou collez un lien"
+            contexteIdees={idees()}
           />
         </>
       );
@@ -603,6 +636,7 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
             decision={b.decisions.activites}
             onDecision={(d) => maj({ decisions: { ...b.decisions, activites: d } })}
             placeholder="Randonnée, ou collez un lien"
+            contexteIdees={idees()}
           />
         </>
       );
@@ -678,6 +712,22 @@ export default function NouveauEvenementScreen({ navigation, route }: any) {
         <>
           <Libelle>Au menu</Libelle>
           <Aide>Notez ce que vous avez en tête. Les plats sans personne seront proposés aux invités.</Aide>
+          <View style={styles.assistant}>
+            {menuEnCours ? (
+              <ChargementAssistant
+                etapes={['Je regarde l’occasion et les invités…', 'Je compose le menu…']}
+                couleur={theme.colors.accent}
+                onAnnuler={() => {
+                  annulationMenu.current?.abort();
+                  setMenuEnCours(false);
+                }}
+              />
+            ) : (
+              <BoutonAssistant titre="L’assistant propose un menu complet" onPress={proposerMenu} couleur={theme.colors.accent} />
+            )}
+            {infoMenu ? <Aide>{infoMenu}</Aide> : null}
+            {erreurMenu ? <MessageAssistant message={erreurMenu.message} pause={erreurMenu.code === 'plafond'} /> : null}
+          </View>
           <Puces options={CATEGORIES_PLAT} valeur={platCategorie} onChange={(c: EtapeRepas | 'autre') => setPlatCategorie(c)} />
           <Champ
             value={platTexte}
