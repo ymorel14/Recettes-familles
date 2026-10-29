@@ -45,6 +45,7 @@ import {
   enviesDeListe,
   listesEnviesLiees,
   offrirEnvie,
+  participerCagnotte,
   prendrePlat,
   proposerPlat,
   relancer,
@@ -530,6 +531,7 @@ export default function VoyageScreen({ route, navigation }: any) {
             onOuvrir={(ecran) => navigation.navigate(ecran, { voyageId: voyage.id })}
             onRepondre={reponduePour}
             onPresence={presencePour}
+            onCagnotte={(souhaitId, montant) => agir(() => participerCagnotte(souhaitId, montant))}
             enCours={enCours}
           />
           {organisateur ? <OnAttend lignes={attente} nomDe={nom} relances={relances} onRelancer={relancerPersonne} /> : null}

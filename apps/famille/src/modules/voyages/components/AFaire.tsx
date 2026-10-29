@@ -45,6 +45,7 @@ export function AFaire({
   onOuvrir,
   onRepondre,
   onPresence,
+  onCagnotte,
   enCours,
 }: {
   actions: ActionAFaire[];
@@ -54,6 +55,7 @@ export function AFaire({
   onOuvrir: (ecran: string) => void;
   onRepondre: (personneId: string, reponse: ReponseInvite) => void;
   onPresence: (activiteId: string, nous: boolean) => void;
+  onCagnotte: (souhaitId: string, montant: number) => void;
   enCours: boolean;
 }) {
   const reponses: { id: ReponseInvite; libelle: string }[] = repas
@@ -123,6 +125,21 @@ export function AFaire({
                 onPress={() => onPresence(a.objet_id!, false)}
                 style={{ flex: 1 }}
               />
+            </View>
+          ) : null}
+
+          {a.type === 'cagnotte' && a.objet_id ? (
+            <View style={styles.ligne}>
+              {[10, 20, 30].map((m) => (
+                <Bouton
+                  key={m}
+                  titre={`${m} €`}
+                  variante="contour"
+                  desactive={enCours}
+                  onPress={() => onCagnotte(a.objet_id!, m)}
+                  style={{ flex: 1 }}
+                />
+              ))}
             </View>
           ) : null}
 

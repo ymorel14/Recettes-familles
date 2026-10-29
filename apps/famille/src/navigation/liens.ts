@@ -133,7 +133,7 @@ export const liens: LinkingOptions<any> = {
             path: 'voyages',
             initialRouteName: 'Onglets',
             screens: {
-              Onglets: { path: '', screens: { Voyages: '', RepasFamille: 'repas' } },
+              Onglets: { path: '', screens: { ListeVoyages: '', RepasFamille: 'repas' } },
               NouveauVoyage: 'proposer',
               Voyage: 'voyage/:voyageId',
               Dates: 'voyage/:voyageId/dates',

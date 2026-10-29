@@ -29,7 +29,7 @@ import SurpriseScreen from '../../modules/voyages/screens/SurpriseScreen';
 export default creerModule({
   id: 'voyages',
   onglets: [
-    { nom: 'Voyages', titre: 'Voyages', composant: VoyagesScreen },
+    { nom: 'ListeVoyages', titre: 'Voyages', composant: VoyagesScreen },
     { nom: 'RepasFamille', titre: 'Repas de famille', composant: RepasFamilleScreen },
   ],
   ecrans: [

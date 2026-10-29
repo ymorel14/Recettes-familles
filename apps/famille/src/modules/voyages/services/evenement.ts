@@ -82,6 +82,16 @@ export async function enviesDeListe(listeId: string): Promise<Envie[]> {
   return (data ?? []) as unknown as Envie[];
 }
 
+// Cagnotte : je promets une somme au pot commun d'une envie (modifiable ensuite
+// depuis la liste). Aucun argent ne transite par l'app ; seul son auteur voit son montant.
+export async function participerCagnotte(souhaitId: string, montant: number): Promise<void> {
+  const { error } = await supabase
+    .schema('wishlist')
+    .from('participations')
+    .upsert({ souhait_id: souhaitId, montant }, { onConflict: 'souhait_id,participant' });
+  if (error) throw error;
+}
+
 export async function offrirEnvie(souhaitId: string): Promise<void> {
   const { error } = await supabase.schema('wishlist').from('reservations').insert({ souhait_id: souhaitId });
   if (error && (error as any).code !== '23505') throw error;
