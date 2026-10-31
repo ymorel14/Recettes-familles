@@ -1,0 +1,1 @@
+{ "description": "Une seule photo acceptée.", "entree": { "fichiers": [{ "type": "image", "media_type": "image/jpeg", "donnees": "AAAA" }, { "type": "image", "media_type": "image/jpeg", "donnees": "AAAA" }] }, "erreurAttendue": "entree" }

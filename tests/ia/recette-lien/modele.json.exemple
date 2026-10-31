@@ -1,0 +1,5 @@
+{
+  "description": "Site de cuisine sans fiche recette structurée (blog) : recette lue dans le texte. Remplacez l'adresse par une page réelle.",
+  "entree": { "lien": "https://blog-exemple.fr/ma-tarte-tatin" },
+  "attendu": { "titre": "~tatin", "elements": [1] }
+}

@@ -35,7 +35,9 @@ partagent le compte famille :
   poche virtuel affiché en points avec l'équivalent en euros entre
   parenthèses, sans aucun flux d'argent réel), données dans le schéma
   `quotidien`. Tâches et tirelires (`src/services/maison.ts`) restent dans
-  le foyer (règles RLS) ; tâches et argent de poche branchés depuis les
+  le foyer (règles RLS), sauf une tâche confiée à une personne d'un autre foyer de la famille
+  (migration `20261020120000_quotidien_taches_autres_foyers.sql` : ce foyer la voit et la coche,
+  sans points, sans pouvoir la modifier) ; tâches et argent de poche branchés depuis les
   Phases 3 et 4 (migration `20261008110000_quotidien_taches_argent.sql`).
   Espace enfant (Phase 5) : lien `/quotidien/enfant/<jeton>`, `EnfantScreen`,
   fonctions `*_enfant` ; « J'ai fini » attend la validation d'un parent. Cahier des charges : document Claude "Cahier des charges —
@@ -91,6 +93,34 @@ partagent le compte famille :
   mode sans réseau au magasin (`src/services/horsLigne.ts` : liste gardée
   sur le téléphone, appuis mis en attente puis renvoyés).
   Cahier des charges : document Claude "Cahier des charges — Courses".
+- `apps/famille` : **nouvelle version** (V1 de l'app unique, documents « V1-specification-dev.md » et
+  « V1-charte-graphique.md » du projet Claude) : les six apps réunies, code des apps COPIÉ dans
+  `src/modules/<module>` (les apps actuelles restent intactes), un seul client Supabase
+  (`clientPourSchema`), thème « Famille » clair/sombre (`src/theme`), barre du bas commune et onglets
+  du haut par module (`src/navigation`). Même base que les autres apps. Adresse `/famille/` du site commun.
+  Assistant (chantier B) : fonction Edge `ia` (`supabase/functions/ia`, une route par
+  fonctionnalité, socle commun `supabase/functions/_partage/ia.ts` : lectures au jeton de
+  l'utilisateur, brouillons seulement, plafond et comptage `famille.ia_usage`, migration
+  `20261020110000_famille_ia.sql`), appelée par `apps/famille/src/services/assistant.ts` ;
+  jeux de tests `tests/ia/`. Fonctions de l'assistant : textes courts (Haiku : ⊕, courses en
+  phrase, tâche dictée, lien collé) et photos (Sonnet : recette, planning, objet, lettre au
+  Père Noël ; ⊕ photo classée par Haiku), pages et vidéos (Sonnet : recette d'une page sans
+  fiche structurée ou d'une vidéo par son texte public, annonce de location incomplète), traitement
+  de nuit à moitié prix (fonction Edge `ia-nuit`, API Batches : résumé du matin à partir de
+  `famille.faits_du_jour`, calculés sous l'identité de chaque personne par
+  `famille.preparer_travaux_nuit` ; affinage des habituels de Courses) et doublons de Courses (route
+  `doublons`, `courses.non_doublons`), migration `20261021100000_famille_nuit.sql`, assistant en
+  cuisine (route `cuisine-question`, `DeroulementAssistantScreen`) et brouillon de voyage (route
+  `voyage-brouillon` avec recherche web, `NouveauVoyageScreen`, mention `voyage.proposes_assistant`,
+  migration `20261021110000_voyage_propositions_assistant.sql`) ; voir `supabase/functions/ia/LISEZMOI.md`.
+  Notifications (§ 2.5, migration `20261021120000_famille_notifications_modules.sql`) : déclencheurs des
+  modules vers `famille.notifications` (règle « surprise » vérifiée sous l'identité de chaque destinataire,
+  `famille.prendre_identite`, jamais d'erreur levée), envoi sur téléphone par la fonction Edge
+  `envoyer-notifications` (`famille.appareils`, `famille.reglages_notifications`,
+  `supabase/planification_notifications.sql`), `apps/famille/src/services/notificationsTelephone.ts`. Import d'une sauvegarde My Recipe Box (fichier `.rtk` = archive ZIP de
+  `recipes_<n>.json` + photos, lue avec `fflate`) : `ImportMyRecipeBoxScreen`, conversion dans
+  `src/modules/recettes/services/myRecipeBox.ts`, enregistrement dans `importMyRecipeBox.ts` (sans migration). Toute migration pour l'app Famille est un AJOUT : les six apps
+  actuelles doivent continuer de fonctionner.
 - `packages/famille` : code commun (compte famille, foyers, profils, famille
   active, codes d'invitation, AuthProvider/useAuth, visibilité des enfants
   famille par famille : `<VisibiliteEnfants>` dans le Profil de chaque app,

@@ -1,0 +1,5 @@
+{
+  "description": "Description de vidéo collée : recette complète.",
+  "entree": { "lien": "https://www.youtube.com/watch?v=exemple", "texte": "Crêpes faciles 🥞 Ingrédients : 250 g de farine, 4 œufs, 50 cl de lait, 1 pincée de sel, 50 g de beurre fondu. Mélanger la farine et les œufs, ajouter le lait petit à petit, puis le beurre. Laisser reposer 1 h. Cuire à la poêle. #crepes #chandeleur" },
+  "attendu": { "titre": "~crepe", "elements": [1], "source": "video" }
+}

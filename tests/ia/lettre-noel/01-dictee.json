@@ -1,0 +1,5 @@
+{
+  "description": "Lettre dictée par l'enfant, orthographe d'enfant : trois cadeaux.",
+  "entree": { "texte": "je voudré un véllo rouje, des légo ninjago et un livre de dinausore", "prenom": "Léo" },
+  "attendu": { "souhaits": [3] }
+}

@@ -1,0 +1,5 @@
+{
+  "description": "Résumé du matin du compte de test : répond sans erreur (phrases selon les données du jour ; une seule rédaction par jour, ensuite le résumé enregistré est renvoyé).",
+  "entree": {},
+  "attendu": {}
+}

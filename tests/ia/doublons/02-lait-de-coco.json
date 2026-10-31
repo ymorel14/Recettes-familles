@@ -1,0 +1,9 @@
+{
+  "description": "« Lait » et « Lait de coco » : produits différents.",
+  "entree": {
+    "groupes": [
+      { "id": "g1", "articles": [ { "libelle": "Lait", "quantite": null, "unite": null }, { "libelle": "Lait de coco", "quantite": 400, "unite": "ml" } ] }
+    ]
+  },
+  "attendu": { "groupes": [ { "id": "g1", "meme_produit": false } ] }
+}

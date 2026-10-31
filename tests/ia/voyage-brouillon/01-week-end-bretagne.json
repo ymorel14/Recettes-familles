@@ -1,0 +1,5 @@
+{
+  "description": "Week-end en Bretagne : brouillon avec dates et au moins un hébergement réel (≈ 0,15 $ par passage).",
+  "entree": { "demande": "Organise-nous un week-end en Bretagne en novembre, au bord de la mer" },
+  "attendu": { "titre": "*", "dates": [1], "hebergements": [1], "programme": [1] }
+}

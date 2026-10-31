@@ -1,0 +1,5 @@
+{
+  "description": "Phrase vide : erreur de saisie, aucun appel à l'assistant.",
+  "entree": { "texte": "" },
+  "erreurAttendue": "entree"
+}

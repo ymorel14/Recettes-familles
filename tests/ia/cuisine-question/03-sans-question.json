@@ -1,0 +1,5 @@
+{
+  "description": "Question vide : message d'erreur lisible.",
+  "entree": { "question": "", "recette": "Titre : Crêpes" },
+  "erreurAttendue": "entree"
+}

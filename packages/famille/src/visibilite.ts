@@ -1,4 +1,4 @@
-import { schemaFamille } from './client';
+import { schemaFamille, vueToutesFamilles } from './client';
 
 // Visibilité d'un enfant famille par famille (migration
 // 20261016100000_famille_visibilite_par_famille.sql). Quand un foyer
@@ -49,6 +49,9 @@ export async function changerVisibiliteDansFamille(personneId: string, familleId
 // foyer, ou via une autre famille) : à retirer des listes « toute la
 // famille » quand on affiche la famille active.
 export async function personnesMasqueesFamilleActive(): Promise<Set<string>> {
+  // Vue de toutes les familles (app Famille) : pas de famille active, on
+  // montre tous ceux que la base laisse voir.
+  if (vueToutesFamilles()) return new Set();
   const { data, error } = await schemaFamille().rpc('personnes_masquees_famille_active');
   if (error) throw error;
   return new Set(((data ?? []) as any[]).map((x) => (typeof x === 'string' ? x : (Object.values(x)[0] as string))));

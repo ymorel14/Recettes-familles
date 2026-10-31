@@ -1,4 +1,4 @@
-import { schemaFamille } from './client';
+import { schemaFamille, vueToutesFamilles } from './client';
 import { prenomsDe } from './profils';
 import type { CodeInvitation, FoyerMembre, TypeCodeInvitation } from './types';
 
@@ -168,7 +168,8 @@ export async function retirerDuFoyer(idUtilisateur: string): Promise<void> {
 // recettes de toutes ses familles, c'est l'app qui n'affiche que celles de
 // la famille active.
 export async function listerFoyersFamilleActive(): Promise<string[]> {
-  const { data, error } = await schemaFamille().rpc('foyers_famille_active');
+  // Vue de toutes les familles (app Famille) : les foyers de toutes mes familles.
+  const { data, error } = await schemaFamille().rpc(vueToutesFamilles() ? 'foyers_de_mes_familles' : 'foyers_famille_active');
   if (error) throw error;
   return ((data as string[] | null) ?? []).filter(Boolean);
 }

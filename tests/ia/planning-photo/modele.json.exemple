@@ -1,0 +1,5 @@
+{
+  "description": "Calendrier de matchs d'une page (une vingtaine de dates) : aucune date oubliée.",
+  "entree": { "fichiers": [{ "type": "pdf", "media_type": "application/pdf", "donnees": "@photos/calendrier-u11.pdf" }] },
+  "attendu": { "seances": [18] }
+}

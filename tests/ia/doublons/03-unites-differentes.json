@@ -1,0 +1,9 @@
+{
+  "description": "« 1 L » et « 2 bouteilles » : même produit, quantité impossible à additionner (null) et explication.",
+  "entree": {
+    "groupes": [
+      { "id": "g1", "articles": [ { "libelle": "Jus d'orange", "quantite": 1, "unite": "L" }, { "libelle": "Jus d'orange pressé", "quantite": 2, "unite": "bouteilles" } ] }
+    ]
+  },
+  "attendu": { "groupes": [ { "id": "g1", "meme_produit": true, "quantite": null, "explication": "*" } ] }
+}

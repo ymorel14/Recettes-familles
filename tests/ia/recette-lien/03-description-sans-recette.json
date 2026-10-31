@@ -1,0 +1,5 @@
+{
+  "description": "Description sans recette (liens, hashtags) : message clair, pas de recette inventée.",
+  "entree": { "lien": "https://www.tiktok.com/@chef/video/1", "texte": "Recette en vidéo 😋 Abonne-toi ! #food #recette #miam https://exemple.fr/boutique" },
+  "erreurAttendue": "illisible"
+}

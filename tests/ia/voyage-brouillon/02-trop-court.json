@@ -1,0 +1,5 @@
+{
+  "description": "Demande trop courte : message d'erreur lisible, sans appel au modèle.",
+  "entree": { "demande": "mer" },
+  "erreurAttendue": "entree"
+}

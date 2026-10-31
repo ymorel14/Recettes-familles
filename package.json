@@ -24,6 +24,9 @@
     "courses": "npm run start -w coursesfamille",
     "courses:web": "npm run web -w coursesfamille",
     "courses:export:web": "npm run export:web -w coursesfamille",
+    "famille": "npm run start -w famille",
+    "famille:web": "npm run web -w famille",
+    "famille:export:web": "npm run export:web -w famille",
     "site:export:web": "node scripts/construire-site.mjs"
   }
 }

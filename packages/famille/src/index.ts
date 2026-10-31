@@ -5,7 +5,7 @@
 // envelopper l'app dans <AuthProvider>. Les écrans lisent la session, la
 // famille active et le foyer avec useAuth().
 
-export { configurerFamille, clientSupabase, schemaFamille, type OptionsFamille } from './client';
+export { configurerFamille, clientSupabase, schemaFamille, vueToutesFamilles, type OptionsFamille } from './client';
 export * from './types';
 export * from './famille';
 export * from './profils';

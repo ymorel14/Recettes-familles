@@ -1,0 +1,5 @@
+{
+  "description": "Boîte de jeu en magasin : nom et marque lisibles.",
+  "entree": { "fichiers": [{ "type": "image", "media_type": "image/jpeg", "donnees": "@photos/jeu.jpg" }] },
+  "attendu": { "nom": "*", "marque": "*" }
+}

@@ -21,8 +21,82 @@ export type Annonce = {
   capacite: number | null;
   chambres: number | null;
   // Genre de page reconnu, pour préremplir le type ou la catégorie.
-  genre: 'hebergement' | 'restaurant' | 'parc' | 'musee' | 'chateau' | 'spectacle' | 'activite' | null;
+  genre: 'hebergement' | 'restaurant' | 'parc' | 'musee' | 'chateau' | 'spectacle' | 'activite' | 'transport' | null;
+  // Pages de transport (refonte Événements § 5.4, § 10.4) : moyen déduit du site
+  // ou des données structurées, villes de départ et d'arrivée si on les trouve.
+  mode: ModeTransport | null;
+  ville_depart: string | null;
+  ville_arrivee: string | null;
 };
+
+export type ModeTransport = 'voiture' | 'moto' | 'train' | 'avion' | 'bateau' | 'bus' | 'velo' | 'autre';
+
+// Sites de transport reconnus par leur adresse (même liste que l'app :
+// modeDepuisLien, services/creation.ts).
+const SITES_TRANSPORT: [RegExp, ModeTransport][] = [
+  [/brittany|ferries|corsica|dfds|condor|stena|balearia|baleària|directferries/, 'bateau'],
+  [/sncf|trainline|ouigo|eurostar|thalys|trenitalia|renfe|thetrainline|omio\./, 'train'],
+  [/airfrance|easyjet|ryanair|transavia|volotea|vueling|lufthansa|skyscanner|kayak|flights/, 'avion'],
+  [/blablacar|covoiturage/, 'voiture'],
+  [/flixbus|blablabus|ouibus/, 'bus'],
+];
+
+// Types schema.org d'un trajet.
+const TYPES_TRAJET: Record<string, ModeTransport> = {
+  flight: 'avion',
+  traintrip: 'train',
+  bustrip: 'bus',
+  boattrip: 'bateau',
+};
+
+function modeDepuisSite(url: string): ModeTransport | null {
+  let hote = '';
+  let chemin = '';
+  try {
+    const u = new URL(url);
+    hote = u.hostname.replace(/^www\./, '').toLowerCase();
+    chemin = u.pathname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const cible = `${hote}${chemin}`;
+  return SITES_TRANSPORT.find(([re]) => re.test(cible))?.[1] ?? null;
+}
+
+const PARAMS_DEPART = ['origin', 'origine', 'from', 'depart', 'departure', 'departurecity', 'ville_depart', 'o'];
+const PARAMS_ARRIVEE = ['destination', 'arrivee', 'arrivée', 'to', 'arrival', 'arrivalcity', 'ville_arrivee', 'd'];
+
+function nomDeVille(v: string | null | undefined): string | null {
+  const t = decoder(String(v ?? '')).replace(/\s*\(.*?\)\s*/g, ' ').replace(/^[\s,;:-]+|[\s,;:-]+$/g, '').trim();
+  // Un nom de ville ou de gare : des lettres, 2 à 40 caractères, pas un code.
+  return t.length >= 2 && t.length <= 40 && /\p{L}{2}/u.test(t) && !/^\d+$/.test(t) ? t : null;
+}
+
+// Villes du trajet : données structurées, puis paramètres de l'adresse
+// (« ?origin=Rennes&destination=Caen »), puis un titre « Rennes → Caen ».
+function villesDuTrajet(url: string, titre: string | null, trajetLd: any): { depart: string | null; arrivee: string | null } {
+  const nom = (x: any): string | null => nomDeVille(typeof x === 'string' ? x : x?.name ?? x?.address?.addressLocality);
+  if (trajetLd) {
+    const depart = nom(trajetLd.departureAirport ?? trajetLd.departureStation ?? trajetLd.departureBusStop ?? trajetLd.departureBoatTerminal);
+    const arrivee = nom(trajetLd.arrivalAirport ?? trajetLd.arrivalStation ?? trajetLd.arrivalBusStop ?? trajetLd.arrivalBoatTerminal);
+    if (depart || arrivee) return { depart, arrivee };
+  }
+  try {
+    const p = new URL(url).searchParams;
+    const lire = (cles: string[]) => {
+      for (const [k, v] of p.entries()) if (cles.includes(k.toLowerCase())) return nomDeVille(v);
+      return null;
+    };
+    const depart = lire(PARAMS_DEPART);
+    const arrivee = lire(PARAMS_ARRIVEE);
+    if (depart || arrivee) return { depart, arrivee };
+  } catch {
+    /* adresse sans paramètres exploitables */
+  }
+  const m = (titre ?? '').match(/^(.{2,40}?)\s*(?:→|->|–|—| - | vers | à )\s*(.{2,40}?)(?:\s*[|:·,].*)?$/u);
+  if (m) return { depart: nomDeVille(m[1]), arrivee: nomDeVille(m[2]) };
+  return { depart: null, arrivee: null };
+}
 
 const ENTITES: Record<string, string> = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', eacute: 'é', egrave: 'è', ecirc: 'ê',
@@ -129,6 +203,14 @@ export function analyserAnnonce(html: string, url: string): Annonce {
   const ogType = m.get('og:type') ?? '';
   if (!genre && /hotel|lodging|rental/i.test(ogType)) genre = 'hebergement';
 
+  // Transport : un site de transport connu, ou un trajet en données structurées.
+  const trajetLd = objets.find((o) => types(o).some((t) => t in TYPES_TRAJET)) ?? null;
+  let mode: ModeTransport | null = null;
+  if (genre !== 'hebergement') {
+    mode = modeDepuisSite(url) ?? (trajetLd ? TYPES_TRAJET[types(trajetLd).find((t) => t in TYPES_TRAJET)!] : null);
+    if (mode) genre = 'transport';
+  }
+
   const adresseLd = premier(principal?.address);
   const adresse =
     adresseLd && typeof adresseLd === 'object'
@@ -192,6 +274,8 @@ export function analyserAnnonce(html: string, url: string): Annonce {
     }
   }
 
+  const villes = mode ? villesDuTrajet(url, titre || null, trajetLd) : { depart: null, arrivee: null };
+
   return {
     titre: titre || null,
     image,
@@ -204,5 +288,8 @@ export function analyserAnnonce(html: string, url: string): Annonce {
     capacite: capacite !== null ? Math.round(capacite) : null,
     chambres: chambres !== null ? Math.round(chambres) : null,
     genre,
+    mode,
+    ville_depart: villes.depart,
+    ville_arrivee: villes.arrivee,
   };
 }
